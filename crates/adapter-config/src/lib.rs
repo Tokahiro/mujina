@@ -51,7 +51,7 @@ const TEMPLATE_TAIL: &str = r#"
 # level = "info"            # "debug" also logs every event the agent sees (for bug reports)
 
 [interface]
-# language = "auto"         # of Mujina Settings: "auto" follows Windows, or "en", "de"
+# language = "en"           # of Mujina Settings: "en", "de", or "auto" to follow Windows
 "#;
 
 /// The commented-out template of `config.toml`, with each launcher's section after `[launcher]`.
