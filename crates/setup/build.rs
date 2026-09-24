@@ -1,8 +1,5 @@
-//! Compiles the user interface and embeds the icon.
-//!
-//! The package the installer carries is not built in: `packaging/attach-payload.ps1` adds it to
-//! the finished executable (ADR-0015), so that the job that signs it runs no compiler. A build
-//! from cargo alone is an installer that says it carries no package; `--about` says which it is.
+//! Compiles the user interface and embeds the icon. The package is not built in:
+//! `packaging/attach-payload.ps1` attaches it to the finished executable (ADR-0015).
 
 #[cfg(windows)]
 use std::path::Path;
@@ -12,8 +9,7 @@ use std::path::Path;
 mod icon_resource;
 
 fn main() {
-    // `slint-build` is a build-dependency only on a Windows host, so the UI compiler is not even
-    // built elsewhere.
+    // `slint-build` exists only on a Windows host; CARGO_CFG_WINDOWS checks the target.
     #[cfg(windows)]
     if std::env::var_os("CARGO_CFG_WINDOWS").is_some() {
         compile_ui();
@@ -26,8 +22,7 @@ fn compile_ui() {
     icon_resource::embed(Path::new("../../packaging/mujina.ico"));
 
     println!("cargo:rerun-if-changed=lang");
-    // What Settings and Setup share (colours, icons, the mark, the switch, the fonts) is in
-    // ui/ at the top of the repository, imported as "@mujina/...".
+    // The UI shared with Settings, in the repository's ui/, imported as "@mujina/...".
     let shared = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../ui");
     let libraries = std::collections::HashMap::from([("mujina".to_string(), shared)]);
     // Texts in lang/<language>/LC_MESSAGES/mujina-setup.po; the window selects the language.
@@ -40,9 +35,8 @@ fn compile_ui() {
     }
 }
 
-/// The DLLs the executable imports are looked for in the system directory only, not first in
-/// the folder it was started from, where a planted one could wait (a Downloads folder, say).
-/// Windows 10 1607 and later honour it; `main` does the same for DLLs loaded later.
+/// Has Windows look for the imported DLLs in System32 only, never in the folder the program was
+/// started from, where a planted one could wait. `main` does the same for DLLs loaded later.
 #[cfg(windows)]
 fn harden_imports() {
     if std::env::var("CARGO_CFG_TARGET_ENV").as_deref() == Ok("msvc") {

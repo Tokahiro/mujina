@@ -1,12 +1,6 @@
-//! The package this installer carries: the signed MSIX, its certificate (while the package is
-//! self-signed) and a few lines about them. They are not compiled in: `packaging/attach-payload.ps1`
-//! adds them to the finished executable as data resources, before it is signed, so that the job
-//! that holds the signing key needs no compiler (docs/signing.md). A build without them is a
-//! working installer that says it carries no package.
-//!
-//! What the lines say is read here and checked where it can be: the family must follow from the
-//! name and the publisher, as Windows derives it. The certificate is trusted as it is: it and the
-//! lines come from the same file, so a check of one against the other would prove nothing.
+//! The package this installer carries: the signed MSIX, its certificate and a few lines about
+//! them, attached as data resources by `packaging/attach-payload.ps1` (docs/signing.md). The
+//! certificate is not checked against the lines: both come from the same file.
 
 use std::fmt;
 
@@ -92,7 +86,6 @@ const KEYS: [&str; 6] = [
     "certificate",
 ];
 
-/// As `--about` prints it, one fact per line.
 impl fmt::Display for About {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "Package:     {}", self.msix)?;
@@ -119,7 +112,7 @@ pub struct Payload {
 pub enum Missing {
     /// Nothing was attached: a build straight from cargo.
     NotAttached,
-    /// Something was, but not all of it, or not what it says it is.
+    /// Partly attached, or not what it says it is.
     Damaged(String),
 }
 

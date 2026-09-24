@@ -1,7 +1,5 @@
-//! The runner's host on the machine: the registry and the certificate store directly, the home
-//! app through mujina-application's `HomeAppRegistration`, and PowerShell's `Add-AppxPackage` and
-//! `Remove-AppxPackage` for the package. Every program is started by its full path, never looked
-//! up by name, and data reaches PowerShell only through environment variables, never inside the
+//! The runner's host on the machine. Every program is started by its full path, never looked up
+//! by name, and data reaches PowerShell only through environment variables, never inside the
 //! command text.
 
 use std::ffi::OsStr;
@@ -35,23 +33,18 @@ const DEVELOPER_MODE_VALUE: &str = "AllowDevelopmentWithoutDevLicense";
 /// Where Windows keeps its build number; `CurrentBuildNumber` is a string such as `26200`.
 const VERSION_KEY: &str = r"SOFTWARE\Microsoft\Windows NT\CurrentVersion";
 const RUN_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Run";
-/// The Run value of the check at sign-in is this, a dot and the family ([`run_value`]).
 const RUN_VALUE_PREFIX: &str = "MujinaCleanup";
-/// Mujina's own key under the current user: `Created` (below) and Setup's own subkey live in it.
 const MUJINA_KEY: &str = r"Software\Mujina";
-/// Every file Mujina made outside its own folders: one string value each, named after what the
-/// file is for, holding its full path. Written only by whoever made the file, and only when it
-/// did not exist before, so a file of the user's own is never listed.
+/// One string value per file Mujina made outside its own folders, holding its full path. Written
+/// only for a file that did not exist before, so a file of the user's own is never listed.
 const CREATED_KEY: &str = r"Software\Mujina\Created";
-/// What the check at sign-in keeps between sign-ins, per family (`Setup\<family>`): how often
-/// giving the home app back failed. A subkey of its own, since `Software\Mujina` goes as soon as
-/// the created files are gone.
+/// Per family (`Setup\<family>`), the check at sign-in's count of failed attempts. A subkey of
+/// its own, since `Software\Mujina` goes as soon as the created files are gone.
 const SETUP_KEY: &str = r"Software\Mujina\Setup";
 const ATTEMPTS_VALUE: &str = "CleanupAttempts";
-/// No console window for the console programs.
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
-/// The machine as the runner sees it, for the package attached to this executable.
+/// The machine, for the package attached to this executable.
 pub struct WindowsHost {
     payload: Option<&'static Payload>,
     /// The family Setup works on: the attached package's.
@@ -109,15 +102,13 @@ impl WindowsHost {
     }
 }
 
-/// Where the log goes: where `--log` says, else its usual place, but not with administrator
-/// rights. The usual folder is the user's to change, and any program of theirs could make it a
-/// link to a folder of the system's; there, creating the log, or renaming it once it is long,
-/// would be done as administrator (SECURITY.md).
+/// Where `--log` says, else the usual place, but not with administrator rights: any program of
+/// the user's could link that folder to a system one, and the log would be written there as
+/// administrator (SECURITY.md).
 pub fn log_file(requested: Option<PathBuf>) -> Option<PathBuf> {
     requested.or_else(|| (!process::is_elevated()).then(default_log))
 }
 
-/// The log's usual place.
 fn default_log() -> PathBuf {
     let local = std::env::var_os("LOCALAPPDATA").map_or_else(std::env::temp_dir, PathBuf::from);
     journal::default_path(&local)
@@ -164,8 +155,8 @@ impl Probe for WindowsHost {
 }
 
 impl Trust for WindowsHost {
-    /// The administrator part, all in one prompt: this program again, with `--elevated` and
-    /// nothing else. It takes the certificate from its own file, not from anything written here.
+    /// This program again, as administrator, with `--elevated` and nothing else. It takes the
+    /// certificate from its own file, not from anything written here.
     fn prepare(&self) -> Result<(), StepError> {
         self.payload()?;
         let program = std::env::current_exe()
@@ -194,9 +185,6 @@ impl Trust for WindowsHost {
 }
 
 impl Packages for WindowsHost {
-    /// `Add-AppxPackage`, which ends the package's running processes (`-ForceApplicationShutdown`):
-    /// the agent, if Mujina runs in Xbox mode now. It starts again the next time Xbox mode starts
-    /// Mujina. A confirmed downgrade adds `-ForceUpdateFromAnyVersion`.
     fn add(&self, how: Package) -> Result<(), StepError> {
         let payload = self.payload()?;
         let msix = self
@@ -218,8 +206,8 @@ impl Packages for WindowsHost {
 
     fn remove(&self) -> Result<(), StepError> {
         let family = self.family()?;
-        // Without this Mujina there is nothing of this installer's to remove, and what comes after
-        // (the listed files, the check at sign-in) may belong to another Mujina.
+        // Without this family installed, what comes after (the listed files, the check at
+        // sign-in) may belong to another Mujina.
         if !package::is_installed(family) {
             return Err(StepError::new(
                 ErrorKind::NotInstalled,
@@ -239,8 +227,7 @@ impl Packages for WindowsHost {
     }
 }
 
-// The methods themselves are tied to one registration's lifetime, which the registration built
-// inside `registration` does not have.
+// The method paths are tied to one lifetime, which the registration built in `registration` lacks.
 #[allow(clippy::redundant_closure_for_method_calls)]
 impl HomeApp for WindowsHost {
     fn make(&self) -> Result<(), StepError> {
@@ -254,13 +241,11 @@ impl HomeApp for WindowsHost {
     }
 }
 
-/// The Run value of the check at sign-in for `family`: one per family, so that a CI build beside
-/// a release keeps its own.
+/// One Run value per family, so that a CI build beside a release keeps its own check.
 fn run_value(family: &str) -> String {
     format!("{RUN_VALUE_PREFIX}.{family}")
 }
 
-/// Where the check at sign-in for `family` counts its failed attempts.
 fn attempts_key(family: &str) -> String {
     format!(r"{SETUP_KEY}\{family}")
 }
@@ -276,7 +261,6 @@ impl WindowsHost {
 }
 
 impl SignInCheck for WindowsHost {
-    /// Copies this program to where it can stay, and has it look at every sign-in.
     fn arrange_check(&self) -> Result<(), StepError> {
         let family = self.family()?;
         let copy = self.retained_copy()?;
@@ -296,8 +280,7 @@ impl SignInCheck for WindowsHost {
             &format!("\"{}\" --cleanup", copy.display()),
         )
         .map_err(Self::failed)?;
-        // A check that failed at earlier sign-ins starts counting again: this installation's
-        // removal gets all its attempts. Should the count stay, the check only gives up sooner.
+        // A fresh count for this installation; should the delete fail, the check gives up sooner.
         let _ = registry::delete_key(Hive::CurrentUser, &attempts_key(family));
         Ok(())
     }
@@ -331,14 +314,10 @@ impl SignInCheck for WindowsHost {
 }
 
 impl CreatedFiles for WindowsHost {
-    /// Deletes every file recorded under `CREATED_KEY`, as this user, then the record. A file
-    /// that is gone already counts as deleted; if one cannot be deleted, the record stays, so
-    /// that the check at sign-in tries again.
     fn forget(&self) -> Result<(), StepError> {
         let failed = |error: String| StepError::new(ErrorKind::Files, error);
-        // Anything running as this user can add to the list. With administrator rights this
-        // program must not delete what it names; the check at sign-in, which runs without them,
-        // does.
+        // Any program of the user's can add to the list, so never delete from it as
+        // administrator; the check at sign-in, which runs as the user, does.
         if process::is_elevated() {
             return Ok(());
         }
@@ -357,8 +336,7 @@ impl CreatedFiles for WindowsHost {
         }
         registry::delete_key(Hive::CurrentUser, CREATED_KEY)
             .map_err(|error| failed(error.to_string()))?;
-        // Its parent was created along with it. Best effort: a parent that still has other
-        // subkeys (Setup's own, while the check at sign-in counts its attempts) stays.
+        // Best effort: the parent stays while it has other subkeys, such as Setup's.
         let _ = registry::delete_key(Hive::CurrentUser, MUJINA_KEY);
         Ok(())
     }
@@ -400,8 +378,7 @@ pub fn elevated() -> ExitCode {
     ExitCode::SUCCESS
 }
 
-/// The folders a copy of Setup leaves, innermost first, each to go only once empty: its own
-/// (`Mujina\<family>`), and `Mujina` above it.
+/// The copy's folder (`Mujina\<family>`) and `Mujina` above it, innermost first.
 fn copy_folders(copy: &Path) -> Vec<&Path> {
     let folder = copy.parent();
     let parent = folder
@@ -410,11 +387,9 @@ fn copy_folders(copy: &Path) -> Vec<&Path> {
     folder.into_iter().chain(parent).collect()
 }
 
-/// Removes the copy of Setup and its folders, where nothing else is in them. A running program
-/// cannot delete itself, so when this is the copy, PowerShell waits for it to end, which may be
-/// long after this step: Remove Mujina's window stays open until it is closed. The wait is
-/// bounded in case the process ended before PowerShell looked and its ID went to another; a few
-/// tries after it cover a file Windows still holds a moment after the end.
+/// Removes the copy of Setup and its empty folders. A running program cannot delete itself, so
+/// when this is the copy, PowerShell waits for it to end (bounded, as the ID may be reused) and
+/// retries a few times while Windows still holds the file.
 fn remove_copy(copy: &Path) -> Result<(), String> {
     let folders = copy_folders(copy);
     if std::env::current_exe().ok().as_deref() != Some(copy) {
@@ -452,8 +427,7 @@ fn remove_copy(copy: &Path) -> Result<(), String> {
         .map_err(|error| format!("powershell.exe: {error}"))
 }
 
-/// A recorded path worth deleting: a full one. Anything else would depend on the folder this
-/// program happens to run in.
+/// Only a full path: anything else would depend on the current folder.
 fn recorded_file(path: &str) -> Option<&Path> {
     Some(Path::new(path)).filter(|path| path.is_absolute())
 }
@@ -488,8 +462,7 @@ fn powershell(command: &str, environment: &[(&str, &OsStr)]) -> Result<(), Strin
     Err(format!("powershell.exe failed: {text}"))
 }
 
-/// A folder of this process's own for the package it unpacks, removed with everything in it
-/// when Setup ends, whatever happened.
+/// A folder for the unpacked package, removed with everything in it on drop.
 struct WorkFolder(PathBuf);
 
 impl WorkFolder {
@@ -585,8 +558,7 @@ mod tests {
         assert!(kept.is_file());
     }
 
-    /// Read-only: the test binary carries no package, so its host has no family and reports
-    /// nothing installed and nothing carried.
+    /// Read-only: the test binary carries no package, so its host has no family.
     #[test]
     fn a_build_without_a_package_finds_nothing_of_its_own() {
         let host = WindowsHost::new(Some(std::env::temp_dir().join("mujina-setup-test.log")));

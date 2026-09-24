@@ -1,12 +1,5 @@
-//! Setup's log: every step, every failure with its code, and what the check at sign-in did.
-//!
-//! It lives in `%LOCALAPPDATA%\Mujina Setup\setup.log`, a folder of its own, because it has to
-//! outlast Mujina: removing Mujina deletes `%LOCALAPPDATA%\Mujina` (the copy of Setup kept for
-//! the check at sign-in) and the package's own folder, and the check at sign-in, which runs after
-//! the package is gone, is exactly what a report may need to explain. The temporary folder would
-//! outlast it too, but Disk Cleanup and Storage Sense empty it. The log is plain text, written as
-//! the user, and kept small: when it passes [`LIMIT`] it becomes `setup.log.1`, replacing the
-//! one before.
+//! Setup's log, in a folder of its own: removing Mujina deletes `%LOCALAPPDATA%\Mujina`, and the
+//! check at sign-in logs after that. Not in the temporary folder, which Storage Sense empties.
 
 use std::fs::{self, OpenOptions};
 use std::io::Write as _;
@@ -14,19 +7,16 @@ use std::path::{Path, PathBuf};
 
 use crate::run::Journal;
 
-/// The size at which the log starts again, keeping one older file.
+/// Past this size in bytes, the log becomes `setup.log.1`, replacing the one before.
 pub const LIMIT: u64 = 256 * 1024;
 
-/// The log in its folder under `local_app_data` (`%LOCALAPPDATA%`).
 pub fn default_path(local_app_data: &Path) -> PathBuf {
     local_app_data.join("Mujina Setup").join("setup.log")
 }
 
-/// A log file, written line by line; a line that cannot be written is lost, never an error that
-/// stops the installation.
+/// A line that cannot be written is lost; it never stops the installation.
 pub struct FileJournal {
     path: PathBuf,
-    /// The time a line is stamped with.
     clock: fn() -> String,
 }
 

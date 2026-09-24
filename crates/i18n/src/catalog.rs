@@ -1,8 +1,5 @@
-//! A gettext `.po` catalog, as far as texts from Rust need it.
-//!
-//! An app's catalog holds its Slint texts too, each with the component it is in as its context
-//! (msgctxt). Those are Slint's; a [`Catalog`] keeps the texts without a context, translated and
-//! not marked fuzzy, as gettext itself would use them.
+//! A gettext `.po` catalog, as far as texts from Rust need it. Slint's texts carry their
+//! component as context (msgctxt); a [`Catalog`] keeps only texts without one.
 
 use std::collections::HashMap;
 use std::fmt;
@@ -28,7 +25,6 @@ impl fmt::Display for ParseError {
 
 impl std::error::Error for ParseError {}
 
-/// One entry as read, until the next one starts.
 #[derive(Default)]
 struct Entry {
     context: Option<String>,
@@ -48,9 +44,7 @@ enum Field {
 }
 
 impl Catalog {
-    /// Reads `po`: entries of `msgctxt`, `msgid`, `msgid_plural`, `msgstr` and `msgstr[n]`,
-    /// strings continued on the lines after, comments, and the fuzzy flag. Obsolete entries
-    /// (`#~`) are comments like any other.
+    /// Obsolete entries (`#~`) are skipped like any other comment.
     pub fn parse(po: &str) -> Result<Self, ParseError> {
         let mut catalog = Self::default();
         let mut entry = Entry::default();
@@ -146,8 +140,8 @@ impl Catalog {
             .map(|(english, translation)| (english.as_str(), translation.as_str()))
     }
 
-    /// Keeps `entry` if it is one for Rust: no context, no plural, not the header, translated
-    /// and not a guess.
+    /// Keeps `entry` if Rust uses it: translated, not fuzzy, no context, no plural and not the
+    /// header (the empty msgid).
     fn keep(&mut self, entry: Entry) {
         let translation = match entry.translations.as_slice() {
             [translation] if !translation.is_empty() => translation,
@@ -160,7 +154,6 @@ impl Catalog {
     }
 }
 
-/// The text of a quoted `.po` string, unescaped.
 fn unquote(quoted: &str) -> Option<String> {
     let inner = quoted.strip_prefix('"')?.strip_suffix('"')?;
     let mut text = String::new();

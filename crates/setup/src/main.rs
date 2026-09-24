@@ -1,12 +1,7 @@
-//! Mujina Setup: installs, updates and removes Mujina with the steps around the package (see
-//! ADR-0012 and ADR-0015). `mujina-setup.exe --help` prints [`cli::USAGE`]: the window by
-//! default, `--quiet` without it, `--uninstall`, `--about`. `--elevated` is the administrator
-//! part, which the installer starts itself and which takes no arguments; `--cleanup` is the check
-//! at sign-in that gives the home app back once Mujina has been removed through Settings → Apps.
-//!
-//! The crate is cut so that what decides is pure and tested on any system: `plan` (which steps),
-//! `run` (carrying them out over small traits, with a fake host in its tests), `cli`, `payload`'s
-//! reading of what is attached, and `journal`. Windows runs `host_windows` and `ui`.
+//! Mujina Setup: installs, updates and removes Mujina (ADR-0012, ADR-0015). [`cli::USAGE`] lists
+//! the options; `--elevated` (the administrator part) and `--cleanup` (the check at sign-in) are
+//! internal. Everything that decides is pure and tested on any system; only `host_windows` and
+//! `ui` need Windows.
 
 #![cfg_attr(windows, windows_subsystem = "windows")]
 
@@ -34,8 +29,7 @@ fn main() -> std::process::ExitCode {
     use cli::{Exit, Mode, Request};
     use host_windows::WindowsHost;
 
-    // Before anything loads a DLL: none from the folder this program was started from, which is
-    // usually Downloads.
+    // Before anything loads a DLL: none from the start folder, usually Downloads.
     let _ = mujina_winutil::library::search_only_system32();
     let request = match cli::parse(std::env::args_os().skip(1)) {
         Ok(request) => request,
@@ -89,7 +83,6 @@ fn main() -> std::process::ExitCode {
     }
 }
 
-/// `--about`: what package this installer carries, or that it carries none.
 #[cfg(windows)]
 fn about() -> std::process::ExitCode {
     mujina_winutil::console::attach_parent();
@@ -106,15 +99,13 @@ fn about() -> std::process::ExitCode {
     }
 }
 
-/// Set in the environment of Setup started again outside the package, so that it does so once.
+/// Set for the relaunched process, so that it relaunches only once.
 #[cfg(windows)]
 const RELAUNCHED: &str = "MUJINA_SETUP_OUTSIDE_PACKAGE";
 
-/// Starts this program again outside Mujina's package, if it runs inside it, and says whether it
-/// did. Mujina Settings starts Setup to remove Mujina; a process of the package would be stopped
-/// by the removal it runs. Settings already asks Windows to start it outside
-/// (`spawn_outside_package`); whether that reaches Setup itself or only what Setup starts is
-/// not documented, so Setup makes sure.
+/// Starts this program again outside Mujina's package if it runs inside it, and says whether it
+/// did: a process of the package would be stopped by the removal it runs. Settings already asks
+/// Windows for this, but whether that reaches Setup itself is not documented.
 #[cfg(windows)]
 fn relaunched_outside_package(mode: cli::Mode, log: Option<&std::path::Path>) -> bool {
     use mujina_winutil::{package, process};
