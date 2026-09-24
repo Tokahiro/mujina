@@ -1,5 +1,4 @@
-// Moving between a page's rows is decided in Rust (`nav::step`): skip rows that are switched
-// off, stop at both ends.
+// Row navigation is decided in Rust (`nav::step`).
 export global Nav {
     // The row `delta` steps away from `current` among those `enabled`; `current` if there is none.
     pure callback step([bool], int, int) -> int;
@@ -14,8 +13,7 @@ export enum PageKey {
     activate
 }
 
-// What a page tells its rows: which one is current, whether the page has the controller, and
-// the last key pressed on it. `presses` counts the presses, so the current row acts once per
+// What a page tells its rows. `presses` counts key presses, so the current row acts once per
 // press.
 export struct PageState {
     current: int,
@@ -34,8 +32,7 @@ export global Focus {
     in-out property <int> returns;
 }
 
-// A row's change goes straight to Rust, which stores it and answers with a toast. The key is
-// the config key.
+// A row's change, by config key; Rust stores it and answers with a toast.
 export global Change {
     callback choice(string, int);
     callback flag(string, bool);

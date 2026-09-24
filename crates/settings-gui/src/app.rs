@@ -29,7 +29,6 @@ use crate::ui::{
 };
 use crate::{capture, log, nav, setup, status, texts};
 
-/// How much of the log the Log page shows.
 const LOG_LINES: usize = 400;
 
 /// How often the controller is read while the app is in front.
@@ -47,8 +46,7 @@ pub fn run() -> Result<(), slint::PlatformError> {
     use_language(&form::as_text(stored));
     window.set_version(env!("CARGO_PKG_VERSION").into());
     window.set_data_directory(shown(&data_dir).into());
-    // In Xbox mode there is no desktop to put a window on. `--full-screen` shows that layout on
-    // the desktop, to try it out.
+    // Xbox mode has no desktop; `--full-screen` tries that layout on the desktop.
     let console =
         tool::in_xbox_mode() || std::env::args().any(|argument| argument == "--full-screen");
     window.set_fullscreen(console);
@@ -60,7 +58,6 @@ pub fn run() -> Result<(), slint::PlatformError> {
     window.global::<Rows>().on_enabled(|sections| {
         ModelRc::from(Rc::new(VecModel::from(nav::enabled(sections.iter()))))
     });
-    // Until the first checks are back, the verdict and the home card say they are under way.
     show_home_checking(&window);
     refresh(&window);
     refresh_log(&window, &data_dir);
@@ -70,8 +67,8 @@ pub fn run() -> Result<(), slint::PlatformError> {
     window.run()
 }
 
-/// Swaps Slint's one large window icon for the executable's own small images, once the window
-/// exists: Slint makes it when the event loop starts. Tries `attempts` times.
+/// Swaps Slint's window icon for the executable's own. Retried on a timer: Slint creates the
+/// window only once the event loop runs.
 fn use_own_icon(attempts: u8) {
     Timer::single_shot(Duration::from_millis(50), move || {
         if !winutil_window::use_own_icon() && attempts > 1 {
@@ -80,8 +77,7 @@ fn use_own_icon(attempts: u8) {
     });
 }
 
-/// Brings the window of the app that is open already to the front; started again, the app
-/// must not open a second window next to it.
+/// Fronts the window of the instance already running.
 fn show_running() {
     let own = std::process::id();
     let running = winutil_window::top_level_windows()
@@ -96,9 +92,8 @@ fn show_running() {
     }
 }
 
-/// Reads the controller while the app is in front and turns it into the keys the window's own
-/// navigation understands (arrows, Return, Escape). The timer
-/// lives as long as the returned value, which is as long as the window.
+/// Turns controller input into the keys the window's navigation understands (arrows, Return,
+/// Escape). Polling stops when the returned timer is dropped.
 fn follow_controller(window: &MainWindow) -> Timer {
     let weak = window.as_weak();
     let mut navigator = Navigator::default();
@@ -107,16 +102,14 @@ fn follow_controller(window: &MainWindow) -> Timer {
         let Some(window) = weak.upgrade() else {
             return;
         };
-        // Only the window in front takes the controller; a press meant for Steam must not
-        // toggle anything here.
+        // Only while in front: a press meant for Steam must not act here.
         if winutil_window::foreground_process_id() != Some(std::process::id()) {
             navigator.reset();
             return;
         }
         let state = gamepad::first_connected().map(|pad| (pad.buttons, pad.left_x, pad.left_y));
         let actions = navigator.update(state, Instant::now());
-        // A capture waits for the device button, and the controller must not wander off
-        // meanwhile: B cancels it. Its result closes with A or B.
+        // During a capture the pad only closes the overlay: B while waiting, A or B on the result.
         let phase = window.get_capture_phase();
         if phase != CapturePhase::None {
             let result = phase != CapturePhase::Waiting;
@@ -150,7 +143,6 @@ fn follow_controller(window: &MainWindow) -> Timer {
     timer
 }
 
-/// A key press and release, as if typed.
 fn press(window: &MainWindow, key: Key) {
     let text: SharedString = key.into();
     window
@@ -161,7 +153,6 @@ fn press(window: &MainWindow, key: Key) {
         .dispatch_event(WindowEvent::KeyReleased { text });
 }
 
-/// Every callback of the window.
 fn connect(window: &MainWindow, data_dir: &Path) {
     let weak = window.as_weak();
     window.on_refresh(move || {
@@ -228,7 +219,7 @@ fn connect(window: &MainWindow, data_dir: &Path) {
         if let Some(window) = weak.upgrade()
             && DRAFT.with(Cell::take).is_some()
         {
-            // The page showed the launcher being chosen; back to the one in use.
+            // Drop the unsaved launcher choice; show the one in use.
             show_settings(&window);
         }
     });
@@ -249,7 +240,6 @@ fn connect(window: &MainWindow, data_dir: &Path) {
     connect_system(window);
 }
 
-/// The System page's callbacks.
 fn connect_system(window: &MainWindow) {
     let weak = window.as_weak();
     window.on_register_home(move || {
@@ -268,7 +258,6 @@ fn connect_system(window: &MainWindow) {
         let Some(window) = weak.upgrade() else {
             return;
         };
-        // What the check whose row it is offered, as last found.
         let remedy = SYSTEM_FINDINGS.with(|shown| {
             shown
                 .borrow()
@@ -291,8 +280,7 @@ fn connect_system(window: &MainWindow) {
             return;
         };
         match tool::start_removal() {
-            // Mujina Setup removes this app's package, whose processes the removal would stop:
-            // this app ends first. The last window hidden ends the event loop.
+            // Setup removes this app's package, so this app ends first.
             Ok(()) => {
                 let _ = window.hide();
             }
@@ -317,15 +305,13 @@ fn connect_system(window: &MainWindow) {
     });
 }
 
-/// Everything the pages show, read again: the settings at once, the checks on a thread of their
-/// own.
 fn refresh(window: &MainWindow) {
     show_settings(window);
     start_checks(window);
 }
 
-/// What `config.toml` says, as the Setup and Help pages show it. Read after every change, so it
-/// stays quick and runs no checks.
+/// Shows `config.toml` on the Setup and Help pages. Runs after every change, so it must stay
+/// quick and run no checks.
 fn show_settings(window: &MainWindow) {
     let page = setup::page(&tool::configuration(), DRAFT.with(Cell::get));
     let model = |texts: Vec<String>| {
@@ -340,9 +326,8 @@ fn show_settings(window: &MainWindow) {
     window.set_button_in_use(page.button_in_use.into());
 }
 
-/// Runs the checks behind the Status and System pages on a thread of their own: they ask Steam's
-/// debugging port and list the running programs, which must not hold up the window. Until they
-/// are back, the Status page says it is checking. One run at a time, as [`Checks`] says.
+/// Runs the Status and System checks on a thread: they query Steam's debugging port and can
+/// take seconds. One run at a time, see [`Checks`].
 fn start_checks(window: &MainWindow) {
     window.set_checking(true);
     let Some(run) = CHECKS.with(|checks| checks.borrow_mut().start()) else {
@@ -353,14 +338,13 @@ fn start_checks(window: &MainWindow) {
         // Built here: the launcher's adapter cannot be handed from one thread to another.
         let mut diagnostics = Diagnostics::new();
         let facts = diagnostics.system(&tool::SYSTEM_CHECKS);
-        // The System page need not wait for the doctor. Nothing to show once the window is gone.
+        // Shown before the doctor runs. An error only means the window is gone.
         let _ = weak.upgrade_in_event_loop(move |window| found_facts(&window, run, &facts));
         let probe = probe(diagnostics.examine());
         let _ = weak.upgrade_in_event_loop(move |window| checked(&window, run, &probe));
     });
 }
 
-/// What the Status page shows, found out: the doctor's findings, and the settings they are for.
 fn probe(diagnosis: Diagnosis) -> Probe {
     let now = mujina_winutil::time::local_timestamp();
     Probe {
@@ -374,13 +358,13 @@ fn probe(diagnosis: Diagnosis) -> Probe {
     }
 }
 
-/// A run's facts for the System page, shown while that run is the latest. They may also come
-/// after its findings; the run's number decides, not the order.
+/// Shows the System facts of `run` unless a newer run started; they may arrive after its
+/// findings.
 fn found_facts(window: &MainWindow, run: u64, facts: &tool::SystemFacts) {
     if CHECKS.with(|checks| checks.borrow().run) != run {
         return;
     }
-    // The package's execution alias starts this app in its package; Steam takes it as a program.
+    // Steam starts the packaged app through its execution alias.
     let packaged = mujina_winutil::package::family_name().is_some();
     let steam_target = match std::env::var("LOCALAPPDATA") {
         Ok(local) if packaged => format!(r"{local}\Microsoft\WindowsApps\mujina-settings.exe"),
@@ -394,8 +378,7 @@ fn found_facts(window: &MainWindow, run: u64, facts: &tool::SystemFacts) {
     show_system_checks(window);
 }
 
-/// The System page's rows of what Windows allows, from the findings last found, in the language
-/// set.
+/// Rebuilds the System page's check rows in the current language.
 fn show_system_checks(window: &MainWindow) {
     let icons = window.global::<Icons>();
     let rows: Vec<RowData> = SYSTEM_FINDINGS.with(|shown| {
@@ -408,8 +391,7 @@ fn show_system_checks(window: &MainWindow) {
     window.set_system_checks(ModelRc::from(Rc::new(VecModel::from(rows))));
 }
 
-/// A run's findings, which end it: shown while it is the latest run. One more run follows if it
-/// was asked for meanwhile.
+/// Ends `run`: shows its findings if it is the latest, and starts a queued run.
 fn checked(window: &MainWindow, run: u64, probe: &Probe) {
     let (latest, again) = CHECKS.with(|checks| checks.borrow_mut().finish(run));
     if latest {
@@ -420,15 +402,12 @@ fn checked(window: &MainWindow, run: u64, probe: &Probe) {
     }
 }
 
-/// The home card while the home app is being read; the rest of the System page, its button
-/// among it, stays as it was.
 fn show_home_checking(window: &MainWindow) {
     let mut info = window.get_system_info();
     info.home_checking = true;
     window.set_system_info(info);
 }
 
-/// The device in effect as the device tile shows it.
 fn in_use(device: &DeviceSelection) -> InUse {
     let devices = tool::devices();
     match device.id.as_deref().and_then(|id| devices.find(id)) {
@@ -442,7 +421,6 @@ fn in_use(device: &DeviceSelection) -> InUse {
     }
 }
 
-/// The Status page: the doctor's verdict, the device tiles and every finding.
 fn show_status(window: &MainWindow, probe: &Probe) {
     let findings = &probe.findings;
     window.set_verdict(status::verdict(findings));
@@ -479,8 +457,7 @@ fn show_status(window: &MainWindow, probe: &Probe) {
     });
 }
 
-/// Names the checks on the Status and System pages again, in the language set now; what the
-/// doctor found stays as it is, English.
+/// Retranslates the check titles after a language change; what the doctor found stays English.
 fn rename_checks(window: &MainWindow) {
     let checks = window.get_checks();
     CHECK_TITLES.with(|titles| {
@@ -494,8 +471,7 @@ fn rename_checks(window: &MainWindow) {
     show_system_checks(window);
 }
 
-/// Whether the launcher's Wi-Fi fix is in effect: its `wifi_indicator`, with the toggle that one
-/// requires; `None` with a launcher that has none.
+/// Whether `wifi_indicator` and the toggle it requires are on; `None` for a launcher without it.
 fn wifi_fix(settings: &Settings) -> Option<bool> {
     let launcher = &settings.launcher;
     let specs = tool::launchers().get(&launcher.id).settings();
@@ -504,7 +480,7 @@ fn wifi_fix(settings: &Settings) -> Option<bool> {
     Some(on(spec.key) && spec.requires.is_none_or(on))
 }
 
-/// Starts the agent as `mujina.exe` next to this app would be started in Xbox mode.
+/// Starts the agent the way Xbox mode would.
 fn start_agent(window: &MainWindow) {
     let notice = match tool::start_agent() {
         Ok(()) => feedback::notice(ToastKind::Now, Said::AgentStarting),
@@ -520,15 +496,13 @@ fn start_agent(window: &MainWindow) {
     });
 }
 
-/// A path of ours as the pages show it.
 fn shown(path: &Path) -> String {
     let local = std::env::var("LOCALAPPDATA").ok();
     status::shown_path(&path.display().to_string(), local.as_deref())
 }
 
-/// A choice from a list. A launcher that requires a value not stored yet (the generic one's
-/// program) stores nothing yet: the page shows it with its rows, and the switch is stored
-/// together with what it requires.
+/// Stores a list choice. A launcher missing a required value (the generic one's program) is
+/// only drafted, and stored together with that value.
 fn choose(window: &MainWindow, key: &str, index: i32) {
     if key == "interface.language" {
         choose_language(window, index);
@@ -542,8 +516,7 @@ fn choose(window: &MainWindow, key: &str, index: i32) {
             &config.loaded.settings.launcher.id,
         );
         let chosen = setup::launcher_at(index);
-        // Back to the launcher the page showed before another was being chosen: nothing to
-        // store.
+        // Back to the stored launcher: drop the draft, store nothing.
         if draft.is_some() && chosen.is_some_and(|chosen| chosen.id() == shown.id()) {
             show_settings(window);
             return;
@@ -571,19 +544,17 @@ fn choose_language(window: &MainWindow, index: i32) {
             .unwrap_or_default();
         use_language(code);
     }
-    // The pages word themselves again; the lists and rows Rust fills are filled again, and the
-    // checks named again, in the new language.
+    // Slint retranslates itself; the texts Rust fills in are rebuilt.
     show_settings(window);
     rename_checks(window);
-    // Not the agent's concern: in effect now, whether or not an agent runs.
+    // Applies at once, whether or not an agent runs.
     let _ = report(window, outcome.map(|_| Applied::Now));
 }
 
-/// Words the app in the language `interface.language` names, where Mujina has it; otherwise, as
-/// for "auto", in the first of the Windows display languages it has. Slint's texts and Rust's
-/// follow the same decision, which Mujina Setup makes the same way.
+/// Sets Slint's and Rust's texts to `chosen`, or, for "auto" or a language Mujina lacks, to the
+/// first Windows display language it has.
 fn use_language(chosen: &str) {
-    // The first of the Help page's list is "auto"; the rest are the languages lang/ has.
+    // Skip "auto"; the rest are the languages lang/ has.
     let languages = form::choices("interface.language").get(1..);
     let language = locale::language(chosen, languages.unwrap_or_default());
     // Only fails without bundled translations, which the build always has.
@@ -591,8 +562,7 @@ fn use_language(chosen: &str) {
     texts::set(language);
 }
 
-/// A text field's new value. A value the launcher being chosen requires switches to it once it
-/// requires no other.
+/// Stores a text field. Entering the last value a drafted launcher requires also switches to it.
 fn edit(window: &MainWindow, key: &str, text: &str) {
     let changes = form::text_changes(key, text, setup::spec(key));
     let Some(draft) = DRAFT.with(Cell::get) else {
@@ -618,7 +588,7 @@ fn edit(window: &MainWindow, key: &str, text: &str) {
         );
         return;
     }
-    // The last value it requires: stored with the switch, and the page shows it in use.
+    // The last missing value: store it together with the launcher switch.
     let switches = missing.len() == 1;
     let changes = changes.map(|mut changes| {
         if switches {
@@ -635,15 +605,14 @@ fn edit(window: &MainWindow, key: &str, text: &str) {
     }
 }
 
-/// Stores the changes like `mujinactl config set` does and says what came of it in a toast.
+/// Stores the changes as `mujinactl config set` does, and reports the outcome in a toast.
 fn apply(window: &MainWindow, changes: Result<Vec<SettingChange>, Refusal>) {
-    // The toast has said what came of it.
+    // The toast has reported the outcome.
     let _ = report(window, change(window, changes));
 }
 
-/// Stores the changes and shows the pages what the file says now; no toast. The checks are not
-/// run again for it: a switch must answer at once, and the pages with checks run them when
-/// entered.
+/// Stores the changes and refreshes the pages, without a toast. Skips the checks so a switch
+/// answers at once; the pages with checks run them when shown.
 fn change(
     window: &MainWindow,
     changes: Result<Vec<SettingChange>, Refusal>,
@@ -655,44 +624,38 @@ fn change(
     outcome
 }
 
-/// The toast for what came of a change.
 fn report(window: &MainWindow, outcome: Result<Applied, Refusal>) -> Result<Applied, Refusal> {
     show_toast(window, feedback::of(&outcome));
     outcome
 }
 
 thread_local! {
-    /// A launcher chosen on the Setup page but not stored yet, for want of a value it requires:
-    /// the page shows it with its rows until that is entered, or the page is left.
+    /// A launcher chosen on the Setup page, not stored until its required values are entered;
+    /// dropped when the page is left.
     static DRAFT: Cell<Option<&'static str>> = const { Cell::new(None) };
     /// Counts the toasts shown, so a toast's timer only hides its own toast.
     static TOASTS: Cell<u64> = const { Cell::new(0) };
-    /// The runs of the checks.
     static CHECKS: RefCell<Checks> = RefCell::new(Checks::default());
-    /// The capture under way, and what it came to.
     static CAPTURE: RefCell<Capture> = RefCell::new(Capture::default());
-    /// The titles of the checks the Status page lists, in its order: named again when the
-    /// language changes.
+    /// The Status page's check titles, kept to retranslate them.
     static CHECK_TITLES: RefCell<Vec<Msg>> = const { RefCell::new(Vec::new()) };
-    /// The findings the System page shows, as last found: named again when the language
-    /// changes.
+    /// The System page's findings, kept for its row buttons and to retranslate them.
     static SYSTEM_FINDINGS: RefCell<Vec<Finding>> = const { RefCell::new(Vec::new()) };
 }
 
-/// The runs of the checks. One at a time: a run can wait on Steam's debugging port for seconds,
-/// and pages shown meanwhile need one run after it, not one each.
+/// Check runs, one at a time: a run can wait seconds on Steam's debugging port, so requests
+/// meanwhile collapse into one more run.
 #[derive(Default)]
 struct Checks {
     /// Counts the runs, so a result is shown only from the latest one.
     run: u64,
-    /// A run is under way.
     running: bool,
-    /// Asked for while a run was under way: one more run follows it.
+    /// Requested during a run: one more run follows it.
     again: bool,
 }
 
 impl Checks {
-    /// A run asked for: its number when it starts now, `None` when it follows the one under way.
+    /// The new run's number, or `None` if it is queued behind the one under way.
     fn start(&mut self) -> Option<u64> {
         if self.running {
             self.again = true;
@@ -703,15 +666,13 @@ impl Checks {
         Some(self.run)
     }
 
-    /// Run `run` is back: whether it is still the latest, so its result is shown, and whether
-    /// one more run was asked for meanwhile.
+    /// Ends `run`: whether it is still the latest, and whether a queued run should start.
     fn finish(&mut self, run: u64) -> (bool, bool) {
         self.running = false;
         (self.run == run, std::mem::take(&mut self.again))
     }
 
-    /// The home app changed. A run under way may have read the old one, so none of its result is
-    /// shown.
+    /// Discards the result of the run under way: it may have read the old home app.
     fn forget_home(&mut self) {
         self.run += 1;
     }
@@ -741,14 +702,13 @@ fn show_toast(window: &MainWindow, notice: Notice) {
 struct Capture {
     /// Set to stop the watcher while it waits.
     cancel: Option<Arc<AtomicBool>>,
-    /// Counts the overlay's seconds down for as long as it is held.
+    /// Ticks the overlay's countdown while held.
     _countdown: Option<Timer>,
     /// The toast for the stored button, shown once the overlay is closed.
     toast: Option<Notice>,
 }
 
-/// Watches for the device button on a thread of its own (the hook needs a thread that waits for
-/// it), and stores what was seen once it is back.
+/// Waits for the device button on a worker thread, then stores what was seen.
 fn start_capture(window: &MainWindow) {
     let seconds = i32::try_from(tool::CAPTURE_TIME.as_secs()).unwrap_or(10);
     window.set_capture_seconds(seconds);
@@ -784,8 +744,8 @@ fn start_capture(window: &MainWindow) {
 
 /// The overlay's result: the button stored, nothing seen, or the watcher failing.
 fn captured(window: &MainWindow, result: Result<Option<TriggerChord>, String>) {
-    // The button did what it always does too: a program with administrator rights (OneXConsole
-    // on a OneXPlayer) sends it, and such input cannot be held back.
+    // The button also did its usual job: an elevated program (OneXConsole on a OneXPlayer)
+    // sends it, and such input cannot be held back.
     bring_back(window);
     let (phase, detail, toast) = match result {
         Ok(Some(button)) => {
@@ -825,8 +785,7 @@ fn dismiss_capture(window: &MainWindow) {
     }
 }
 
-/// Restores and fronts the window after something else (the device button's own "show
-/// desktop") pushed it away.
+/// Restores and fronts the window after the device button's own "show desktop" hid it.
 fn bring_back(window: &MainWindow) {
     window.window().set_minimized(false);
     let own = std::process::id();
@@ -836,7 +795,7 @@ fn bring_back(window: &MainWindow) {
     if let Some(ours) = ours
         && !winutil_window::bring_to_foreground(ours.handle)
     {
-        // The user asked for this a moment ago; see ADR-0001 for the one synthetic key tap.
+        // The user pressed the button a moment ago; ADR-0001 covers the synthetic key tap.
         winutil_window::claim_foreground(ours.handle);
     }
 }
@@ -850,8 +809,7 @@ fn register(window: &MainWindow, make_home: bool) {
     // Windows reads the home app when Xbox mode is entered, so a change applies next time.
     let changed = notice.kind == ToastKind::NextTime;
     show_toast(window, notice);
-    // The home app changed. Until it is read again the card says it is checking, not the old
-    // home app, which can be for seconds while a run already under way waits on Steam.
+    // Show "checking", not the old home app, while a run under way may still wait on Steam.
     if changed {
         CHECKS.with(|checks| checks.borrow_mut().forget_home());
         show_home_checking(window);

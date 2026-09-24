@@ -1,6 +1,5 @@
-//! What a toast says after a change: applied now, applied the next time Xbox mode is entered,
-//! or refused with the reason. Every change ends in exactly one of the three. The window words
-//! it (`Words` in controls.slint); this says which words, and fills in the details.
+//! Which toast a change ends in: applied now, applied the next time Xbox mode is entered, or
+//! refused. The texts are in `Words` (controls.slint).
 
 use std::time::Duration;
 
@@ -20,13 +19,12 @@ pub enum Refusal {
     NotACombination(String),
     /// Another launcher chosen, without its program.
     ProgramRequired,
-    /// Another launcher chosen, without another value it requires: its title, in the window's
-    /// language.
+    /// Another launcher chosen without another value it requires: its title, translated.
     ValueRequired(String),
 }
 
-/// The refusal of `spec`, which the launcher being chosen requires, left empty: a path is its
-/// program, as with every launcher so far, and anything else is named by its `title`.
+/// The refusal for a required `spec` left empty: a path is the launcher's program, anything else
+/// is named by its `title`.
 pub fn required(spec: &SettingSpec, title: &str) -> Refusal {
     match spec.kind {
         SettingKind::Text {
@@ -53,8 +51,8 @@ fn detailed(kind: ToastKind, said: Said, detail: &str) -> Notice {
     }
 }
 
-/// The toast for what came of storing a change. The kind follows the real outcome: a setting
-/// that could apply at once still waits for Xbox mode when no agent runs to take it over.
+/// The toast for a stored change. A live setting still waits for Xbox mode when no agent runs
+/// to take it over.
 pub fn of(outcome: &Result<Applied, Refusal>) -> Notice {
     match outcome {
         Ok(Applied::Now) => notice(ToastKind::Now, Said::Applied),
@@ -72,8 +70,7 @@ pub fn refused(refusal: &Refusal) -> Notice {
     }
 }
 
-/// The toast once the capture overlay closes: the combination captured and when it applies,
-/// or why it was not stored.
+/// The toast once the capture overlay closes.
 pub fn captured(chord: &str, outcome: &Result<Applied, Refusal>) -> Notice {
     match outcome {
         Ok(Applied::Now) => detailed(ToastKind::Now, Said::CapturedApplied, chord),
@@ -93,7 +90,6 @@ pub fn registered(outcome: Result<RegisterOutcome, String>) -> Notice {
     }
 }
 
-/// Giving the home app back.
 pub fn unregistered(outcome: Result<UnregisterOutcome, String>) -> Notice {
     match outcome {
         Ok(UnregisterOutcome::Restored(previous)) => {

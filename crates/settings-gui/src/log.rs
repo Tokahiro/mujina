@@ -1,5 +1,4 @@
-//! mujina.log as the Help page shows it: newest first, each line split into time, level and
-//! message for colouring. Pure, so it is tested here.
+//! mujina.log for the Help page: newest first, each line split into time, level and message.
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Line {

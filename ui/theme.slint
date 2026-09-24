@@ -1,8 +1,5 @@
-// The design's tokens (design_handoff_mujina_settings/README.md), shared by Mujina Settings and
-// Mujina Setup. Every size here is at the handheld scale (1280 × 800) and multiplied by `density`:
-// 1 in full screen on a 1280 × 800 screen, 0.72 in Settings' desktop window, and 1 in Setup,
-// which draws its own sizes in px and the shared controls at that scale. Write sizes as
-// `16 * Theme.u`.
+// Design tokens shared by Mujina Settings and Mujina Setup. Sizes are at the handheld scale
+// (1280 × 800), multiplied by `density`; write them as `16 * Theme.u`.
 
 // How a doctor finding came out, as the pages colour it.
 export enum Health {
@@ -88,7 +85,6 @@ export global Theme {
     out property <duration> fade: 180ms;
     out property <duration> slide: 150ms;
 
-    // The colour of a doctor state.
     public pure function state-color(health: Health) -> color {
         return health == Health.problem ? problem : health == Health.warning ? warning : ok;
     }

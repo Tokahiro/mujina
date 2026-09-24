@@ -1,11 +1,9 @@
-// Mujina Settings, after design_handoff_mujina_settings/: a rail with its pages, a hint bar in
-// full screen, and a toast after every change.
+// Mujina Settings: a rail with its pages, a hint bar in full screen, a toast after every change.
 //
-// Controller and keyboard navigation is the app's own, not Slint's Tab chain: in the rail,
-// up/down chooses the page and A or right enters it; on a page, up/down moves between rows,
-// left/right changes a row's value, A presses, B goes back to the rail. Each page is one
-// FocusScope that knows its current row. Every page exists all the time and is only hidden, so
-// the window can hand focus to it.
+// Navigation is the app's own, not Slint's Tab chain: in the rail, up/down picks the page and A
+// or right enters it; on a page, up/down moves between rows, left/right changes a value, A
+// presses, B goes back. Each page is one FocusScope that knows its current row; pages are only
+// hidden, never removed, so the window can hand focus to them.
 
 import { Theme, Health } from "@mujina/theme.slint";
 import { Icons } from "@mujina/icons.slint";
@@ -80,7 +78,6 @@ export component MainWindow inherits Window {
 
     // Setup
     in property <Config> config;
-    // The launchers Mujina has, by name.
     in property <[string]> launcher-names;
     in property <[string]> profiles;
     in property <string> button-in-use;
@@ -88,8 +85,7 @@ export component MainWindow inherits Window {
     in property <PluginRows> launcher-rows;
     in property <PluginRows> device-rows;
 
-    // The capture overlay: the seconds left of `capture-total`, the combination captured or why
-    // the watcher failed, and what came of storing it.
+    // The capture overlay; `capture-detail` is the combination captured or why the watcher failed.
     in property <CapturePhase> capture-phase;
     in property <int> capture-seconds;
     in property <int> capture-total: 10;
@@ -107,7 +103,7 @@ export component MainWindow inherits Window {
     in property <string> data-directory;
 
     callback refresh();
-    // Runs only the checks again, not the settings: for a page with checks when it is shown.
+    // Runs only the checks, not the settings, when a page with checks is shown.
     callback check();
     callback refresh-log();
     callback open-data-directory();
@@ -116,9 +112,9 @@ export component MainWindow inherits Window {
     callback quit();
     callback capture();
     callback dismiss-capture();
-    // The Setup page was left: a launcher chosen without what it requires is forgotten.
+    // Leaving Setup drops a launcher chosen without what it requires.
     callback leave-setup();
-    // The button of the System page's row of the check `id`.
+    // The button of a System page check row, by check `id`.
     callback check-action(string);
     callback copy(string);
     // Remove Mujina, on the System page: Mujina Setup takes over.
@@ -149,8 +145,7 @@ export component MainWindow inherits Window {
         }
     }
 
-    // Full screen fits the design's 1280 × 800 to the screen; the desktop window is the same
-    // layout, smaller.
+    // Full screen scales 1280 × 800 to the screen; the desktop window is the same layout, smaller.
     function update-density() {
         Theme.density = root.fullscreen ? max(0.6, min(root.width / 1280px, root.height / 800px)) : 0.72;
     }
@@ -172,8 +167,7 @@ export component MainWindow inherits Window {
         if (root.page != 1) {
             root.leave-setup();
         }
-        // Status and System show the checks, which a change of settings does not run: each
-        // time one of them is shown, they run again.
+        // Settings changes do not run the checks, so Status and System run them when shown.
         if (root.page == 0 || root.page == 2) {
             root.check();
         }

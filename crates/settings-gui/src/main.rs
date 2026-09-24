@@ -1,5 +1,5 @@
-//! Mujina Settings: a window onto what `mujinactl` shows and changes. A process of its own that
-//! exists only while it is open, so the resident agent never pays for it (ADR-0011).
+//! Mujina Settings: a window onto what `mujinactl` shows and changes. A separate process, so the
+//! resident agent never pays for it (ADR-0011).
 
 #![cfg_attr(windows, windows_subsystem = "windows")]
 
@@ -77,7 +77,7 @@ mod tests {
         c.is_alphanumeric() || c == '_'
     }
 
-    /// Where `text` names the crate `name` (not one whose name only starts so), what follows.
+    /// The text after each whole-word mention of `name` in `text`.
     fn after_crate<'a>(text: &'a str, name: &str) -> Vec<&'a str> {
         text.match_indices(name)
             .filter(|(at, _)| !text[..*at].ends_with(identifier))
@@ -86,9 +86,8 @@ mod tests {
             .collect()
     }
 
-    /// arch-check sees crates, not modules: Mujina Settings may depend on mujina-app, and would
-    /// be a second composition root again through its `compose` or `registry`. It takes what it
-    /// needs from the tool module, which hands out the application ring's types and plain data.
+    /// arch-check sees crates, not modules. This keeps Mujina Settings to mujina-app's `tool`
+    /// module, so it never becomes a second composition root.
     #[test]
     fn mujina_app_is_reached_through_its_tool_module_only() {
         // Written in two, so that this file does not name the crate itself.
