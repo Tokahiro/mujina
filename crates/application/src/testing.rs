@@ -1,5 +1,4 @@
-//! In-memory port implementations for tests, and the checks every launcher's and every
-//! device's descriptor has to pass.
+//! In-memory ports for tests, and the conformance checks every launcher and device must pass.
 
 use std::cell::{Cell, RefCell};
 use std::path::PathBuf;
@@ -97,15 +96,12 @@ pub struct FakeLauncher {
     pub game_in_front: Cell<Option<bool>>,
     /// Whether the launcher knows the game's processes.
     pub game_known: Cell<bool>,
-    /// Whether nothing of the game runs any more, although the launcher counts it as running.
     pub game_gone: Cell<bool>,
-    /// Whether the launcher opens its menu itself instead of through a shortcut.
     pub direct_menu: Cell<bool>,
-    /// Whether the launcher opens its in-game overlay itself instead of through a shortcut.
     pub direct_overlay: Cell<bool>,
-    /// Its menu shortcut: [`FakeLauncher::MENU`] unless the test says otherwise.
+    /// [`FakeLauncher::MENU`] unless the test says otherwise.
     pub menu_shortcut: Cell<Option<KeyChord>>,
-    /// Its overlay shortcut: [`FakeLauncher::OVERLAY`] unless the test says otherwise.
+    /// [`FakeLauncher::OVERLAY`] unless the test says otherwise.
     pub overlay_shortcut: Cell<Option<KeyChord>>,
     reconfigured: RefCell<Vec<OptionTable>>,
     observed: RefCell<Vec<AgentEvent>>,
@@ -150,7 +146,6 @@ impl FakeLauncher {
         self.game_running.set(running);
     }
 
-    /// The events the agent passed on, in order.
     pub fn observed(&self) -> Vec<AgentEvent> {
         self.observed.borrow().clone()
     }
@@ -159,7 +154,6 @@ impl FakeLauncher {
         self.calls.borrow().clone()
     }
 
-    /// The options each `reconfigure` brought, in order.
     pub fn reconfigured(&self) -> Vec<OptionTable> {
         self.reconfigured.borrow().clone()
     }
@@ -306,16 +300,14 @@ impl SessionLauncher for FakeLauncher {
     }
 }
 
-/// A launcher descriptor for tests; build it in a `static` from [`FakeLauncherDescriptor::named`]
-/// with struct update syntax.
+/// Build it in a `static` from [`FakeLauncherDescriptor::named`] with struct update syntax.
 pub struct FakeLauncherDescriptor {
     pub id: &'static str,
     pub name: &'static str,
     pub settings: &'static [SettingSpec],
     pub template: &'static str,
     pub caps: LauncherCaps,
-    /// A rule across options for `validate`: the text option named first must not hold the
-    /// second.
+    /// For `validate`: the text option named first must not hold the second.
     pub refuses: Option<(&'static str, &'static str)>,
     pub conflicting: &'static [&'static str],
     pub catalogs: &'static [(&'static str, &'static str)],
@@ -563,7 +555,6 @@ pub fn device_conformance(descriptor: &dyn DeviceDescriptor) {
     check_catalogs(&format!("device {id}"), descriptor.catalogs(), &texts);
 }
 
-/// Adds the texts Mujina Settings shows for `settings`: titles, helps and choice values.
 fn add_setting_texts(settings: &[SettingSpec], texts: &mut Vec<&str>) {
     for spec in settings {
         texts.push(spec.title);
@@ -591,8 +582,7 @@ fn check_catalogs(owner: &str, catalogs: &[(&str, &str)], texts: &[&str]) {
     }
 }
 
-/// A device descriptor for tests; build it in a `static` from [`FakeDevice::named`] with struct
-/// update syntax.
+/// Build it in a `static` from [`FakeDevice::named`] with struct update syntax.
 pub struct FakeDevice {
     pub id: &'static str,
     pub name: &'static str,
@@ -690,7 +680,6 @@ pub struct FakeInput {
 }
 
 impl FakeInput {
-    /// Every device passed to `reconfigure`, in order.
     pub fn reconfigured(&self) -> Vec<DeviceSelection> {
         self.reconfigured.borrow().clone()
     }
@@ -699,7 +688,6 @@ impl FakeInput {
         self.sent.borrow().clone()
     }
 
-    /// The buttons sent on untouched, in order.
     pub fn passed_on(&self) -> Vec<ButtonId> {
         self.passed_on.borrow().clone()
     }
@@ -717,7 +705,6 @@ impl DeviceButtons for FakeInput {
     }
 }
 
-/// Settings as the test says; `load` hands out a copy.
 #[derive(Default)]
 pub struct FakeSettingsSource(RefCell<Settings>);
 
@@ -742,13 +729,11 @@ impl KeySender for FakeInput {
     }
 }
 
-/// What is in front, as the test says.
 #[derive(Default)]
 pub struct FakeForeground {
     process: RefCell<Option<String>>,
-    /// How the window in front is shown; `None` (the default) as if it could not be read.
+    /// `None` (the default) as if it could not be read.
     pub shape: Cell<Option<WindowShape>>,
-    /// How often the shape was asked for.
     pub shape_asked: Cell<u32>,
 }
 
@@ -769,12 +754,10 @@ impl ForegroundProbe for FakeForeground {
     }
 }
 
-/// Counts home activations requested by the agent.
 #[derive(Default)]
 pub struct FakeHomeActivator {
     pub activations: Cell<u32>,
     pub game_activations: Cell<u32>,
-    /// Whether activating the home role for the game fails, as it does without the package.
     pub refuse_game: Cell<bool>,
 }
 
@@ -793,7 +776,7 @@ impl HomeActivator for FakeHomeActivator {
     }
 }
 
-/// A launch screen that records what happened to it and never actually waits.
+/// Records its calls and never waits.
 #[derive(Default)]
 pub struct FakeLaunchScreen {
     pub log: RefCell<Vec<&'static str>>,
@@ -818,7 +801,6 @@ impl LaunchScreen for FakeLaunchScreen {
     }
 }
 
-/// Counts how often the agent was asked for, and told of a launcher start.
 #[derive(Default)]
 pub struct FakeAgentControl {
     pub requests: Cell<u32>,

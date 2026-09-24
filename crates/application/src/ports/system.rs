@@ -17,12 +17,10 @@ pub trait FullScreenExperience {
 }
 
 pub trait ForegroundProbe {
-    /// File name of the process that owns the foreground window right now.
     fn foreground_process(&self) -> Option<String>;
 
-    /// `None` without a foreground window or when it cannot be read. Asked only on a button press
-    /// whose game window cannot be found, so it may look things up, but it must not wait on the
-    /// window's own thread.
+    /// `None` without a foreground window or when it cannot be read. May look things up (asked on
+    /// a button press only), but must not wait on the window's own thread.
     fn foreground_shape(&self) -> Option<WindowShape> {
         None
     }

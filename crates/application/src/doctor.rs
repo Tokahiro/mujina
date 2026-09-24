@@ -1,5 +1,4 @@
-//! Self-diagnosis. The target devices have no keyboard, so "why does it not work" has to be
-//! answerable from one command whose output can be read on the device or sent to someone.
+//! Self-diagnosis in one command, readable on a device without a keyboard or sent to someone.
 
 use std::fmt::Write as _;
 
@@ -17,8 +16,7 @@ pub enum Severity {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Finding {
-    /// The check's stable id, English and lower case, e.g. `developer mode`: printed by
-    /// `mujinactl doctor` and used by Mujina Settings to look the finding up.
+    /// Stable, lower case, e.g. `developer mode`: Mujina Settings looks the finding up by it.
     pub id: &'static str,
     /// Its name in Mujina Settings, e.g. "Developer Mode", translated by its crate's catalog.
     pub title: Msg,
@@ -31,7 +29,6 @@ pub struct Finding {
 }
 
 impl Finding {
-    /// Sets [`Finding::summary`].
     #[must_use]
     pub fn saying(self, summary: Msg) -> Self {
         Self {
@@ -40,7 +37,6 @@ impl Finding {
         }
     }
 
-    /// Sets [`Finding::remedy`].
     #[must_use]
     pub fn remedied_by(self, remedy: Remedy) -> Self {
         Self {
@@ -50,7 +46,7 @@ impl Finding {
     }
 }
 
-/// What a page can offer to fix a finding. The check chooses, so pages need not know.
+/// What a page can offer to fix a finding; the check chooses it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Remedy {
     /// Windows' page of location permissions.
@@ -58,17 +54,15 @@ pub enum Remedy {
     StartAgent,
 }
 
-/// A doctor check. Adapters add those only they can make (OS settings, a launcher's files).
+/// A doctor check from an adapter (OS settings, a launcher's files).
 pub trait Check {
-    /// Its findings' [`Finding::id`], known before examining so a page can run only its checks.
+    /// Its findings' [`Finding::id`], known before examining.
     fn id(&self) -> &'static str;
 
-    /// The title of its findings ([`Finding::title`]).
     fn title(&self) -> Msg;
 
     fn examine(&self) -> Finding;
 
-    /// A finding of this check.
     fn found(&self, severity: Severity, detail: impl Into<String>) -> Finding
     where
         Self: Sized,
@@ -93,10 +87,9 @@ pub struct Doctor<'a> {
     pub checks: &'a [Box<dyn Check>],
 }
 
-/// Id of the doctor's check of Xbox mode, the full screen experience.
+/// Id of the doctor's Xbox mode check.
 pub const FULL_SCREEN_EXPERIENCE: &str = "full screen experience";
 
-// The doctor's own checks, by id and title.
 const FSE: (&str, Msg) = (FULL_SCREEN_EXPERIENCE, Msg::new("Xbox mode"));
 const PACKAGE: (&str, Msg) = ("package", Msg::new("Mujina's package"));
 const HOME_APP: (&str, Msg) = ("home app", Msg::new("Home app"));
@@ -113,11 +106,9 @@ fn finding((id, title): (&'static str, Msg), severity: Severity, detail: String)
     }
 }
 
-/// One of the doctor's own checks: its id, and how it looks.
 type Own<'d> = (&'static str, fn(&Doctor<'d>) -> Finding);
 
 impl<'d> Doctor<'d> {
-    /// Its own checks, in the order they are looked at, before the others.
     fn own() -> [Own<'d>; 4] {
         [
             (FSE.0, Self::check_fse),
@@ -131,8 +122,7 @@ impl<'d> Doctor<'d> {
         self.examine_only(|_| true)
     }
 
-    /// Runs only the checks whose id `wanted` accepts, in [`examine`](Self::examine)'s order, so a
-    /// page showing a few need not wait for all.
+    /// Only the checks whose id `wanted` accepts, in [`examine`](Self::examine)'s order.
     pub fn examine_only(&self, wanted: impl Fn(&str) -> bool) -> Vec<Finding> {
         let own = Self::own()
             .into_iter()
@@ -146,8 +136,7 @@ impl<'d> Doctor<'d> {
         own.chain(theirs).collect()
     }
 
-    /// As [`examine`](Self::examine), but reuses the `known` findings instead of running those
-    /// checks again.
+    /// As [`examine`](Self::examine), but reuses the `known` findings.
     pub fn examine_knowing(&self, mut known: Vec<Finding>) -> Vec<Finding> {
         let mut take = |id: &str| {
             let at = known.iter().position(|finding| finding.id == id)?;
@@ -228,7 +217,7 @@ impl<'d> Doctor<'d> {
     }
 }
 
-/// Renders findings as plain text, one per line.
+/// Plain text, one finding per line.
 pub fn render(findings: &[Finding]) -> String {
     let mut text = String::new();
     for finding in findings {
@@ -299,7 +288,6 @@ mod tests {
         );
     }
 
-    /// A check of an adapter's, which says it is fine.
     struct Quiet;
 
     impl Check for Quiet {
@@ -348,7 +336,6 @@ mod tests {
         assert_eq!(render(&found[1..]), "[ok  ] quiet: calm\n");
     }
 
-    /// A check of an adapter's that counts how often it looked.
     struct Counted {
         id: &'static str,
         looked: Rc<Cell<u32>>,
@@ -395,7 +382,6 @@ mod tests {
         };
         let known = doctor.examine_only(|id| id == "second" || id == "launcher");
         let all = doctor.examine_knowing(known.clone());
-        // In the doctor's order, as if looked at once.
         let ids: Vec<&str> = all.iter().map(|finding| finding.id).collect();
         assert_eq!(
             ids,
@@ -447,7 +433,6 @@ mod tests {
                 Some(Msg::new("This Windows has no Xbox mode."))
             )
         );
-        // Adapters' checks say it the same way.
         let quiet = Quiet
             .found(Severity::Warning, "loud")
             .saying(Msg::new("Loud."))

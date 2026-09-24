@@ -1,6 +1,5 @@
-//! Ports: the interfaces through which use cases reach the outside world. They are cut by who
-//! needs them (home role, agent); what a launcher cannot do stays at the trait's default.
-//! Adapters use everything from here, so moving a port between files changes no adapter.
+//! Interfaces through which use cases reach the outside world, cut by who needs them (home role,
+//! agent). What a launcher cannot do stays at the trait's default.
 
 pub mod absent;
 mod device;

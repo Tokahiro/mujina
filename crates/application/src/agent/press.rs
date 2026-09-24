@@ -1,11 +1,9 @@
-//! What one press of the device button came to, for the composition root's log. It names roles
-//! only (launcher, game, another app), never a process or window, so logs can go into an issue.
+//! What a button press came to, for the log. Names roles only, so logs can go into an issue.
 
 use std::fmt;
 
 use mujina_domain::button::WindowShape;
 
-/// What was in front at the press, as the agent made it out.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InFront {
     LauncherUi,
@@ -17,7 +15,6 @@ pub enum InFront {
     Other,
 }
 
-/// What the agent found out about the launcher's game.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GameSeen {
     /// The launcher runs none, or cannot tell.
@@ -28,11 +25,9 @@ pub enum GameSeen {
     Behind,
     /// No window found, and the launcher knows its processes: the window in front is not the game.
     NoWindow,
-    /// No window found, and the launcher does not know its processes: the window in front may be
-    /// the game.
+    /// No window found, and the launcher does not know its processes: the front one may be it.
     NotFound,
-    /// The launcher still counts one as running, but nothing of it runs (it may wait for what the
-    /// game started, such as a browser).
+    /// The launcher still counts one as running, but nothing of it runs.
     Gone,
 }
 
@@ -43,26 +38,23 @@ impl GameSeen {
     }
 }
 
-/// What the agent looked at before it decided.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Seen {
     pub in_front: InFront,
     pub game: GameSeen,
-    /// How the window in front is shown. Asked only while the game's window cannot be found;
-    /// `None` then means it could not be read.
+    /// Only asked while the game's window is not found; then `None` means it could not be read.
     pub shape: Option<WindowShape>,
     /// Xbox mode is on.
     pub console: bool,
 }
 
-/// What the press was turned into.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Outcome {
     /// The button is switched off, or no device runs: the press means nothing.
     Off,
     /// The launcher's menu; `direct`: opened by the launcher itself, not by its shortcut.
     Menu { direct: bool },
-    /// The launcher's overlay over the game; `direct` as for [`Menu`](Self::Menu).
+    /// `direct` as for [`Menu`](Self::Menu).
     Overlay { direct: bool },
     /// The menu or the overlay was due, but the launcher did not open it and has no shortcut.
     NothingToSend,
@@ -86,8 +78,7 @@ pub struct PressReport {
 }
 
 impl PressReport {
-    /// One line for the log; `launcher` is the launcher's name for the user, e.g. "Steam Big
-    /// Picture".
+    /// One line for the log; `launcher` is its display name, e.g. "Steam Big Picture".
     pub fn describe(&self, launcher: &str) -> String {
         let outcome = Described {
             outcome: self.outcome,
@@ -150,7 +141,6 @@ impl fmt::Display for Seen {
         }
         f.write_str(match self.game {
             GameSeen::None => "; no game",
-            // Only the launcher's word: where the game is was not needed, so it was not looked at.
             GameSeen::Running => "; the launcher counts a game as running",
             GameSeen::InFront => "; a game runs",
             GameSeen::Behind => "; the game's window is behind it",

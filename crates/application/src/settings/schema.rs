@@ -1,6 +1,5 @@
-//! Settings described as data, so the configuration reader and the tools need not know them. The
-//! core settings are here; launchers and devices describe their own
-//! ([`LauncherDescriptor::settings`], [`DeviceDescriptor::settings`]).
+//! Settings as data, so the configuration reader and the tools need not know them. Launchers and
+//! devices describe their own ([`LauncherDescriptor::settings`], [`DeviceDescriptor::settings`]).
 
 use crate::device::DeviceDescriptor;
 use crate::launcher::{LauncherDescriptor, OptionTable};
@@ -12,15 +11,13 @@ pub struct SettingSpec {
     /// Lower case, digits and `_`, e.g. `wifi_indicator`.
     pub key: &'static str,
     pub kind: SettingKind,
-    /// A short English name, e.g. "Correct the Wi-Fi icon in Steam", and its translation key.
-    /// Write it as `Msg::new("…").english()` so `cargo xtask i18n-check` finds it. Core settings
-    /// stay English: Mujina Settings words their rows itself.
+    /// A short English name and its translation key. Write it as `Msg::new("…").english()` so
+    /// `cargo xtask i18n-check` finds it.
     pub title: &'static str,
     /// A sentence or two shown under the title; English, like the title.
     pub help: &'static str,
     pub applies: Applies,
-    /// A toggle of the same section without which this setting does nothing. Mujina Settings
-    /// greys it out while that toggle is off; the configuration takes it as it is.
+    /// A toggle of the same section without which this setting does nothing.
     pub requires: Option<&'static str>,
     /// The section cannot be used without a value here. Only for kinds without a default.
     pub required: bool,
@@ -39,8 +36,7 @@ pub enum SettingKind {
     Text {
         format: TextFormat,
     },
-    /// A list of texts, such as a program's arguments. Mujina Settings edits it as one line with
-    /// [`TextFormat::ArgumentList`]'s rules.
+    /// Edited as one line with [`TextFormat::ArgumentList`]'s rules, e.g. a program's arguments.
     TextList,
     Number {
         min: i64,
@@ -122,8 +118,7 @@ impl SettingSpec {
     }
 }
 
-/// Whether the toggle `key` of `specs` is on in `options`, or by default. `false` for a key that
-/// is no toggle there.
+/// Whether toggle `key` is on in `options` or by default; `false` for a key that is no toggle.
 pub fn flag(specs: &[SettingSpec], options: &OptionTable, key: &str) -> bool {
     let spec = specs.iter().find(|spec| spec.key == key);
     matches!(
@@ -132,7 +127,6 @@ pub fn flag(specs: &[SettingSpec], options: &OptionTable, key: &str) -> bool {
     )
 }
 
-/// A section of `config.toml` and the settings in it.
 #[derive(Debug, Clone, Copy)]
 pub struct SettingSection {
     /// Dotted, e.g. `device.button`.
@@ -342,8 +336,7 @@ pub static CORE: &[SettingSection] = &[
     },
 ];
 
-/// The setting dotted `key` names, among the core settings and those of `launchers` and
-/// `devices`.
+/// The setting dotted `key` names, among the core settings, `launchers` and `devices`.
 pub fn find(
     key: &str,
     launchers: &[&dyn LauncherDescriptor],
@@ -386,7 +379,6 @@ mod tests {
     use crate::settings::Settings;
     use crate::testing::{FakeDevice, FakeLauncherDescriptor};
 
-    /// A device with one option that applies at once and one that waits.
     static WITH_A_MODE: FakeDevice = FakeDevice {
         settings: &[
             SettingSpec {
@@ -465,11 +457,11 @@ mod tests {
             "launcher.kind",
             "features.launch_screen",
             "launcher.fake.link",
-            // Unknown: nothing running follows it.
+            // Unknown.
             "features.surprise",
             "launcher.fake.surprise",
             "launcher.other.link",
-            // Another launcher's, which the one running leaves alone.
+            // Another launcher's.
             "launcher.second.start_screen",
             "features",
             "device.ally.link",

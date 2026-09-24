@@ -1,5 +1,4 @@
-//! The launcher as the home role (bringing it up) and the agent (living beside it) need it. What
-//! it is and what it offers is its descriptor's business ([`crate::launcher`]).
+//! The launcher as the home role and the agent use it; descriptors are in [`crate::launcher`].
 
 use std::path::PathBuf;
 
@@ -28,15 +27,14 @@ pub enum LauncherState {
 /// Where the launcher's running game is at a button press.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GameWhereabouts {
-    /// Its window is the one in front.
     InFront,
-    /// Its window was found behind the one in front.
     Behind,
-    /// No window of it was found. `known`: the launcher knows the game's processes, so the window
-    /// in front is not the game's; otherwise it may be (a game started through its own launcher).
-    NoWindow { known: bool },
-    /// The launcher still counts it as running, but nothing of it runs: a launcher may wait for
-    /// what the game started (a browser, say) to end too.
+    /// No window found. `known`: the launcher knows the game's processes, so the window in front
+    /// is not the game's.
+    NoWindow {
+        known: bool,
+    },
+    /// The launcher counts it as running, but nothing of it runs (it waits for a browser, say).
     Gone,
 }
 
@@ -49,8 +47,7 @@ pub trait HomeLauncher {
 
     fn state(&self) -> LauncherState;
 
-    /// Puts in place what the launcher needs, however it gets started. Called on every home
-    /// activation, so it must be idempotent and cheap; a failure is only a warning.
+    /// Called on every home activation, so idempotent and cheap; a failure is only a warning.
     fn prepare(&self, _install: &LauncherInstall) -> PortResult<()> {
         Ok(())
     }
@@ -61,8 +58,7 @@ pub trait HomeLauncher {
 
     fn focus_ui(&self) -> PortResult<()>;
 
-    /// Opens `destination` in the console UI, which is already up. Launchers without such pages
-    /// stay where they are.
+    /// Opens `destination` in the console UI, which is already up.
     fn navigate(
         &self,
         _install: &LauncherInstall,
@@ -71,8 +67,7 @@ pub trait HomeLauncher {
         Ok(())
     }
 
-    /// Brings the running game back to the front. Works from the freshly activated home role
-    /// only; see [`HomeActivator::activate_game`](super::HomeActivator::activate_game).
+    /// Brings the running game to the front; works only from the freshly activated home role.
     fn focus_game(&self) -> PortResult<()> {
         Err(PortError::NotFound("the game's window".into()))
     }
@@ -81,39 +76,34 @@ pub trait HomeLauncher {
 /// Whether the launcher took a request on itself.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Direct {
-    /// It did; nothing else is to be done.
     Taken,
-    /// It did not, or cannot tell that it did: the shortcut is next.
+    /// It did not, or cannot tell: the shortcut is next.
     NotTaken,
 }
 
 /// What the resident agent needs of a running launcher.
 pub trait SessionLauncher {
-    /// Whether a process of this image name is the launcher's own: its window in front is the
-    /// launcher UI, and supervision may watch it (a reused process id names someone else's).
+    /// Whether this image name is the launcher's: its window in front counts as the launcher UI.
     fn owns_process(&self, process_name: &str) -> bool;
 
     fn process_id(&self) -> Option<u32>;
 
-    /// `false` for a launcher that cannot tell; the button then opens the menu in the launcher UI
-    /// and leads home elsewhere.
+    /// `false` for a launcher that cannot tell.
     fn game_running(&self) -> bool {
         false
     }
 
-    /// Whether the window in front belongs to a game this launcher started. Asked on a button
-    /// press only, so it may look things up.
+    /// Whether the window in front is a game this launcher started; may look things up.
     fn game_in_front(&self) -> bool {
         false
     }
 
-    /// Whether the running game's window can be found at all.
     fn game_findable(&self) -> bool {
         false
     }
 
-    /// Asked on a button press only, while [`game_running`](Self::game_running) is true, so it
-    /// may look things up. Override it where the launcher knows the game's processes.
+    /// Asked on a button press while [`game_running`](Self::game_running), so it may look things
+    /// up. Override it where the launcher knows the game's processes.
     fn game_whereabouts(&self) -> GameWhereabouts {
         if self.game_in_front() {
             GameWhereabouts::InFront
@@ -124,44 +114,37 @@ pub trait SessionLauncher {
         }
     }
 
-    /// A game was just started; the launcher may tidy up what it shows while it loads. Must not
-    /// block.
+    /// The launcher may tidy up what it shows while the game loads. Must not block.
     fn game_started(&self) {}
 
-    /// The game has ended just now. Must not block.
+    /// Must not block.
     fn game_ended(&self) {}
 
-    /// The chord that opens its main menu while its UI has the focus. Read on each press: the
-    /// user may change it at any time.
+    /// Opens the main menu while its UI has the focus. Read on each press, so it may change.
     fn menu_shortcut(&self) -> Option<KeyChord> {
         None
     }
 
-    /// The chord that opens its overlay while a game has the focus. Separate from the menu's,
-    /// since finding it may mean reading the launcher's files.
+    /// Opens the overlay while a game has the focus. May read the launcher's files.
     fn overlay_shortcut(&self) -> Option<KeyChord> {
         None
     }
 
-    /// Toggles the menu without a shortcut (a shortcut only works while the right part of the
-    /// launcher has the focus). [`Direct::Taken`] once the request went through. Must not block.
+    /// Toggles the menu without a shortcut; [`Direct::Taken`] once it went through. Must not block.
     fn open_menu(&self) -> Direct {
         Direct::NotTaken
     }
 
-    /// As [`open_menu`](Self::open_menu), for the in-game overlay; asked only while the game is
-    /// in front.
+    /// As [`open_menu`](Self::open_menu), for the overlay; asked only while the game is in front.
     fn open_overlay(&self) -> Direct {
         Direct::NotTaken
     }
 
-    /// The options that apply at once changed. `live` holds only those set, so read them with
+    /// Called only when `live` changed. It holds only the options set: get defaults with
     /// [`SettingSpec::value_in`](crate::settings::schema::SettingSpec::value_in) or
-    /// [`schema::flag`](crate::settings::schema::flag) to get defaults. Called only when `live`
-    /// differs from last time. Must not block.
+    /// [`schema::flag`](crate::settings::schema::flag). Must not block.
     fn reconfigure(&self, _live: &OptionTable) {}
 
-    /// Sees every event after the agent has handled it, for work beside these ports (Steam keeps
-    /// its Big Picture link up this way). Must not block: hand work to the launcher's own thread.
+    /// Every event, after the agent handled it. Must not block: hand work to the launcher's thread.
     fn observe(&self, _event: &AgentEvent) {}
 }

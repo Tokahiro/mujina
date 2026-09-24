@@ -1,6 +1,5 @@
-//! Making Mujina the console home app, and handing the setting back cleanly: on some Windows
-//! builds Task View stops working when the selected home app is uninstalled. Every tool hands it
-//! back by one rule, [`home_app_repair`].
+//! Making Mujina the console home app and handing it back by one rule, [`home_app_repair`]: on
+//! some Windows builds Task View breaks when the selected home app is uninstalled.
 
 use crate::ports::{HomeAppRegistry, PackageIdentity, PortError};
 
@@ -25,15 +24,13 @@ pub enum UnregisterOutcome {
 pub enum HomeAppRepair {
     /// This Mujina is the home app: put the previous one back.
     Restore(String),
-    /// This Mujina is the home app and there was none before it (or the backup names a Mujina,
-    /// this one or another, whose package may have gone since): remove the setting.
+    /// This Mujina is the home app; the backup is empty or a Mujina whose package may be gone.
     Clear,
-    /// Another app is the home app, another Mujina among them: leave it alone.
+    /// Another app is the home app, another Mujina too.
     Leave,
 }
 
-/// The rule for giving the home app back. `ours` is this Mujina's app ID (`<family>!App`); a
-/// contributor's build beside the release has another family, so it is another app.
+/// `ours` is this Mujina's app ID (`<family>!App`); a contributor's build has another family.
 pub fn home_app_repair(current: Option<&str>, backup: Option<&str>, ours: &str) -> HomeAppRepair {
     match current {
         Some(current) if same_app(current, ours) => match backup {
@@ -46,8 +43,7 @@ pub fn home_app_repair(current: Option<&str>, backup: Option<&str>, ours: &str) 
     }
 }
 
-/// Whether two app IDs (`<package family>!<application id>`) name the same app. Windows compares
-/// package family names without regard to case; the application id is compared as written.
+/// App IDs are `<package family>!<application id>`; Windows ignores case in the family only.
 pub fn same_app(one: &str, other: &str) -> bool {
     match (one.split_once('!'), other.split_once('!')) {
         (Some((family, app)), Some((other_family, other_app))) => {
@@ -57,8 +53,7 @@ pub fn same_app(one: &str, other: &str) -> bool {
     }
 }
 
-/// Whether two app IDs name the same app whoever signed it: compares the package name (the
-/// family up to its last `_`, where the publisher's id begins) and the application id.
+/// Same app whoever signed it: ignores the publisher id after the family's last `_`.
 pub fn same_product(one: &str, other: &str) -> bool {
     fn parts(id: &str) -> Option<(&str, &str)> {
         let (family, app) = id.split_once('!')?;
@@ -73,8 +68,7 @@ pub fn same_product(one: &str, other: &str) -> bool {
     }
 }
 
-/// Why the home app setting was not changed. The port's error is in the message, not the source,
-/// so a printed error chain does not repeat it.
+/// The port's error is in the message, not the source, so a printed chain does not repeat it.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum RegisterError {
     #[error("this process has no package identity; install the MSIX package first")]
@@ -120,8 +114,7 @@ impl<'a> HomeAppRegistration<'a> {
         Ok(RegisterOutcome::Registered)
     }
 
-    /// If Mujina is the home app, gives the setting back to the app before it and forgets the
-    /// backup. Otherwise touches nothing: the shared backup may belong to another Mujina.
+    /// Gives the setting back if this Mujina is home; else touches nothing: the backup is shared.
     pub fn unregister(&self) -> Result<UnregisterOutcome, RegisterError> {
         let ours = self
             .identity
@@ -165,7 +158,6 @@ mod tests {
         assert_eq!(registry.current().unwrap().as_deref(), Some(OURS));
         assert_eq!(registry.backup().unwrap().as_deref(), Some(XBOX));
 
-        // A second run must not overwrite the backup with ourselves.
         assert_eq!(
             registration.register(),
             Ok(RegisterOutcome::AlreadyRegistered)
@@ -226,12 +218,10 @@ mod tests {
             home_app_repair(Some(OURS), Some(""), OURS),
             HomeAppRepair::Clear
         );
-        // Package family names compare without regard to case.
         assert_eq!(
             home_app_repair(Some("MUJINA_ABC!App"), None, OURS),
             HomeAppRepair::Clear
         );
-        // A backup that names this Mujina itself is no app to go back to.
         assert_eq!(
             home_app_repair(Some(OURS), Some("mujina_abc!App"), OURS),
             HomeAppRepair::Clear
@@ -248,25 +238,22 @@ mod tests {
             home_app_repair(None, Some(XBOX), OURS),
             HomeAppRepair::Leave
         );
-        // Another app of the same package is not the home app entry.
         assert_eq!(
             home_app_repair(Some("Mujina_abc!Settings"), None, OURS),
             HomeAppRepair::Leave
         );
-        // Not by prefix: a family that merely starts the same is another package.
         assert_eq!(
             home_app_repair(Some("Mujina_abcd!App"), None, OURS),
             HomeAppRepair::Leave
         );
     }
 
-    /// A contributor's build: the same package name, another publisher, so another family.
+    /// A contributor's build: same package name, another publisher.
     const DEV: &str = "Mujina_zexajcypj3ggw!App";
 
     #[test]
     fn another_mujina_is_another_app() {
         assert_eq!(home_app_repair(Some(DEV), None, OURS), HomeAppRepair::Leave);
-        // Nor is it an app to go back to: its package may have gone since.
         assert_eq!(
             home_app_repair(Some(OURS), Some(DEV), OURS),
             HomeAppRepair::Clear
@@ -277,14 +264,12 @@ mod tests {
     fn one_product_whoever_signed_it() {
         assert!(same_product(OURS, DEV));
         assert!(same_product("MUJINA_abc!App", DEV));
-        // Another app of the package, or another package that only starts the same, is not.
         assert!(!same_product(OURS, "Mujina_abc!Settings"));
         assert!(!same_product(OURS, "MujinaDev_zexajcypj3ggw!App"));
         assert!(!same_product(OURS, XBOX));
         assert!(!same_product("no-family!App", "no-family!App"));
     }
 
-    /// The release registered, then a contributor's build over it.
     fn release_then_dev() -> (FakeHomeAppRegistry, FakeIdentity, FakeIdentity) {
         let registry = FakeHomeAppRegistry::with_current(Some(XBOX));
         let release = FakeIdentity::packaged(OURS);
@@ -295,7 +280,6 @@ mod tests {
         HomeAppRegistration::new(&dev, &registry)
             .register()
             .unwrap();
-        // The build took over from the release, and the app before both stays the backup.
         assert_eq!(registry.current().unwrap().as_deref(), Some(DEV));
         assert_eq!(registry.backup().unwrap().as_deref(), Some(XBOX));
         (registry, release, dev)
@@ -317,8 +301,7 @@ mod tests {
 
     #[test]
     fn removing_the_build_first_gives_the_xbox_app_back_too() {
-        // Not the still installed release: the backup is shared and never names a package that
-        // may be gone.
+        // Not the release: the shared backup never names a package that may be gone.
         let (registry, release, dev) = release_then_dev();
         assert_eq!(
             HomeAppRegistration::new(&dev, &registry).unregister(),
@@ -372,21 +355,17 @@ mod tests {
     #[test]
     fn register_records_exactly_what_was_there_before() {
         let identity = FakeIdentity::packaged(OURS);
-        // A backup from an earlier time, and since then no home app at all.
         let registry = FakeHomeAppRegistry::with_current(None);
         registry.set_backup(Some(XBOX)).unwrap();
         let registration = HomeAppRegistration::new(&identity, &registry);
         assert_eq!(registration.register(), Ok(RegisterOutcome::Registered));
         assert_eq!(registry.backup().unwrap(), None);
-        // So giving it back leaves no home app, as before.
         assert_eq!(registration.unregister(), Ok(UnregisterOutcome::Cleared));
         assert_eq!(registry.current().unwrap(), None);
     }
 
     #[test]
     fn removing_one_mujina_keeps_the_backup_of_another() {
-        // A contributor's build (another family) is the home app, and its backup is the Xbox
-        // app. The release, which is not the home app, goes.
         let dev = DEV;
         let registry = FakeHomeAppRegistry::with_current(Some(XBOX));
         let dev_identity = FakeIdentity::packaged(dev);
@@ -400,7 +379,6 @@ mod tests {
         );
         assert_eq!(registry.current().unwrap().as_deref(), Some(dev));
         assert_eq!(registry.backup().unwrap().as_deref(), Some(XBOX));
-        // When the build goes too, the Xbox app comes back.
         assert_eq!(
             HomeAppRegistration::new(&dev_identity, &registry).unregister(),
             Ok(UnregisterOutcome::Restored(XBOX.to_string()))
@@ -425,7 +403,6 @@ mod tests {
             RegisterError::Registry(PortError::Failed("access denied".to_string()))
         );
         assert_eq!(error.to_string(), "home app setting: access denied");
-        // Already in the message, so not repeated as the source.
         assert!(std::error::Error::source(&error).is_none());
     }
 }
