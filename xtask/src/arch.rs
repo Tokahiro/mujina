@@ -143,7 +143,6 @@ pub fn check() -> TaskResult {
     }
 }
 
-/// Every way `members`, as `cargo metadata` lists them, break the rule.
 fn violations(members: &[Value]) -> Vec<String> {
     let mut violations = Vec::new();
     for member in members {

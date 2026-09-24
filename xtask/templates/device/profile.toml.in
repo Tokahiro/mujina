@@ -10,6 +10,7 @@ name = "@NAME@"
 manufacturer = "TODO manufacturer"
 product = "TODO product"
 
+# One entry per extra button.
 [[buttons]]
 # A name for logs and the configuration: lower case, digits and _.
 key = "extra"

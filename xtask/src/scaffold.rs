@@ -855,6 +855,7 @@ mod tests {
         for key in ["key", "label", "chord"] {
             assert!(buttons[0][key].is_str(), "{key}");
         }
+        // adapter-keyboard's reader refuses any other key.
         let known = ["id", "name", "match", "buttons"];
         assert!(profile.keys().all(|key| known.contains(&key.as_str())));
 

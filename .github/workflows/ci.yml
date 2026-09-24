@@ -20,8 +20,9 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
 
+# Actions are pinned to a commit, the only immutable reference; Dependabot keeps them current.
 # `rustup toolchain install` without arguments installs what rust-toolchain.toml pins.
-# Only main saves caches, except slint-tr-extractor's: tags can restore main's, not each other's.
+# Only main saves caches (tags can restore main's, not each other's), except slint-tr-extractor's.
 # release.yml finds portable, win-check and win-package by their names: rename them in both files.
 
 jobs:
@@ -99,7 +100,8 @@ jobs:
           shared-key: linux
           save-if: ${{ github.ref == 'refs/heads/main' }}
       # slint-tr-extractor, cached by Slint's version outside target/, where rust-cache keeps only
-      # build output. Pull requests save it too. No restore-keys: another version's is no use.
+      # build output. Pull requests save it too, so a Slint update builds it once. No restore-keys:
+      # another version's is no use.
       - name: Slint version
         id: slint
         run: |
