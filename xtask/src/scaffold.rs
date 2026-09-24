@@ -80,7 +80,8 @@ enum Kind {
     Launcher,
     /// A device crate, for buttons that are no key chords.
     Device,
-    /// A profile in `profiles/devices/`, for buttons that are key chords.
+    /// A profile in `profiles/devices/`, for buttons that are key chords. adapter-keyboard's build
+    /// script finds it, so no list is edited.
     Profile,
 }
 
@@ -246,7 +247,6 @@ impl Skeleton {
         format!("mujina-{}", self.dir())
     }
 
-    /// The crate's name in Rust code.
     fn ident(&self) -> String {
         self.package().replace('-', "_")
     }

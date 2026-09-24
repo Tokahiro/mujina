@@ -272,7 +272,6 @@ mod tests {
         })
     }
 
-    /// Whether a crate of ring `from` may depend on a workspace crate of ring `to`.
     fn allowed(from: &str, to: &str) -> bool {
         violations(&[
             member("a", Some(from), &[path("b")]),
@@ -281,7 +280,6 @@ mod tests {
         .is_empty()
     }
 
-    /// Whether a crate of ring `ring` may depend on the crates.io crate `dependency`.
     fn allowed_outside(ring: &str, dependency: &str) -> bool {
         violations(&[member("a", Some(ring), &[registry(dependency)])]).is_empty()
     }
@@ -409,7 +407,7 @@ mod tests {
         assert!(!allowed("settings-app", "adapter"));
         assert!(!allowed("settings-app", "adapter-support"));
         assert!(allowed_outside("settings-app", "slint"));
-        // The home app rule runs in-process, with the registry adapter.
+        // The home app rule runs in-process, with the registry adapter: no mujinactl.exe to find.
         for ring in ["domain", "application", "plumbing", "leaf", "adapter"] {
             assert!(allowed("installer", ring), "installer on {ring}");
         }

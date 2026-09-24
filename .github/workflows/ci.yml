@@ -23,7 +23,8 @@ env:
 # Actions are pinned to a commit (the only immutable reference); Dependabot keeps them current.
 # `rustup toolchain install` without arguments installs what rust-toolchain.toml pins.
 # Caches are saved on main only (tags can restore main's, not each other's), except the small
-# slint-tr-extractor cache. release.yml finds portable, win-check and win-package by name.
+# slint-tr-extractor cache. release.yml finds portable, win-check and win-package by their names:
+# rename them in both files together.
 
 jobs:
   changes:

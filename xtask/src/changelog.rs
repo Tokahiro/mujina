@@ -29,7 +29,6 @@ pub fn release_notes(tag: Option<&str>) -> TaskResult {
     Ok(())
 }
 
-/// The release page's text: `notes` unwrapped, and the badge.
 fn page(notes: &str) -> String {
     format!("{}\n\n{SLINT_BADGE}", unwrap(notes))
 }

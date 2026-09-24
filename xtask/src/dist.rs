@@ -166,7 +166,6 @@ fn sha256(file: &Path) -> Result<String, String> {
     }
 }
 
-/// Windows PowerShell, from the system directory.
 fn windows_powershell() -> PathBuf {
     std::env::var_os("SystemRoot")
         .map_or_else(|| PathBuf::from(r"C:\Windows"), PathBuf::from)

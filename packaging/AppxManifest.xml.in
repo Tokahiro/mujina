@@ -103,7 +103,8 @@
     <uap4:CustomCapability Name="Microsoft.appCategory.gamingHome_8wekyb3d8bbwe" />
     <!-- Wi-Fi signal strength: since 24H2, WlanRegisterNotification refuses the MSM
          notifications with ERROR_ACCESS_DENIED without this capability, even to a full-trust
-         package. It asks for the location consent the connection's details already need
+         package with the location consent given. It asks for the location consent the
+         connection's details already need
          (https://learn.microsoft.com/en-us/windows/win32/nativewifi/wi-fi-access-location-changes).
          Used for those notifications only (crates/adapter-steam/src/wlan.rs).
          DeviceCapability elements come last. -->

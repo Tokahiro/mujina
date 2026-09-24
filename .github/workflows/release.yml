@@ -55,7 +55,8 @@ jobs:
           run='first(.workflow_runs[] | select(.conclusion == "success") | .id)
             // (if any(.workflow_runs[]; .status != "completed") then "running" else "missing" end)'
           # Whether the build and test jobs passed, by their names in ci.yml; skipped is not passed.
-          # All attempts count: a job not re-run passed in an earlier one.
+          # All attempts count: a job not re-run passed in an earlier one, and one that failed in
+          # the last would have failed the run.
           built='["portable (Linux)", "Windows (clippy, test)", "Windows (package)"]
             - [.jobs[] | select(.conclusion == "success") | .name] | length == 0'
           # An API error is no verdict: the question is asked again, as for a run still going.

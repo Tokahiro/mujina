@@ -383,8 +383,8 @@ pub(crate) fn rust_catalog_problems(sources: &[String], po: &str) -> Result<Vec<
 }
 
 /// The first translation of `entry` whose placeholders differ from its English, with both lists.
-/// `msgstr[0]` is compared with the msgid (German uses it for exactly one), other forms with the
-/// plural.
+/// `msgstr[0]` is compared with the msgid, other forms with the plural: German uses `msgstr[0]`
+/// for exactly one, so it may leave out a `{n}` the msgid leaves out.
 fn lost_placeholder(entry: &Entry) -> Option<(&str, Vec<&str>, Vec<&str>)> {
     entry
         .translations
