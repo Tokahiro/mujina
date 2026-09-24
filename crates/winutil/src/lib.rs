@@ -1,5 +1,4 @@
-//! Safe Win32 wrappers shared by the Windows adapters, so that adapters never depend on each
-//! other. Not an adapter itself: it implements no port and knows nothing of Mujina's domain.
+//! Safe Win32 wrappers shared by the Windows adapters; no ports, nothing of Mujina's domain.
 
 #![cfg(windows)]
 

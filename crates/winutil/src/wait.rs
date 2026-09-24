@@ -127,6 +127,7 @@ impl<'a, E> EventLoop<'a, E> {
                     }
                 }
             }
+            // Also after a source: Windows does not say how input ranks among signalled handles.
             pump(&mut events);
             if deliver(&mut events, handle) == Flow::Exit {
                 return Ok(());

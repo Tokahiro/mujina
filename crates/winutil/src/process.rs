@@ -200,7 +200,6 @@ impl ProcessWatch {
         self.handle.as_raw_handle()
     }
 
-    /// How long this watch has existed.
     pub fn observed_for(&self) -> Duration {
         self.since.elapsed()
     }

@@ -27,7 +27,7 @@ pub fn family_name_from_id(name: &str, publisher: &str) -> Option<String> {
     (status == ERROR_SUCCESS).then(|| from_wide(&buffer))
 }
 
-/// Whether a package of this family is installed for the current user.
+/// For the current user.
 pub fn is_installed(family: &str) -> bool {
     let family = to_wide(family);
     let mut count: u32 = 0;
@@ -93,7 +93,7 @@ pub fn installed_full_names(family: &str) -> Vec<String> {
         .collect()
 }
 
-/// The package family name, or `None` when the process runs unpackaged.
+/// `None` when this process runs unpackaged.
 pub fn family_name() -> Option<String> {
     let mut length: u32 = 0;
     // SAFETY: a null buffer with length 0 is the documented way to query the required length.

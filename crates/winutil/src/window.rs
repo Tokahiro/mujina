@@ -149,7 +149,7 @@ fn info(window: &WindowSnapshot) -> WindowInfo {
 }
 
 /// Restores and activates the window; works only while this process may set the foreground.
-/// A window already in front counts as success, though Windows reports that as refused.
+/// A window already in front counts as success, which Windows may report as refused.
 pub fn bring_to_foreground(handle: WindowHandle) -> bool {
     let hwnd = handle.raw();
     // SAFETY: Win32 validates the handle; no pointers are involved.
@@ -231,7 +231,6 @@ pub fn focus_with_fallbacks(handle: WindowHandle) -> Result<Focused, String> {
     if bring_to_foreground(handle) {
         return Ok(Focused::Directly);
     }
-    // At boot the window may be up before the user unlocks; it shows once they have.
     if lock_screen_in_front() {
         return Ok(Focused::BehindLockScreen);
     }

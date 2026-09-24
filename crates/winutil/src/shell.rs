@@ -1,5 +1,4 @@
-//! Asking the shell to open or run something, in a COM STA (see [`com::Apartment`]); a thread in
-//! the multithreaded apartment stays in it.
+//! Asking the shell to open or run something, in a COM STA unless the thread is in the MTA.
 
 use std::path::Path;
 use std::ptr::{null, null_mut};
