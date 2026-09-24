@@ -6,9 +6,8 @@ use std::fs;
 use crate::TaskResult;
 use crate::workspace;
 
-/// Slint's attribution badge, as its royalty-free licence asks for it (condition 2 (b)): on a
-/// public page, preferably where the binaries are downloaded, which a release page is. Mujina
-/// Settings and Mujina Setup use Slint. The image is Slint's own, from slint.dev/logo.
+/// Slint's attribution badge, which its royalty-free licence asks for (condition 2 (b)),
+/// preferably where the binaries are downloaded.
 const SLINT_BADGE: &str = "<a href=\"https://slint.dev\"><img src=\"https://slint.dev/logo/\
                            MadeWithSlint-logo-whitebg.png\" height=\"60\" alt=\"Made with \
                            Slint\"></a>";

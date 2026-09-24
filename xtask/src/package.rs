@@ -1,17 +1,9 @@
-//! Builds the MSIX package, unsigned.
-//!
-//! Signing is not done here: `packaging/sign.ps1` signs the package in a job that runs no cargo,
-//! so the signing key never shares a machine with the build scripts of our dependencies
+//! Builds the MSIX package, unsigned: `packaging/sign.ps1` signs it in a job that runs no cargo
 //! (docs/signing.md).
 //!
-//! Options:
-//! - `--no-build`: package what target/release already holds.
-//! - `--timings`: cargo also writes target/cargo-timings/cargo-timing.html.
-//!
-//! Inputs from the environment:
-//! - `MSIX_PUBLISHER`: certificate subject for the manifest (default `CN=Mujina Dev`). It must
-//!   equal the subject of the signing certificate and must never change between releases,
-//!   because the package family name is derived from it.
+//! - `MSIX_PUBLISHER`: the manifest's publisher (default `CN=Mujina Dev`). It must equal the
+//!   signing certificate's subject and never change between releases: the package family
+//!   derives from it.
 //! - `MSIX_REVISION`: fourth component of the package version (default `0`).
 
 use std::fs;
@@ -22,7 +14,6 @@ use crate::{TaskResult, workspace};
 
 const BINARIES: [&str; 3] = ["mujina.exe", "mujinactl.exe", "mujina-settings.exe"];
 
-/// What the command line asks for.
 #[derive(Debug, PartialEq, Eq)]
 struct Options {
     build: bool,
@@ -46,7 +37,6 @@ impl Options {
         Ok(options)
     }
 
-    /// The cargo build of the packaged binaries.
     fn cargo_build(&self) -> Vec<&'static str> {
         let mut arguments = vec![
             "build",
@@ -71,7 +61,7 @@ pub fn run(arguments: &[String]) -> TaskResult {
     Ok(())
 }
 
-/// Builds the package; its path. `build`: whether cargo builds the binaries first.
+/// Builds the package and returns its path; `build_binaries` runs cargo first.
 pub fn unsigned(build_binaries: bool) -> Result<PathBuf, String> {
     build(&Options {
         build: build_binaries,
@@ -126,8 +116,8 @@ fn build(options: &Options) -> Result<PathBuf, String> {
     fs::write(layout.join("AppxManifest.xml"), manifest)
         .map_err(|error| format!("AppxManifest.xml: {error}"))?;
 
-    // The resource index. Only through it does Windows find the logo's sizes and forms next to
-    // the file the manifest names, such as the taskbar's unplated 24 px one.
+    // resources.pri: only through it does Windows find the logo's other sizes and forms, such as
+    // the taskbar's unplated 24 px one.
     let makepri = sdk_tool("makepri.exe")?;
     let config = out.join("priconfig.xml");
     run_tool(

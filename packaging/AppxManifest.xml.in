@@ -101,16 +101,12 @@
     <rescap:Capability Name="runFullTrust" />
     <rescap:Capability Name="unvirtualizedResources" />
     <uap4:CustomCapability Name="Microsoft.appCategory.gamingHome_8wekyb3d8bbwe" />
-    <!-- For the Wi-Fi icon's signal strength: since 24H2 WlanRegisterNotification refuses the
-         MSM notifications (signal quality) with ERROR_ACCESS_DENIED unless the app has this
-         capability; without it this full-trust package was refused even with the location
-         consent given. Microsoft: "Requesting the wiFiControl device capability will require
-         consent from the user regarding access to location", and apps are to check their
-         location access through this capability (AppCapability.CheckAccess), so it is the
-         consent the connection's details already need
+    <!-- Wi-Fi signal strength: since 24H2, WlanRegisterNotification refuses the MSM
+         notifications with ERROR_ACCESS_DENIED without this capability, even to a full-trust
+         package. It asks for the location consent the connection's details already need
          (https://learn.microsoft.com/en-us/windows/win32/nativewifi/wi-fi-access-location-changes).
-         Mujina uses it for those notifications only
-         (crates/adapter-steam/src/wlan.rs). DeviceCapability elements come last. -->
+         Used for those notifications only (crates/adapter-steam/src/wlan.rs).
+         DeviceCapability elements come last. -->
     <DeviceCapability Name="wiFiControl" />
   </Capabilities>
 </Package>

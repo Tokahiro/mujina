@@ -30,8 +30,7 @@ log = "0.4"
 rspolib = "0.1.2"
 serde = "1"
 serde_json = "1"
-# The two apps with a window, Mujina Settings and Mujina Setup (ADR-0011); never linked into
-# mujina.exe.
+# Only in Mujina Settings and Mujina Setup (ADR-0011); never linked into mujina.exe.
 slint = "1"
 slint-build = "1"
 # xtask's tests only: the launcher and device skeletons parse as Rust.

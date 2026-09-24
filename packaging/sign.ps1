@@ -6,18 +6,11 @@
     The signing jobs of CI and of the release workflow run this and nothing else, so the key
     never shares a machine with the build scripts of Mujina's dependencies (docs/signing.md).
 
-    1. Writes the PFX (base64 in one environment variable, its password in another) to
-       $env:RUNNER_TEMP under a random name.
-    2. Signs each file with signtool from the newest Windows SDK: SHA-256, with an RFC 3161
-       timestamp. If the first timestamp server fails, the file goes back to unsigned and is
-       signed again with the second.
-    3. Checks each signature (see Get-SignatureProblem).
-    4. Deletes the PFX it wrote, whatever happened (a -PfxFile stays).
-
-    The password goes to signtool only; this script never prints it. signtool itself leaves a
-    copy of the private key, one per call, in the key store of the user it runs as
-    (%APPDATA%\Microsoft\Crypto\Keys). A hosted runner is thrown away after the job; on a
-    machine that is kept, sign from the certificate store instead.
+    Signs each file with signtool (SHA-256, RFC 3161 timestamp, a second server as fallback),
+    checks each signature and deletes the PFX it wrote. The password goes to signtool only.
+    signtool leaves a copy of the private key, one per call, in the user's key store
+    (%APPDATA%\Microsoft\Crypto\Keys): fine on a hosted runner, which is thrown away after the
+    job; on a machine that is kept, sign from the certificate store instead.
 
 .PARAMETER Path
     The files to sign; wildcards allowed. They must not be signed yet: a package cannot carry
@@ -27,10 +20,8 @@
     The environment variable that holds the PFX, base64-encoded.
 
 .PARAMETER PfxFile
-    A PFX file to sign with instead, for a release-shaped build on a developer's own machine
-    (cargo xtask dist). It is used where it is and never deleted; its password is still read
-    from -PasswordVariable. signtool leaves a copy of its private key in your key store (see
-    above): use a development certificate, never the release one.
+    A PFX file to sign with instead (cargo xtask dist), never deleted; its password still comes
+    from -PasswordVariable. Use a development certificate, never the release one (see above).
 
 .PARAMETER PasswordVariable
     The environment variable that holds the PFX's password.
@@ -75,14 +66,10 @@ function Find-SignTool {
     Join-Path $newest.FullName 'x64\signtool.exe'
 }
 
-# Why the signature of $File is not the one wanted, or $null if it is.
-#
-# `signtool verify /pa` cannot decide this: it fails for every self-signed certificate the
-# machine does not trust, which on a runner is always. Get-AuthenticodeSignature reads the
-# signer and the timestamp whatever its verdict, and reports a chain that ends in an untrusted
-# root as UnknownError, while a damaged file is HashMismatch or NotSigned. So the signer must
-# be exactly this certificate, a timestamp must be there, and the status must be Valid, or
-# UnknownError for a self-signed certificate. (StatusMessage is localised; it is only shown.)
+# Why the signature of $File is not the one wanted, or $null if it is. Not `signtool verify /pa`:
+# it fails for every untrusted self-signed certificate. Get-AuthenticodeSignature reports an
+# untrusted root as UnknownError (a damaged file is HashMismatch or NotSigned), so UnknownError
+# passes for a self-signed certificate only. StatusMessage is localised: only shown.
 function Get-SignatureProblem([string] $File, $Expected) {
     $signature = Get-AuthenticodeSignature -LiteralPath $File
     if (-not $signature.SignerCertificate) { return "not signed ($($signature.Status))" }
@@ -176,6 +163,5 @@ try {
     if ($signer) { $signer.Dispose() }
 }
 
-# signtool's last exit code can be 2 although the signature is right (see above), and a pwsh
-# step on GitHub ends with `exit $LASTEXITCODE`. The verdict is this script's, so say it.
+# $LASTEXITCODE may still be signtool's 2, and a pwsh step on GitHub exits with it.
 exit 0

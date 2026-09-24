@@ -1,6 +1,6 @@
 [toolchain]
-# Pinned, so that a new stable release (and its new lints) never turns CI red on its own, and
-# every run's cache key stays the same. Bump together with `rust-version` in Cargo.toml.
+# Pinned so a new stable release and its lints never turn CI red on their own. Bump together with
+# `rust-version` in Cargo.toml.
 channel = "1.98.1"
 profile = "minimal"
 components = ["clippy", "rustfmt"]

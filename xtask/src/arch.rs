@@ -1,9 +1,7 @@
-//! Enforces the dependency rule of the onion: dependencies point inward only.
+//! Enforces the onion's dependency rule: dependencies point inward only.
 //!
-//! Every workspace member names its ring in its Cargo.toml (`[package.metadata.mujina] ring`),
-//! and [`MATRIX`] says which rings each ring may depend on. docs/architecture.md shows the same
-//! table; a test keeps the two equal. A member without a ring, or with one the matrix does not
-//! know, fails the check: a new crate gets the rule by saying where it sits, never by its name.
+//! Each member names its ring in `[package.metadata.mujina] ring`; none or an unknown one fails.
+//! [`MATRIX`] says which rings each ring may use; a test keeps docs/architecture.md's table equal.
 
 use serde_json::Value;
 
@@ -47,8 +45,7 @@ impl Ring {
     }
 }
 
-/// Which crates from outside the workspace a ring may use. Which of those may be used at all is
-/// cargo-deny's business (deny.toml).
+/// Crates from outside the workspace a ring may use; deny.toml says which are allowed at all.
 #[derive(Clone, Copy, Debug)]
 enum Outside {
     Nothing,
@@ -77,14 +74,12 @@ struct Rule {
 /// The ring matrix, the one source of the rule. A crate may not depend on a crate of its own
 /// ring unless its row says so.
 const MATRIX: &[Rule] = &[
-    // The domain is pure: nothing at all.
     Rule {
         ring: Domain,
         rings: &[],
         outside: Outside::Nothing,
     },
-    // Use cases know the domain and nothing about the outside world. thiserror only derives
-    // `Error` impls; the leaf's `Msg` is what the doctor's titles are.
+    // thiserror only derives `Error` impls; the leaf's `Msg` gives the doctor's titles.
     Rule {
         ring: Application,
         rings: &[Domain, Leaf],
@@ -96,8 +91,7 @@ const MATRIX: &[Rule] = &[
         rings: &[],
         outside: Outside::Any,
     },
-    // Knows no Mujina type and uses nothing, so any ring could build on it; a row lists it once
-    // a crate of that ring does.
+    // Any ring could build on a leaf; a row lists it once a crate of that ring does.
     Rule {
         ring: Leaf,
         rings: &[],
@@ -109,37 +103,31 @@ const MATRIX: &[Rule] = &[
         rings: &[Domain, Application, Plumbing],
         outside: Outside::Any,
     },
-    // Adapters implement ports; they never reach sideways into another adapter or outward into
-    // the composition root.
+    // Adapters implement ports; never sideways into another adapter or outward into the root.
     Rule {
         ring: Adapter,
         rings: &[Domain, Application, Plumbing, AdapterSupport],
         outside: Outside::Any,
     },
-    // The composition root sees every inner ring. Nothing builds on the settings app, the
-    // installer or the tooling.
+    // Sees every inner ring. Nothing builds on the settings app, the installer or the tooling.
     Rule {
         ring: Root,
         rings: &[Domain, Application, Plumbing, AdapterSupport, Adapter],
         outside: Outside::Any,
     },
-    // The settings app reuses the composition root rather than wiring adapters again (ADR-0011),
-    // through its tool module only: it never names an adapter.
+    // Reuses the composition root's tool module instead of wiring adapters again (ADR-0011).
     Rule {
         ring: SettingsApp,
         rings: &[Domain, Application, Plumbing, Leaf, Root],
         outside: Outside::Any,
     },
-    // The installer knows no launcher and no device. It runs the home app rule of the
-    // application ring in-process, with the registry adapter of adapter-windows (the only adapter
-    // it needs; a ring cannot name one crate), and the leaf comes with the application ring,
-    // which re-exports it.
+    // Runs the home app rule in-process with adapter-windows' registry adapter (a row cannot name
+    // one crate). Knows no launcher or device; uses the leaf through the application ring.
     Rule {
         ring: Installer,
         rings: &[Domain, Application, Plumbing, Leaf, Adapter],
         outside: Outside::Any,
     },
-    // Tooling reads the workspace; it builds on no Mujina crate.
     Rule {
         ring: Tool,
         rings: &[],
@@ -225,8 +213,7 @@ fn rule(package: &Value) -> Result<&'static Rule, String> {
 /// What is wrong with `member`, of `rule`'s ring, depending on `dependency`, if anything.
 fn violation(member: &Value, rule: &Rule, dependency: &Value, members: &[Value]) -> Option<String> {
     let (name, ring) = (name(member), rule.ring.name());
-    // A crate of the workspace is a path dependency, whatever its name says: cargo metadata gives
-    // it no `source` and its `path`. A registry crate named mujina-… is a crate from outside.
+    // Workspace crates are path dependencies (no `source`, a `path`), whatever their name says.
     let by_path = dependency["source"].is_null() || dependency.get("path").is_some();
     let dependency = self::name(dependency);
     if !by_path {
@@ -238,8 +225,6 @@ fn violation(member: &Value, rule: &Rule, dependency: &Value, members: &[Value])
         .iter()
         .find(|member| self::name(member) == dependency)
     else {
-        // Path dependencies inside the workspace directory are members; one that is not has no
-        // ring, so nobody can say whether it may be used.
         return Some(format!(
             "{name} ({ring}) must not depend on {dependency}, a path dependency that is no \
              workspace member and so has no ring"
@@ -265,7 +250,6 @@ mod tests {
 
     use super::{MATRIX, Outside, Ring, violations};
 
-    /// A workspace member named `name` in `ring`, if any.
     fn member(name: &str, ring: Option<&str>, dependencies: &[Value]) -> Value {
         json!({
             "name": name,
@@ -425,7 +409,7 @@ mod tests {
         assert!(!allowed("settings-app", "adapter"));
         assert!(!allowed("settings-app", "adapter-support"));
         assert!(allowed_outside("settings-app", "slint"));
-        // The home app rule in-process, with the registry adapter: no mujinactl.exe to find.
+        // The home app rule runs in-process, with the registry adapter.
         for ring in ["domain", "application", "plumbing", "leaf", "adapter"] {
             assert!(allowed("installer", ring), "installer on {ring}");
         }
