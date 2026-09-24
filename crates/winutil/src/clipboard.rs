@@ -8,10 +8,8 @@ use windows_sys::Win32::System::Memory::{GMEM_MOVEABLE, GlobalAlloc, GlobalLock,
 use windows_sys::Win32::System::Ole::CF_UNICODETEXT;
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::GetActiveWindow;
 
-/// Replaces what the clipboard holds with `text`; `false` if the clipboard could not be had.
-///
-/// Call it on the thread of the active window, which becomes the clipboard's owner; without one
-/// nothing is copied.
+/// Replaces the clipboard's text; `false` if that failed. Call it on the active window's thread,
+/// which becomes the clipboard's owner; without an active window nothing is copied.
 pub fn set_text(text: &str) -> bool {
     let wide: Vec<u16> = text.encode_utf16().chain(std::iter::once(0)).collect();
     // Opened without an owner window, SetClipboardData fails after EmptyClipboard.
@@ -33,8 +31,7 @@ pub fn set_text(text: &str) -> bool {
 /// Empties the open clipboard and hands it `wide` (NUL-terminated UTF-16).
 fn put(wide: &[u16]) -> bool {
     let bytes = size_of_val(wide);
-    // SAFETY: the caller has the clipboard open with an owner window, which this makes the
-    // clipboard's owner.
+    // SAFETY: the caller opened the clipboard with an owner window.
     if unsafe { EmptyClipboard() } == 0 {
         return false;
     }

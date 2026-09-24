@@ -31,8 +31,7 @@ use windows_sys::core::BOOL;
 
 use crate::wide::from_wide;
 
-/// An opaque window handle. Stored as an integer so it can cross threads; it is only ever
-/// handed back to Win32, which validates it.
+/// Stored as an integer so it can cross threads; Win32 validates it when it is handed back.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct WindowHandle(isize);
 
@@ -57,8 +56,7 @@ pub struct WindowSnapshot {
 }
 
 unsafe extern "system" fn collect(hwnd: HWND, lparam: LPARAM) -> BOOL {
-    // SAFETY: `lparam` is the address of the `Vec` owned by `top_level_windows`, which outlives
-    // the synchronous `EnumWindows` call and is not touched by anyone else meanwhile.
+    // SAFETY: `lparam` is the `Vec` of `top_level_windows`, alive and unshared during EnumWindows.
     let handles = unsafe { &mut *(lparam as *mut Vec<WindowHandle>) };
     handles.push(WindowHandle::from_raw(hwnd));
     1
@@ -80,8 +78,7 @@ fn snapshot(handle: WindowHandle) -> WindowSnapshot {
     let hwnd = handle.raw();
     let mut class = [0u16; 256];
     let mut process_id: u32 = 0;
-    // SAFETY: all calls take a window handle that Win32 validates itself (a stale handle yields
-    // zero/false) plus buffers that are writable for the stated length.
+    // SAFETY: Win32 validates the handle (a stale one yields zero); buffers fit the stated length.
     let (style, ex_style, visible) = unsafe {
         GetClassNameW(hwnd, class.as_mut_ptr(), 256);
         GetWindowThreadProcessId(hwnd, &raw mut process_id);
@@ -101,11 +98,9 @@ fn snapshot(handle: WindowHandle) -> WindowSnapshot {
     }
 }
 
-/// The facts about a top-level window that matter for classification.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WindowInfo {
     pub class_name: String,
-    /// File name of the owning process, e.g. `steamwebhelper.exe`.
     pub process_name: String,
     pub visible: bool,
     /// The window asks for a taskbar button (`WS_EX_APPWINDOW`).
@@ -114,7 +109,6 @@ pub struct WindowInfo {
     pub resizable: bool,
 }
 
-/// Describes one window among all on screen, such as a launcher's full-screen UI.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WindowRule {
     pub class_name: String,
@@ -154,10 +148,8 @@ fn info(window: &WindowSnapshot) -> WindowInfo {
     }
 }
 
-/// Restores the window if minimised and asks for the foreground. Succeeds only while this
-/// process is allowed to set the foreground, which is the case right after it was activated.
-/// A window that is in front already counts as success: Windows reports such a request as
-/// refused when the caller has no foreground right, although there was nothing to do.
+/// Restores and activates the window; works only while this process may set the foreground.
+/// A window already in front counts as success, though Windows reports that as refused.
 pub fn bring_to_foreground(handle: WindowHandle) -> bool {
     let hwnd = handle.raw();
     // SAFETY: Win32 validates the handle; no pointers are involved.
@@ -172,10 +164,8 @@ pub fn bring_to_foreground(handle: WindowHandle) -> bool {
 /// Marks keystrokes synthesized by Mujina ("MUJI"), so its own keyboard hook lets them be.
 pub const OWN_INPUT_TAG: usize = 0x4D55_4A49;
 
-/// [`bring_to_foreground`] for a process Windows gave no foreground right, which is every
-/// process started on behalf of a background one. Windows lifts the restriction for whoever
-/// produced the last input, hence one synthetic tap of the Alt key. For use on the user's
-/// explicit request only (a button press); see ADR-0001.
+/// [`bring_to_foreground`] for a process without the foreground right: taps Alt, as Windows lifts
+/// the restriction for the last input's source. Only on the user's explicit request (ADR-0001).
 pub fn claim_foreground(handle: WindowHandle) -> bool {
     if bring_to_foreground(handle) {
         return true;
@@ -203,16 +193,14 @@ pub fn claim_foreground(handle: WindowHandle) -> bool {
     })
 }
 
-/// Lets whichever process shows a window next take the foreground from us. Only effective while
-/// this process owns the foreground right itself.
+/// Lets the next window shown take the foreground; works only while this process has that right.
 pub fn allow_any_foreground() -> bool {
     // SAFETY: plain call without pointers.
     unsafe { AllowSetForegroundWindow(ASFW_ANY) != 0 }
 }
 
-/// Starts `executable` with `args` in `directory` without waiting, and lets whatever shows a
-/// window next take the foreground from us. `Ok(false)` means started without that hand-over:
-/// this process did not hold the foreground right itself.
+/// Starts `executable` without waiting and hands the foreground to the next window shown.
+/// `Ok(false)`: started, but without the hand-over, as this process lacked the foreground right.
 pub fn spawn_with_foreground<S: AsRef<OsStr>>(
     executable: &Path,
     args: &[S],
@@ -230,17 +218,15 @@ pub fn spawn_with_foreground<S: AsRef<OsStr>>(
 /// How [`focus_with_fallbacks`] got a window in front.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Focused {
-    /// Windows let it come to the front.
     Directly,
-    /// The lock screen is in front; the window is what shows once the user has unlocked.
+    /// The window shows once the user unlocks.
     BehindLockScreen,
     /// Through [`claim_foreground`], which may have needed its synthetic key tap.
     AfterKeyTap,
 }
 
-/// Brings a window to the front by every means a process without the foreground right has. The
-/// error names what is in front instead ([`describe_foreground`]). Like [`claim_foreground`],
-/// for use on the user's explicit request only.
+/// Every means a process without the foreground right has; the error describes what is in front.
+/// Like [`claim_foreground`], only on the user's explicit request.
 pub fn focus_with_fallbacks(handle: WindowHandle) -> Result<Focused, String> {
     if bring_to_foreground(handle) {
         return Ok(Focused::Directly);
@@ -249,15 +235,14 @@ pub fn focus_with_fallbacks(handle: WindowHandle) -> Result<Focused, String> {
     if lock_screen_in_front() {
         return Ok(Focused::BehindLockScreen);
     }
-    // Activated on behalf of a background process (device button, crash relaunch), this
-    // process has no foreground right of its own.
+    // Activated for a background process (device button, crash relaunch), it lacks the right.
     if claim_foreground(handle) {
         return Ok(Focused::AfterKeyTap);
     }
     Err(describe_foreground())
 }
 
-/// File name of the process that owns `hwnd` (a window handle as integer, e.g. from a WinEvent).
+/// `hwnd` is a window handle as an integer, e.g. from a WinEvent.
 pub fn owner_process_name(hwnd: isize) -> Option<String> {
     let mut process_id: u32 = 0;
     // SAFETY: Win32 validates the handle; `process_id` is writable.
@@ -267,7 +252,6 @@ pub fn owner_process_name(hwnd: isize) -> Option<String> {
         .flatten()
 }
 
-/// File name of the process that owns the foreground window.
 pub fn foreground_process_name() -> Option<String> {
     // SAFETY: plain call without arguments; may return null.
     let hwnd = unsafe { GetForegroundWindow() };
@@ -276,7 +260,6 @@ pub fn foreground_process_name() -> Option<String> {
         .flatten()
 }
 
-/// Id of the process that owns the foreground window.
 pub fn foreground_process_id() -> Option<u32> {
     // SAFETY: plain call without arguments; may return null.
     let hwnd = unsafe { GetForegroundWindow() };
@@ -286,29 +269,23 @@ pub fn foreground_process_id() -> Option<u32> {
     (process_id != 0).then_some(process_id)
 }
 
-/// How a top-level window is shown: the facts that tell a game in full screen from the windows
-/// of other programs.
+/// The facts that tell a full-screen game from the windows of other programs.
 // Independent facts about one window, not states of one machine.
 #[allow(clippy::struct_excessive_bools)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Presentation {
-    /// It has a title bar or a border (any bit of `WS_CAPTION`), or a sizing border
-    /// (`WS_THICKFRAME`).
+    /// Any bit of `WS_CAPTION` (title bar or border) or `WS_THICKFRAME` (sizing border).
     pub framed: bool,
     /// Its window rectangle is exactly its monitor's, in physical pixels. A maximised window
     /// with a sizing border is larger: its borders lie off the screen.
     pub fills_monitor: bool,
-    /// It is maximised (`IsZoomed`).
     pub maximized: bool,
     /// DWM hides it (`DWMWA_CLOAKED`), although it counts as visible.
     pub cloaked: bool,
-    /// It belongs to the process of the shell's desktop window (`GetShellWindow`): the desktop,
-    /// the taskbar, the task switcher. Xbox mode may have no shell window; its home is a
-    /// packaged app, which `packaged` covers.
+    /// Owned by the process of `GetShellWindow` (desktop, taskbar, task switcher). Xbox mode may
+    /// have no shell window; its home is a packaged app, which `packaged` covers.
     pub shell: bool,
-    /// It is a packaged app's: its process has a package identity, or it is the frame Windows
-    /// draws around such an app (the window classes of [`PACKAGED_APP_FRAMES`]), whose process,
-    /// `ApplicationFrameHost.exe`, has none.
+    /// Its process has a package identity, or its class is one of [`PACKAGED_APP_FRAMES`].
     pub packaged: bool,
 }
 
@@ -316,7 +293,7 @@ pub struct Presentation {
 /// around it, whose process has no package identity, and the app's own core window.
 pub const PACKAGED_APP_FRAMES: [&str; 2] = ["ApplicationFrameWindow", "Windows.UI.Core.CoreWindow"];
 
-/// Class name of a window; empty for a stale handle.
+/// Empty for a stale handle.
 fn class_of(hwnd: HWND) -> String {
     let mut class = [0u16; 256];
     // SAFETY: Win32 validates the handle; the buffer is writable for the stated length.
@@ -324,15 +301,13 @@ fn class_of(hwnd: HWND) -> String {
     from_wide(&class)
 }
 
-/// Switches the calling thread to physical pixels while it lives: window and monitor
-/// rectangles are scaled for a process that is not DPI aware, and a scaled pair may round
-/// apart.
+/// Switches the calling thread to physical pixels while it lives: for a DPI-unaware process,
+/// window and monitor rectangles are scaled and may round apart.
 struct PhysicalPixels(DPI_AWARENESS_CONTEXT);
 
 impl PhysicalPixels {
     fn enter() -> Self {
-        // SAFETY: a predefined context; an invalid one leaves the thread as it was and returns
-        // null, which `drop` then does not restore.
+        // SAFETY: a predefined context; an invalid one returns null, which `drop` does not restore.
         Self(unsafe { SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2) })
     }
 }
@@ -346,9 +321,8 @@ impl Drop for PhysicalPixels {
     }
 }
 
-/// How the foreground window (its root window) is shown; `None` without one, or when a fact
-/// could not be read. Reads what Windows keeps about the window and sends it no message, so a
-/// window that does not answer holds nothing up.
+/// Of the foreground's root window; `None` without one or when a fact cannot be read. Sends no
+/// message, so a window that does not answer holds nothing up.
 pub fn foreground_presentation() -> Option<Presentation> {
     // SAFETY: plain call without arguments; may return null.
     let foreground = unsafe { GetForegroundWindow() };
@@ -360,7 +334,6 @@ pub fn foreground_presentation() -> Option<Presentation> {
     presentation_of(if root.is_null() { foreground } else { root })
 }
 
-/// How the top-level window `hwnd` is shown, as [`foreground_presentation`] says.
 fn presentation_of(hwnd: HWND) -> Option<Presentation> {
     let _physical = PhysicalPixels::enter();
 
@@ -430,8 +403,7 @@ fn presentation_of(hwnd: HWND) -> Option<Presentation> {
     })
 }
 
-/// The topmost window a user would call "the application" among those of `process_ids`:
-/// visible, with a title, without an owner, and not a tool window.
+/// The topmost window of `process_ids` a user would call "the application".
 pub fn main_window_of(process_ids: &[u32]) -> Option<WindowHandle> {
     top_level_windows()
         .into_iter()
@@ -448,8 +420,7 @@ pub fn main_window_of(process_ids: &[u32]) -> Option<WindowHandle> {
         })
 }
 
-/// Whether the lock screen is what is in front. Nothing can be brought in front of it, and
-/// nothing needs to be: the window order behind it is what shows after the unlock.
+/// Nothing can be brought in front of the lock screen; the order behind it shows after unlock.
 pub fn lock_screen_in_front() -> bool {
     foreground_process_name().is_some_and(|name| name.eq_ignore_ascii_case("LockApp.exe"))
 }
@@ -468,9 +439,8 @@ fn describe(hwnd: HWND) -> String {
     )
 }
 
-/// Where keyboard input goes, for diagnostics: the active window and the focused control of the
-/// foreground thread. A window can be in front without either being set, and then it gets no
-/// keys until something (a touch, a click) activates it.
+/// The foreground thread's active window and focused control, for diagnostics. A window in
+/// front with neither gets no keys until something (a touch, a click) activates it.
 pub fn describe_input_focus() -> String {
     // SAFETY: GUITHREADINFO is plain data for which all-zero is a valid value.
     let mut info: GUITHREADINFO = unsafe { std::mem::zeroed() };
@@ -486,7 +456,6 @@ pub fn describe_input_focus() -> String {
     )
 }
 
-/// The foreground window in words, for diagnostics: process, window class and title.
 pub fn describe_foreground() -> String {
     // SAFETY: plain call without arguments; may return null.
     let hwnd = unsafe { GetForegroundWindow() };
@@ -508,10 +477,8 @@ pub fn describe_foreground() -> String {
     )
 }
 
-/// Gives this process's visible windows the executable's own icon (its first icon resource),
-/// at the sizes the title bar and the task switcher draw on each window's display. A GUI
-/// toolkit hands Windows one large image, which Windows scales down poorly; the icon has
-/// images drawn for small sizes. Returns whether any window got it.
+/// Sets the executable's first icon on this process's visible windows, at each display's sizes:
+/// a toolkit's single large image scales down poorly. Whether any window got it.
 pub fn use_own_icon() -> bool {
     let own = std::process::id();
     let mut given = false;
@@ -525,9 +492,8 @@ pub fn use_own_icon() -> bool {
         }
         let hwnd = window.handle.raw();
         for (kind, width, height) in sizes {
-            // SAFETY: Win32 validates the window handle; the resource name is an integer
-            // resource id, as MAKEINTRESOURCE makes it. The icon is never destroyed: the window
-            // uses it for as long as it exists.
+            // SAFETY: Win32 validates the handle; the resource name is a MAKEINTRESOURCE id. The
+            // icon is never destroyed: the window uses it for as long as it exists.
             unsafe {
                 let dpi = GetDpiForWindow(hwnd);
                 let icon = LoadImageW(
@@ -565,8 +531,7 @@ mod tests {
         };
         // SAFETY: plain call without arguments.
         let before = unsafe { GetThreadDpiAwarenessContext() };
-        // What is in front depends on the machine (none in headless CI): only the DPI awareness
-        // is checked.
+        // What is in front depends on the machine; only the DPI awareness is checked.
         let _ = foreground_presentation();
         // SAFETY: plain call without arguments.
         let after = unsafe { GetThreadDpiAwarenessContext() };
@@ -574,16 +539,15 @@ mod tests {
         assert_ne!(unsafe { AreDpiAwarenessContextsEqual(before, after) }, 0);
     }
 
-    /// A hidden window of the system's `STATIC` class, with `style`, over `area`; destroyed
-    /// when dropped. Never shown, so it takes no foreground and nothing appears on screen.
+    /// Never shown, so it takes no foreground and nothing appears on screen.
     struct TestWindow(HWND);
 
     impl TestWindow {
         fn new(style: u32, area: RECT) -> Self {
             use windows_sys::Win32::UI::WindowsAndMessaging::CreateWindowExW;
             let class = crate::wide::to_wide("STATIC");
-            // SAFETY: a predefined class, no parent, menu or creation data; the class name lives
-            // through the call. Created in physical pixels, as the reading measures.
+            // SAFETY: a predefined class whose name outlives the call; no parent, menu or data.
+            // Created in physical pixels, as `presentation_of` measures them.
             let hwnd = unsafe {
                 let _physical = PhysicalPixels::enter();
                 CreateWindowExW(
@@ -614,7 +578,7 @@ mod tests {
         }
     }
 
-    /// The primary monitor's rectangle in physical pixels; `None` on a machine without one.
+    /// In physical pixels; `None` on a machine without a monitor.
     fn primary_monitor() -> Option<RECT> {
         use windows_sys::Win32::Foundation::POINT;
         use windows_sys::Win32::Graphics::Gdi::{MONITOR_DEFAULTTONULL, MonitorFromPoint};
@@ -638,7 +602,7 @@ mod tests {
             eprintln!("skipped: no monitor");
             return;
         };
-        // Styled as a full-screen game (Unreal's): WS_POPUP, no caption, no sizing border.
+        // Styled as a full-screen game (Unreal's).
         let game = TestWindow::new(WS_POPUP, monitor);
         let Some(read) = presentation_of(game.0) else {
             eprintln!("skipped: the window manager's facts cannot be read here");
@@ -655,15 +619,13 @@ mod tests {
                 packaged: false,
             }
         );
-        // One pixel short of its monitor is not filling it.
         let short = RECT {
             right: monitor.right - 1,
             ..monitor
         };
         let narrow = TestWindow::new(WS_POPUP, short);
         assert!(!presentation_of(narrow.0).unwrap().fills_monitor);
-        // A desktop app's window has a title bar and a sizing border, even over its whole
-        // monitor; custom-drawn title bars (Chromium's, Firefox's) keep both styles too.
+        // A desktop app's styles; custom title bars (Chromium's, Firefox's) keep them too.
         let app = TestWindow::new(WS_OVERLAPPEDWINDOW, monitor);
         let read = presentation_of(app.0).unwrap();
         assert!(read.framed && !read.maximized, "{read:?}");
@@ -678,8 +640,7 @@ mod tests {
             eprintln!("skipped: no monitor");
             return;
         };
-        // A class with the frame's name in this process, which, like ApplicationFrameHost.exe,
-        // has no package identity.
+        // The frame's class, in this process, which like ApplicationFrameHost.exe is unpackaged.
         let name = crate::wide::to_wide(PACKAGED_APP_FRAMES[0]);
         // SAFETY: plain call; GetModuleHandleW(null) is this executable.
         let instance = unsafe { GetModuleHandleW(null()) };
@@ -688,8 +649,7 @@ mod tests {
         class.lpfnWndProc = Some(DefWindowProcW);
         class.hInstance = instance;
         class.lpszClassName = name.as_ptr();
-        // SAFETY: the class and its name live through the call; registering twice (another test
-        // run in this process) fails harmlessly and the class stays usable.
+        // SAFETY: the class and its name outlive the call; a second registration fails harmlessly.
         unsafe { RegisterClassW(&raw const class) };
         // SAFETY: the class registered above; no parent, menu or creation data.
         let hwnd = unsafe {

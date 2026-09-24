@@ -1,5 +1,4 @@
-//! Run-time binding to system libraries that may not exist on every Windows build, and keeping
-//! a process to the system directory for its libraries and helper programs.
+//! System libraries bound at run time, and DLL and program lookup kept to the system directory.
 
 use std::ffi::{CStr, OsString};
 use std::os::windows::ffi::OsStringExt;
@@ -15,16 +14,14 @@ use windows_sys::Win32::System::SystemInformation::GetSystemDirectoryW;
 use crate::error::{Win32Result, last_error};
 use crate::wide::to_wide;
 
-/// Makes this process look for DLLs loaded by name only in the system directory, never in its
-/// own or the current folder, where a planted DLL could wait. Call it first thing in `main`.
-/// False if Windows refused.
+/// Loads DLLs named without a path only from the system directory, never from the exe's or the
+/// current folder, where a planted DLL could wait. Call it first in `main`; `false` if refused.
 pub fn search_only_system32() -> bool {
     // SAFETY: plain call with a documented flag.
     unsafe { SetDefaultDllDirectories(LOAD_LIBRARY_SEARCH_SYSTEM32) != 0 }
 }
 
-/// The system directory, e.g. `C:\Windows\System32`: where a program started by its full path
-/// is Windows' own and not one planted next to the caller.
+/// E.g. `C:\Windows\System32`: a program started from here by full path is Windows' own.
 pub fn system_directory() -> Option<PathBuf> {
     let mut buffer = vec![0u16; 260];
     loop {
@@ -43,10 +40,8 @@ pub fn system_directory() -> Option<PathBuf> {
 /// An exported function whose real signature the caller knows.
 pub type RawSymbol = unsafe extern "system" fn() -> isize;
 
-/// A system library that stays loaded for the rest of the process.
-///
-/// It is never unloaded on purpose: function pointers obtained from it are handed out as plain
-/// `fn` values, and those must stay valid without a lifetime tying them to this struct.
+/// A system library that stays loaded for the rest of the process, so that function pointers
+/// from it stay valid as plain `fn` values without a lifetime.
 #[derive(Debug, Clone, Copy)]
 pub struct SystemLibrary(HMODULE);
 
@@ -54,8 +49,7 @@ impl SystemLibrary {
     /// Loads `name` from the system directory (API-set names are resolved by the loader).
     pub fn load(name: &str) -> Win32Result<Self> {
         let name = to_wide(name);
-        // SAFETY: `name` is NUL-terminated and outlives the call; the file handle parameter is
-        // reserved and must be null.
+        // SAFETY: `name` is NUL-terminated and outlives the call; the reserved handle is null.
         let module =
             unsafe { LoadLibraryExW(name.as_ptr(), null_mut(), LOAD_LIBRARY_SEARCH_SYSTEM32) };
         if module.is_null() {
@@ -64,7 +58,7 @@ impl SystemLibrary {
         Ok(Self(module))
     }
 
-    /// Looks up an export. The caller transmutes it to the documented signature.
+    /// The caller transmutes the result to the export's documented signature.
     pub fn symbol(self, name: &CStr) -> Win32Result<RawSymbol> {
         // SAFETY: `self.0` is a module handle that is never freed; `name` is NUL-terminated.
         unsafe { GetProcAddress(self.0, name.as_ptr().cast()) }

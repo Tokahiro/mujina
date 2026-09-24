@@ -6,7 +6,7 @@ use windows_sys::Win32::UI::Input::XboxController::{XINPUT_STATE, XInputGetState
 const SLOTS: u32 = 4;
 const ERROR_SUCCESS: u32 = 0;
 
-/// Buttons (XInput's `XINPUT_GAMEPAD_*` bits) and the left stick of one controller.
+/// `buttons` holds XInput's `XINPUT_GAMEPAD_*` bits.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct PadState {
     pub buttons: u16,

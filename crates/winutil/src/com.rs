@@ -7,12 +7,8 @@ use windows_sys::Win32::System::Com::{
     COINIT_APARTMENTTHREADED, COINIT_DISABLE_OLE1DDE, CoInitializeEx, CoUninitialize,
 };
 
-/// COM initialised on this thread as a single-threaded apartment, until dropped.
-///
-/// Microsoft asks for an STA before ShellExecute, whose shell extensions may need one
-/// (ADR-0014). An STA thread must pump messages while it waits. A thread that calls ShellExecute
-/// often may hold one for its whole life, so that COM and its DLLs are not unloaded after each
-/// call.
+/// COM initialised on this thread as a single-threaded apartment until dropped, as ShellExecute
+/// needs (ADR-0014). An STA thread must pump messages while it waits.
 #[must_use = "COM is uninitialised again when the apartment is dropped"]
 #[derive(Debug)]
 pub struct Apartment {
@@ -21,16 +17,13 @@ pub struct Apartment {
 }
 
 impl Apartment {
-    /// Initialises COM as recommended for ShellExecute; also succeeds when the thread already is
-    /// in an STA. The error is the HRESULT; RPC_E_CHANGED_MODE means the thread is in the
-    /// multithreaded apartment, which is left as it is.
+    /// Also succeeds when the thread already is in an STA. Fails with the HRESULT, which is
+    /// RPC_E_CHANGED_MODE when the thread is in the multithreaded apartment; it stays there.
     pub fn sta() -> Result<Self, i32> {
         let mode = (COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE).cast_unsigned();
-        // SAFETY: plain call; the reserved parameter must be null, and the flags are a valid
-        // combination.
+        // SAFETY: plain call; the reserved parameter is null and the flags are a valid combination.
         let result = unsafe { CoInitializeEx(null(), mode) };
-        // S_OK and S_FALSE ("already initialised") both need a matching CoUninitialize; a
-        // failure, such as another mode set earlier, must not get one.
+        // S_OK and S_FALSE ("already initialised") need a CoUninitialize; a failure must not.
         if result >= 0 {
             Ok(Self {
                 _this_thread: PhantomData,
@@ -43,8 +36,7 @@ impl Apartment {
 
 impl Drop for Apartment {
     fn drop(&mut self) {
-        // SAFETY: balances the successful CoInitializeEx in `sta`, on the same thread, since an
-        // `Apartment` can neither be sent nor shared.
+        // SAFETY: balances `sta` on the same thread: an `Apartment` is neither `Send` nor `Sync`.
         unsafe { CoUninitialize() };
     }
 }
@@ -69,7 +61,7 @@ mod tests {
             let inner = Apartment::sta().expect("the same mode again is fine");
             drop(inner);
             drop(outer);
-            // Both were balanced, the S_FALSE one too: COM is closed, so any mode may follow.
+            // S_OK only if both apartments, the S_FALSE one too, were balanced.
             assert_eq!(enter_mta(), S_OK);
             // SAFETY: balances `enter_mta`, on the same thread.
             unsafe { CoUninitialize() };
@@ -83,7 +75,6 @@ mod tests {
         std::thread::spawn(|| {
             assert_eq!(enter_mta(), S_OK);
             assert_eq!(Apartment::sta().unwrap_err(), RPC_E_CHANGED_MODE);
-            // Still initialised: the failed attempt uninitialised nothing.
             assert_eq!(enter_mta(), S_FALSE);
             // SAFETY: balances both calls to `enter_mta`, on the same thread.
             unsafe {

@@ -1,25 +1,21 @@
-//! Whether this process may know where the device is, as Windows' privacy settings say. Since
-//! Windows 11 24H2 that includes the name and signal strength of the Wi-Fi network: the WLAN
-//! service asks for the location permission before it tells them.
+//! Whether Windows' privacy settings let this process know the device's location. Since Windows
+//! 11 24H2 the WLAN service needs this permission to report the Wi-Fi name and signal strength.
 
 use crate::package;
 use crate::registry::{Hive, read_string};
 
-/// What Windows' privacy settings say about the location permission of this process.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LocationConsent {
     Granted,
     /// Windows asks the first time it is needed.
     NotAsked,
-    /// Declined for this app.
     DeniedForApp,
-    /// Location access is off for every app.
     DeniedEverywhere,
     /// Not a packaged app: nothing to grant.
     Unpackaged,
 }
 
-/// Reads the consent store, as Windows' privacy settings keep it. Quick: a few registry values.
+/// Quick: reads a few registry values of Windows' consent store.
 pub fn consent() -> LocationConsent {
     const STORE: &str =
         r"Software\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\location";

@@ -1,7 +1,5 @@
-//! Kernel events: how other threads and OS callbacks wake the main loop.
-//!
-//! An OS callback gets a pointer to an [`Event`] kept alive while the callback may run, never
-//! its raw handle: a closed handle's value is reused and could signal an unrelated object.
+//! Kernel events that wake the main loop. Give an OS callback a pointer to a live [`Event`],
+//! never its raw handle: a closed handle's value is reused and could signal another object.
 
 use std::ffi::c_void;
 use std::os::windows::io::{AsHandle, AsRawHandle, BorrowedHandle, FromRawHandle, OwnedHandle};
@@ -15,7 +13,6 @@ use windows_sys::Win32::System::Threading::{
 use crate::error::{Win32Error, Win32Result, last_error};
 use crate::wide::to_wide;
 
-/// A kernel event, closed when dropped.
 #[derive(Debug)]
 pub struct Event(OwnedHandle);
 
@@ -25,14 +22,12 @@ impl Event {
         Self::create(false, None)
     }
 
-    /// A named auto-reset event, shared by every process of this session that uses the name.
-    /// Created if it does not exist yet; one wait consumes one signal.
+    /// Shared by every process of this session that uses the name; created if it does not exist.
     pub fn named_auto_reset(name: &str) -> Win32Result<Self> {
         Self::create(false, Some(name))
     }
 
-    /// A named manual-reset event, shared by every process of this session that uses the name.
-    /// Created if it does not exist yet. It stays signalled until [`Event::reset`].
+    /// Like [`Event::named_auto_reset`], but stays signalled until [`Event::reset`].
     pub fn named_manual_reset(name: &str) -> Win32Result<Self> {
         Self::create(true, Some(name))
     }
@@ -40,8 +35,7 @@ impl Event {
     fn create(manual_reset: bool, name: Option<&str>) -> Win32Result<Self> {
         let wide = name.map(to_wide);
         let name = wide.as_ref().map_or(null(), Vec::as_ptr);
-        // SAFETY: null attributes are valid; the name is null or NUL-terminated and outlives
-        // the call; failure is a null handle.
+        // SAFETY: null attributes are valid; `name` is null or NUL-terminated and outlives it.
         let handle = unsafe { CreateEventW(null(), i32::from(manual_reset), 0, name) };
         if handle.is_null() {
             return Err(last_error("CreateEventW"));
@@ -95,7 +89,7 @@ mod tests {
 
     use windows_sys::Win32::Foundation::WAIT_TIMEOUT;
 
-    /// Whether the event is signalled right now, without waiting. Consumes an auto-reset signal.
+    /// Does not wait; consumes an auto-reset signal.
     fn is_signalled(event: &Event) -> bool {
         // SAFETY: valid event handle owned by `event`.
         match unsafe { WaitForSingleObject(event.as_raw(), 0) } {
