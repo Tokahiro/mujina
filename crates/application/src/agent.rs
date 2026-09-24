@@ -49,7 +49,6 @@ pub struct AgentPorts<'a> {
     pub launcher: &'a dyn SessionLauncher,
     /// What the running launcher is: what it offers, and which of its options apply at once.
     pub descriptor: &'a dyn LauncherDescriptor,
-    /// The device's buttons as they run; they report presses through the event loop.
     pub buttons: &'a dyn DeviceButtons,
     /// For looking up the running device's buttons.
     pub devices: Devices,
@@ -244,7 +243,6 @@ impl<'a> AgentService<'a> {
         match self.ports.launcher.game_whereabouts() {
             GameWhereabouts::InFront => return seen(InFront::Game, GameSeen::InFront),
             GameWhereabouts::Behind => return seen(InFront::Other, GameSeen::Behind),
-            // The launcher knows the game's processes, and the window in front is none of them.
             GameWhereabouts::NoWindow { known: true } => {
                 return seen(InFront::Other, GameSeen::NoWindow);
             }
@@ -379,7 +377,6 @@ impl<'a> AgentService<'a> {
         }
     }
 
-    /// Not ours to interpret here: the button does what it always did.
     fn pass(&self, button: ButtonId) -> Outcome {
         if self.swallowed(button) {
             self.ports.buttons.pass_on(button);

@@ -131,14 +131,14 @@ pub trait SessionLauncher {
     /// The game has ended just now. Must not block.
     fn game_ended(&self) {}
 
-    /// Opens its main menu while its UI has the focus. Read on each press: the user may change it
-    /// at any time.
+    /// The chord that opens its main menu while its UI has the focus. Read on each press: the
+    /// user may change it at any time.
     fn menu_shortcut(&self) -> Option<KeyChord> {
         None
     }
 
-    /// Opens its overlay while a game has the focus. Separate from the menu's, since finding it
-    /// may mean reading the launcher's files.
+    /// The chord that opens its overlay while a game has the focus. Separate from the menu's,
+    /// since finding it may mean reading the launcher's files.
     fn overlay_shortcut(&self) -> Option<KeyChord> {
         None
     }

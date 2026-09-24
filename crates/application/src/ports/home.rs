@@ -23,7 +23,6 @@ pub trait HomeActivator {
 
 /// What the user looks at while the launcher starts.
 pub trait LaunchScreen {
-    /// Covers the screen.
     fn show(&self);
     /// Waits until `ready` is true (checked whenever a window appears or comes to the front) or
     /// `timeout` passes; returns whether it got ready. The screen stays up.
