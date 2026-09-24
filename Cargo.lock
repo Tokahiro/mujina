@@ -5889,7 +5889,7 @@ version = "0.27.0"
 dependencies = [
  "rspolib",
  "serde_json",
- "syn 2.0.119",
+ "syn 3.0.6",
  "toml",
 ]
 

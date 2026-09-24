@@ -35,7 +35,7 @@ serde_json = "1"
 slint = "1"
 slint-build = "1"
 # xtask's tests only: the launcher and device skeletons parse as Rust.
-syn = "2"
+syn = "3"
 thiserror = "2"
 toml = "1.1"
 # Comment-preserving edits of config.toml; of the same release as `toml`, whose parser it shares.
