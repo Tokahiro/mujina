@@ -414,7 +414,7 @@ mod tests {
     #[test]
     fn try_again_keeps_the_home_app_switch_as_the_run_found_it() {
         assert_eq!(starting_switch(None, &facts()), Some(true));
-        // The package went on, then a later step failed: found again, its default is off.
+        // The package went on, then a later step failed: found again, the default would be off.
         let installed = Facts {
             installed: Version::parse("0.28.0.0"),
             ..facts()
