@@ -9,14 +9,12 @@ use mujina_winutil::registry::{self, Hive};
 
 const MARKER: &str = ".cef-enable-remote-debugging";
 
-/// Where Mujina lists the files it created outside its own folders: one `REG_SZ` value per file,
-/// named by a stable id, holding the absolute path. Setup reads the same key and deletes what is
-/// listed when Mujina is uninstalled, without having to know anything about Steam.
+/// Files Mujina created outside its own folders: one `REG_SZ` per file, named by a stable id,
+/// holding the absolute path. Setup deletes what is listed here when Mujina is uninstalled.
 const CREATED_KEY: &str = r"Software\Mujina\Created";
-/// The marker's entry in that list.
 const CREATED_ID: &str = "steam-ui-marker";
 
-/// Creates the marker if it is missing. Returns whether it was created just now.
+/// `true` if the marker was created just now.
 pub fn ensure(steam_directory: &Path) -> io::Result<bool> {
     match OpenOptions::new()
         .write(true)

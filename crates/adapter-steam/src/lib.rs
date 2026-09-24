@@ -1,6 +1,5 @@
-//! Steam adapter: everything Mujina knows about Steam (window class, registry layout, command
-//! line, none of them a public API) lives in this crate. [`DESCRIPTOR`] and [`library`] are
-//! portable and tested on Linux too; the rest needs Windows.
+//! Everything Mujina knows about Steam: window class, registry layout, command line, none of them
+//! a public API.
 
 mod descriptor;
 pub mod library;
@@ -37,7 +36,6 @@ mod wlan;
 pub use big_picture::SteamBigPicture;
 pub use descriptor::{DESCRIPTOR, SteamDescriptor, SteamOptions};
 
-/// Steam Big Picture, as `crates/app/src/registry.rs` lists it.
 #[cfg(windows)]
 pub static PLUGIN: mujina_adapter_kit::plugin::LauncherPlugin =
     mujina_adapter_kit::plugin::LauncherPlugin {

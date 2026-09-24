@@ -1,6 +1,5 @@
-//! The Wi-Fi status as Big Picture's icon wants it: bars smoothed at their edges and pushed only
-//! on change, and which WLAN changes to follow when Windows refuses some. Portable, so tested on
-//! every system; the WLAN calls are in `wlan.rs`.
+//! The Wi-Fi status as Big Picture's icon wants it, and which WLAN changes to follow. Portable,
+//! so tested on every system; the WLAN calls are in `wlan.rs`.
 
 /// Signal strength in the 0–4 scale Big Picture draws (none, weak, ok, good, excellent).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -55,27 +54,23 @@ impl BarsFilter {
         settled
     }
 
-    /// Forgets the history, e.g. after a disconnect.
     pub fn reset(&mut self) {
         self.current = None;
     }
 }
 
-/// What the icon should show.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum WifiStatus {
     Disconnected,
     Connected { ssid: String, bars: SignalBars },
 }
 
-/// Decides whether a new status is worth telling Steam about.
 #[derive(Debug, Default)]
 pub struct WifiFeedPolicy {
     last_pushed: Option<WifiStatus>,
 }
 
 impl WifiFeedPolicy {
-    /// Returns `true` exactly when `status` differs from what was pushed last.
     pub fn should_push(&mut self, status: &WifiStatus) -> bool {
         if self.last_pushed.as_ref() == Some(status) {
             return false;
@@ -84,13 +79,11 @@ impl WifiFeedPolicy {
         true
     }
 
-    /// Forgets the last push, for a Steam that restarted or reloaded.
     pub fn invalidate(&mut self) {
         self.last_pushed = None;
     }
 }
 
-/// The current Wi-Fi connection as the WLAN service reports it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WifiReading {
     pub ssid: String,
@@ -98,7 +91,6 @@ pub struct WifiReading {
     pub quality: u8,
 }
 
-/// Turns readings into what the icon is to show, smoothed, and only when it changes.
 #[derive(Debug, Default)]
 pub struct IconFeed {
     bars: BarsFilter,
@@ -125,27 +117,21 @@ impl IconFeed {
 /// The changes a registration with the WLAN service asks for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WifiChanges {
-    /// Connecting and disconnecting.
     Connection,
-    /// Those, and the signal strength, which Windows grants only with the package's wiFiControl
-    /// capability and the location permission.
+    /// Windows grants the signal strength only with the package's wiFiControl capability and the
+    /// location permission.
     ConnectionAndSignal,
 }
 
-/// Which changes the icon follows, as far as Windows granted them.
 #[derive(Debug, PartialEq, Eq)]
 pub enum Followed<E> {
-    /// Connecting, disconnecting and the signal strength.
     All,
-    /// Connecting and disconnecting; the signal strength was refused with `refusal`.
     ConnectionOnly { refusal: E },
-    /// None: the last registration tried failed with this.
     Nothing(E),
 }
 
-/// Registers for every change that can alter the icon or, where Windows refuses that, for
-/// connecting and disconnecting alone. Only a refusal (`refused`) is a reason to ask for less;
-/// any other error ends the attempt.
+/// Registers for every change or, where Windows refuses that, for the connection alone. Only a
+/// refusal (`refused`) is a reason to ask for less; any other error ends the attempt.
 pub fn register_changes<E>(
     mut register: impl FnMut(WifiChanges) -> Result<(), E>,
     refused: impl Fn(&E) -> bool,
@@ -160,26 +146,22 @@ pub fn register_changes<E>(
     }
 }
 
-/// When to register again after Windows refused the signal strength. With Wi-Fi not connected,
-/// the first query did not ask for the location permission; the first reading with the
-/// connection's details shows it was given since, so register once more then. A refusal after
-/// such a reading is not about the permission and is not retried.
+/// When to register again after Windows refused the signal strength. Without Wi-Fi the first
+/// query does not ask for the location permission; the first detailed reading shows it was given.
 #[derive(Debug)]
 pub struct SignalRetry {
     pending: bool,
 }
 
 impl SignalRetry {
-    /// After the first registration, which `followed` says the outcome of; `detailed_before`
-    /// whether a reading with the connection's details came before it.
+    /// `detailed_before`: a reading with the connection's details came before the registration.
     pub fn after_first<E>(followed: &Followed<E>, detailed_before: bool) -> Self {
         Self {
             pending: matches!(followed, Followed::ConnectionOnly { .. }) && !detailed_before,
         }
     }
 
-    /// Whether to register again after a reading with (`detailed`) or without the connection's
-    /// details. `true` at most once.
+    /// `true` at most once.
     pub fn due(&mut self, detailed: bool) -> bool {
         let due = self.pending && detailed;
         self.pending &= !due;
@@ -269,12 +251,10 @@ mod tests {
         );
     }
 
-    /// Windows' codes, as the WLAN reader sees them.
     const ACCESS_DENIED: u32 = 5;
     const RPC_SERVER_UNAVAILABLE: u32 = 1722;
 
-    /// Registers the way `wlan.rs` does against a service that answers each kind of registration
-    /// as `answer` says; also what was asked for, in order.
+    /// Registers as `wlan.rs` does; also returns what was asked for, in order.
     fn register_with(
         answer: impl Fn(WifiChanges) -> Result<(), u32>,
     ) -> (Followed<u32>, Vec<WifiChanges>) {

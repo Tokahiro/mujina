@@ -1,7 +1,5 @@
-// Injected into Steam's SharedJSContext via the CEF debug port. Steam's Windows backend reports
-// the WLAN device with an empty access-point list, so Big Picture draws a grey Wi-Fi icon. This
-// appends an active AP (SSID + signal) to every device update that reaches Steam's UI.
-// indicator.rs runs it as (<this file>)(version); window.__steamWifiError holds the last error.
+// Steam on Windows reports the WLAN device without access points, so Big Picture's Wi-Fi icon is
+// grey: this appends one to every device update. indicator.rs runs it as (<this file>)(version).
 (function (version) {
   // Versioned: a context may still carry the hook of an older Mujina, which cannot adopt. Set
   // only once hook() has succeeded, so that a failed hook is tried again.
@@ -76,9 +74,8 @@
   window.__steamWifiRefire = function () {
     if (window.__steamWifiCb && window.__steamWifiLast) { try { window.__steamWifiCb(patch(window.__steamWifiLast)); } catch (e) {} }
   };
-  // A UI that subscribed before this script arrived cannot have its callback captured, but the
-  // callback is a method of the UI's network store: subscribe too and hand the store the patched
-  // data right after Steam handed it the unpatched. This avoids reloading Steam's UI.
+  // An earlier subscriber's callback cannot be captured, but it is a method of the UI's network
+  // store: subscribe too and hand the store patched data after Steam's, instead of a reload.
   function adopt() {
     if (window.__steamWifiCb || window.__steamWifiSubscribed) return true;
     const S = window.SystemNetworkStore;
@@ -92,9 +89,8 @@
     window.__steamWifiAdopted = true;
     return true;
   }
-  // SteamClient appears shortly after the document, the store a little later: retry every tick
-  // for ~30 s. Only the last attempt's error is kept, so an early one does not make a run that
-  // merely waited look failed.
+  // SteamClient and the store appear after the document: retry for ~30 s. Only the last attempt's
+  // error is kept, so a run that merely waited does not look failed.
   let hooked = false;
   function settle() {
     window.__steamWifiError = null;

@@ -19,12 +19,9 @@ use crate::{games, marker, navigation, registry_keys, shortcuts, window_rule, wl
 
 /// Starts Steam straight into the gamepad UI, without the desktop client flashing up first.
 const START_ARGUMENT: &str = "-gamepadui";
-/// Asks a running Steam to switch to Big Picture.
 const SWITCH_ARGUMENT: &str = "steam://open/bigpicture";
 
 pub struct SteamBigPicture {
-    /// `[launcher.steam] ui_link`: keep the debugging-port marker and reach Big Picture's pages
-    /// through the port.
     ui_link: bool,
     indicator: Option<SteamWifiIndicator>,
     /// Only with the indicator, whose worker keeps the link the menus need.
@@ -42,8 +39,7 @@ impl SteamBigPicture {
     }
 
     /// For the resident agent: with the Wi-Fi fix on, also starts the Steam UI worker and the
-    /// WLAN reader. Nothing else asks the WLAN service, so only the Wi-Fi fix makes Windows ask
-    /// for the location permission.
+    /// WLAN reader, the only part that makes Windows ask for the location permission.
     pub fn for_agent(options: SteamOptions) -> Self {
         // TODO: the direct menus should need only `ui_link`. They need the Wi-Fi fix, whose
         // worker keeps the link; let that worker run without the hook, with no extra thread.
@@ -70,7 +66,6 @@ impl SteamBigPicture {
         }
     }
 
-    /// Opens or closes a menu directly while the link to Big Picture is up;
     /// [`Direct::NotTaken`] means "use the shortcut".
     fn toggle(&self, host: MenuHost) -> Direct {
         let Some(menus) = &self.menus else {
@@ -83,7 +78,6 @@ impl SteamBigPicture {
         }
     }
 
-    /// Steam's overlay shortcut: the user's own from Steam's settings, or Steam's default.
     fn overlay(&self) -> KeyChord {
         let configured = self
             .locate()
@@ -117,8 +111,7 @@ impl HomeLauncher for SteamBigPicture {
         }
     }
 
-    /// Ensures the marker on every activation, not only before a start: anything may start
-    /// Steam, and Steam reads the marker only at start-up.
+    /// Not in `start_ui`: anything may start Steam, which reads the marker only at start-up.
     fn prepare(&self, install: &LauncherInstall) -> PortResult<()> {
         if !self.ui_link {
             return Ok(());
@@ -221,19 +214,16 @@ impl SessionLauncher for SteamBigPicture {
         Some(shortcuts::menu())
     }
 
-    /// Read on every press: presses are rare and the user may change the setting any time. Big
-    /// Picture's own shortcuts do not reach a focused game; the overlay hotkey does.
+    /// Read on every press: presses are rare and the user may change the setting any time.
     fn overlay_shortcut(&self) -> Option<KeyChord> {
         Some(self.overlay())
     }
 
-    /// Through Big Picture's menu store, which works wherever the keyboard focus is.
     fn open_menu(&self) -> Direct {
         self.toggle(MenuHost::BigPicture)
     }
 
-    /// Through the game overlay's menu store, the same way; the overlay only exists while Big
-    /// Picture is the client's UI.
+    /// The overlay only exists while Big Picture is the client's UI.
     fn open_overlay(&self) -> Direct {
         self.toggle(MenuHost::GameOverlay)
     }

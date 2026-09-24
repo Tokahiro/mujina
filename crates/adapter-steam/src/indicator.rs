@@ -1,7 +1,5 @@
-//! Makes Big Picture's Wi-Fi icon tell the truth (ADR-0006): `assets/hook.js`, run in Steam's
-//! shared JavaScript context, patches the missing access point into what the UI receives. A
-//! worker keeps one debugging session per Steam run, because a script registered with
-//! `Page.addScriptToEvaluateOnNewDocument` lives only as long as its session.
+//! Makes Big Picture's Wi-Fi icon tell the truth through `assets/hook.js` (ADR-0006). A worker
+//! keeps one debugging session per Steam run: the hook's registration lives only as long as it.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -36,22 +34,17 @@ fn hook_source() -> String {
     format!("({HOOK_FUNCTION})({HOOK_VERSION})")
 }
 
-/// Whether this version of the hook is in place.
 fn is_hooked() -> String {
     format!("window.__steamWifiHooked === {HOOK_VERSION}")
 }
 
-/// One round of attempts; it has to outlast a cold Steam start with an update check. The next
-/// sign of life from Steam starts a new round.
+/// One round of attempts; it has to outlast a cold Steam start with an update check.
 const PATIENCE: Duration = Duration::from_secs(120);
 /// Probe the port back to back this long into a round: Steam's script context appears then, and
 /// every tenth of a second counts. A refused loopback connection is cheap.
 const EAGER_PHASE: Duration = Duration::from_secs(30);
 const EAGER_PAUSE: Duration = Duration::from_millis(100);
-/// After the eager phase, pauses double from one second up to this; every sign of life from
-/// Steam cuts the current pause short.
 const MAX_PAUSE: Duration = Duration::from_secs(8);
-/// How often readiness is checked once a session is open.
 const READY_POLL: Duration = Duration::from_millis(250);
 /// How long the UI gets to subscribe through a freshly injected hook before it is taken to have
 /// subscribed earlier, and is reloaded. Short, because only an early reload is an invisible one.
@@ -65,11 +58,7 @@ const TRUST_PERIOD: Duration = Duration::from_secs(30);
 
 enum Command {
     Connect,
-    Show {
-        ssid: String,
-        bars: u8,
-    },
-    /// A press of the device button that was taken on while the link was up.
+    Show { ssid: String, bars: u8 },
     Press(MenuPress),
 }
 
@@ -81,7 +70,6 @@ pub struct SteamWifiIndicator {
 }
 
 impl SteamWifiIndicator {
-    /// Starts the worker thread.
     pub fn start(port: u16) -> Option<Self> {
         Self::start_with(port, RELOAD_DELAY)
     }
@@ -114,7 +102,6 @@ impl SteamWifiIndicator {
         Some(Self { commands, link })
     }
 
-    /// The link to Steam's UI that the worker keeps, for the device button's menus.
     pub fn link(&self) -> UiLink {
         UiLink {
             up: Arc::clone(&self.link),
@@ -123,12 +110,10 @@ impl SteamWifiIndicator {
     }
 }
 
-/// What [`UiLink`] holds while no session is up.
 const DOWN: u64 = 0;
 
-/// Whether Steam's UI can be reached, as the worker last found: up once its session is open with
-/// the hook ready, down once the session is dropped. The worker looks only on signs of life from
-/// Steam, so this may be hours old.
+/// Whether Steam's UI can be reached, as the worker last found. The worker looks only on signs
+/// of life from Steam, so this may be hours old.
 #[derive(Clone)]
 pub struct UiLink {
     /// The number of the worker's session while it is up, [`DOWN`] otherwise. A new number means
@@ -179,7 +164,6 @@ impl SteamWifiIndicator {
     }
 }
 
-/// Where one step of the worker got to.
 enum Progress {
     /// The UI has subscribed through the hook.
     Ready,
@@ -199,11 +183,9 @@ struct Worker {
     link: Arc<AtomicU64>,
     /// What the icon should show; pushed again whenever a new session is established.
     shown: Option<(String, u8)>,
-    /// The bars last written to the log at info level.
     logged_bars: Option<u8>,
     /// When the session last proved ready.
     verified: Option<Instant>,
-    /// Since when Big Picture has been up without having subscribed through the hook.
     unsubscribed_since: Option<Instant>,
     /// The one reload this session is allowed has been spent.
     reloaded: bool,
@@ -211,7 +193,6 @@ struct Worker {
     last_reload: Option<Instant>,
     /// The hook's failure last written to the log, so that it is written once.
     hook_error: Option<String>,
-    /// The session over which the device button's presses go, kept open between them.
     presses: Option<PressSession>,
 }
 
@@ -263,8 +244,8 @@ impl Worker {
         }
     }
 
-    /// Carries out a press over the presses' session, (re)opened as needed. `false` when the link
-    /// turned out to be down; then only the presses' session is dropped, not the hook's.
+    /// `false` when the link turned out to be down; then only the presses' session is dropped,
+    /// not the hook's.
     fn carry_out(&mut self, press: MenuPress) -> bool {
         let link_session = press.session();
         // Opened while an earlier link was up, so with a Steam that may be gone.
@@ -279,9 +260,8 @@ impl Worker {
         let held = press.carry_out(|script| {
             if let Some(mut kept) = presses.take() {
                 match kept.session.evaluate(script) {
-                    // Steam may have closed it (its web helper restarted, say): retry over a new
-                    // one. Not after a timeout: the script may have run, and a second run would
-                    // close the menu again.
+                    // Steam may have closed it: retry over a new one. Not after a timeout: the
+                    // script may have run, and a second run would close the menu again.
                     Err(CdpError::Link(error)) => {
                         log::debug!("the session kept for presses is gone ({error}); reopening");
                     }
@@ -395,7 +375,6 @@ impl Worker {
         }
     }
 
-    /// One step towards a UI that has subscribed through the hook.
     fn advance(&mut self) -> Result<Progress, CdpError> {
         if self.session.is_none() {
             let Some(url) = cdp::steam_ui(self.port)?.shared_context else {
@@ -460,8 +439,7 @@ impl Worker {
         Ok(Progress::Waiting)
     }
 
-    /// Logs what stopped the hook, once per distinct error: every sign of life from Steam asks
-    /// again.
+    /// Once per distinct error: every sign of life from Steam asks again.
     fn hook_failed(&mut self, error: String) {
         if self.hook_error.as_ref() != Some(&error) {
             log::warn!("Wi-Fi indicator: the hook failed: {error}");
@@ -535,10 +513,8 @@ mod tests {
         .unwrap();
     }
 
-    /// A stand-in for Steam: serves the target list, and up to `sockets` websockets, numbered
-    /// from 1, that answer each expression with `answer` and report each call to `seen` as
-    /// `"<socket>: <method> <expression>"`. A socket hangs up, without a closing handshake,
-    /// after an expression for which `hangs_up` is true.
+    /// Serves the target list and up to `sockets` websockets, numbered from 1, that report each
+    /// call to `seen` as `"<socket>: <method> <expression>"`.
     #[allow(
         clippy::needless_pass_by_value,
         reason = "moved into the server thread"
@@ -644,7 +620,6 @@ mod tests {
         let push = next_matching(&seen, "ssid:");
         assert!(push.contains(r#"ssid:"café \"5G\"""#), "{push}");
         assert!(push.contains("strength:4"), "{push}");
-        // Up before the first push.
         assert_eq!(indicator.link().session(), Some(1));
 
         // A second status goes over the same session: the fake accepts only one websocket.
@@ -701,7 +676,6 @@ mod tests {
         assert!(quiet.is_err(), "{quiet:?}");
         assert_eq!(indicator.link().session(), None);
 
-        // The next sign of life asks once more, and does not inject into the same document again.
         indicator.connect();
         let line = seen.recv_timeout(Duration::from_secs(20)).unwrap();
         assert!(line.ends_with(READINESS), "{line}");
@@ -716,8 +690,6 @@ mod tests {
         assert_eq!(link.load(Ordering::Relaxed), DOWN);
     }
 
-    /// Steam as the tests of presses need it: the menu stores open their menus, and the hook is
-    /// ready at once.
     fn menus_answer(expression: &str) -> Value {
         if expression.contains("MenuStore") {
             json!("opened")
@@ -793,8 +765,6 @@ mod tests {
         let menus = DirectMenus::new(indicator.link());
         assert!(menus.toggle(MenuHost::BigPicture));
 
-        // The worker looks at the link again, over the hook's session, which it kept; and the
-        // hook is not registered anew.
         let looked = next_matching(&seen, READINESS);
         assert!(looked.starts_with("1: "), "{looked}");
         let pushed = next_matching(&seen, "ssid:");

@@ -1,6 +1,5 @@
-# German texts of mujina-adapter-steam that Mujina Settings shows: Steam's name, its options and
-# the titles of its checks. Compiled in (the descriptor's catalogs); `cargo xtask i18n-check`
-# lists what is missing.
+# German texts of mujina-adapter-steam that Mujina Settings shows. Compiled in (the descriptor's
+# catalogs); `cargo xtask i18n-check` lists what is missing.
 msgid ""
 msgstr ""
 "Project-Id-Version: Mujina\n"

@@ -15,7 +15,6 @@ pub fn executable() -> Option<PathBuf> {
     (!raw.is_empty()).then(|| PathBuf::from(raw.replace('/', "\\")))
 }
 
-/// Process id of the running Steam client; `None` when Steam never ran or reports 0.
 pub fn client_pid() -> Option<u32> {
     registry::read_u32(Hive::CurrentUser, ACTIVE_PROCESS, "pid")
         .ok()
@@ -31,7 +30,6 @@ pub fn active_user() -> Option<u32> {
         .filter(|&id| id != 0)
 }
 
-/// App id of the running game; `None` while no game runs.
 pub fn running_app_id() -> Option<u32> {
     registry::read_u32(Hive::CurrentUser, STEAM, "RunningAppID")
         .ok()

@@ -1,6 +1,5 @@
-//! Wi-Fi state from the WLAN service, by change notification, fed straight to the Steam UI worker
-//! (ADR-0014). It runs on a thread of its own: since Windows 11 24H2 the first query may block on
-//! the location consent prompt, which must stall neither the agent's main thread nor that worker.
+//! Wi-Fi state from the WLAN service, fed to the Steam UI worker (ADR-0014). On a thread of its
+//! own: since Windows 11 24H2 the first query may block on the location consent prompt.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU8, Ordering};
@@ -32,8 +31,7 @@ const MSM_SIGNAL_QUALITY_CHANGE: u32 = 8;
 const UNKNOWN_NETWORK: &str = "Wi-Fi";
 const UNKNOWN_QUALITY: u8 = 60;
 
-/// Starts the worker that feeds `icon`. `false` only if the thread or its event cannot be
-/// created; a missing WLAN service merely means there is never a reading, which the worker says.
+/// `false` only if the thread or its event cannot be created; the worker logs a missing service.
 pub fn follow(icon: SteamWifiIndicator) -> bool {
     let Ok(wake) = Event::new() else {
         return false;
@@ -48,8 +46,7 @@ pub fn follow(icon: SteamWifiIndicator) -> bool {
         .is_ok()
 }
 
-/// Decides which notifications wake the worker. Drivers report signal quality every few seconds,
-/// so only a change of bars counts.
+/// Drivers report signal quality every few seconds, so only a change of bars wakes the worker.
 struct Relevance {
     /// Bars of the last signal quality that woke the worker; 255 = none yet.
     last_bars: AtomicU8,
@@ -62,7 +59,6 @@ impl Relevance {
         }
     }
 
-    /// Whether the notification can change what the indicator shows.
     fn wakes(&self, notification: &Notification<'_>) -> bool {
         match (notification.source, notification.code) {
             (WLAN_NOTIFICATION_SOURCE_ACM, ACM_CONNECTION_COMPLETE | ACM_DISCONNECTED) => {
@@ -133,8 +129,7 @@ impl Worker {
     }
 }
 
-/// Registers for the changes that can alter the icon, as far as Windows grants them, in place of
-/// any registered before.
+/// Replaces any registration before.
 fn follow_changes(client: &mut WlanClient, wake: &Arc<Event>) -> Followed<Win32Error> {
     register_changes(
         |changes| {
@@ -162,8 +157,6 @@ fn news(followed: &Followed<Win32Error>, then: LocationConsent, now: LocationCon
     }
 }
 
-/// Logs which changes are followed. With the location permission granted, a refusal points at
-/// the package; without it, a refusal is expected.
 fn say_followed(followed: &Followed<Win32Error>, consent: LocationConsent) {
     match followed {
         Followed::All => {
@@ -214,7 +207,6 @@ fn sources(changes: WifiChanges) -> u32 {
     }
 }
 
-/// The icon as this worker last fed it.
 struct Icon {
     indicator: SteamWifiIndicator,
     latest: Option<WifiReading>,
@@ -233,8 +225,7 @@ impl Icon {
         }
     }
 
-    /// Asks for the connection, and shows it if that changes what the icon shows. `true` if
-    /// Windows gave the connection's details, which it does only with the location permission.
+    /// `true` if Windows gave the connection's details: only with the location permission.
     fn refresh(&mut self, client: &WlanClient) -> bool {
         let answer = query(client, &mut self.permission_noted);
         let detailed = answer.as_ref().is_some_and(|answer| answer.detailed);
@@ -249,7 +240,6 @@ impl Icon {
     }
 }
 
-/// A reading, and where it came from.
 struct Answer {
     reading: WifiReading,
     /// From the connection's details; `false` for the generic reading shown without the
@@ -257,7 +247,6 @@ struct Answer {
     detailed: bool,
 }
 
-/// The connection of the first connected Wi-Fi interface.
 fn query(client: &WlanClient, permission_noted: &mut bool) -> Option<Answer> {
     let interfaces = client.interfaces().ok()?;
     interfaces

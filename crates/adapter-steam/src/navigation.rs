@@ -1,6 +1,5 @@
-//! Showing a page of Big Picture through its own router, over the debugging port. Steam's
-//! `steam://open/games` and its relatives belong to the desktop client and leave Big Picture
-//! where it is.
+//! Showing a page of Big Picture through its own router, over the debugging port: Steam's
+//! `steam://open/games` and its relatives leave Big Picture where it is.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -21,9 +20,8 @@ pub enum MenuHost {
     GameOverlay,
 }
 
-/// Opens the host's main menu, or closes any open side menu, as Steam's own button does; `{host}`
-/// is an expression for the UI instance. Close only through the menu store: taking the overlay
-/// down by hand (its composition state) leaves the desktop in front of the game.
+/// `{host}` is an expression for the UI instance. Close only through the menu store: taking the
+/// overlay down by hand (its composition state) leaves the desktop in front of the game.
 const TOGGLE_TEMPLATE: &str = "(function(){try{\
      var w={host};\
      if(!w)return 'not there';\
@@ -59,9 +57,8 @@ impl MenuHost {
     }
 }
 
-/// Whether a host's menu functions exist, per session of the link. A Steam update may move them;
-/// the device button then sends the shortcut until the next session, which every Steam start
-/// brings.
+/// Whether a host's menu functions exist, per link session. A Steam update may move them; the
+/// button then sends the shortcut until the next session, which every Steam start brings.
 #[derive(Debug, Default)]
 struct HostHealth {
     /// The session in which the functions turned out to be missing; 0 for none.
@@ -74,11 +71,9 @@ struct HostHealth {
 /// What an answer of [`TOGGLE_TEMPLATE`] means for the device button.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Verdict {
-    /// The menu opened or closed.
     Done,
-    /// It did not, and will not in this session: from now on the shortcut.
+    /// Will not work in this session: from now on the shortcut.
     Missing,
-    /// It did not, this time.
     Failed,
 }
 
@@ -119,8 +114,7 @@ impl Health {
     }
 }
 
-/// The device button's direct way to Big Picture's menus, over the link the Wi-Fi indicator
-/// keeps.
+/// The device button's direct way to Big Picture's menus, over the Wi-Fi indicator's link.
 pub struct DirectMenus {
     link: UiLink,
     /// Shared with the presses, which the worker carries out.
@@ -135,10 +129,8 @@ impl DirectMenus {
         }
     }
 
-    /// Opens or closes the host's side menu through its menu store. Unlike `Ctrl+1`, this works
-    /// after a programmatic bring-to-front, which activates Big Picture's window but leaves its
-    /// browser without the keyboard focus. Returns at once whether the press was taken on (not
-    /// while the link is down or the host's functions are missing); the worker carries it out.
+    /// Unlike `Ctrl+1`, works after a programmatic bring-to-front, which leaves Big Picture's
+    /// browser without the keyboard focus. Returns at once whether the worker took the press on.
     pub fn toggle(&self, host: MenuHost) -> bool {
         let Some(session) = self.link.session() else {
             return false;
@@ -154,8 +146,7 @@ impl DirectMenus {
     }
 }
 
-/// A press of the device button that [`DirectMenus::toggle`] took on, for the worker that keeps
-/// the link to carry out.
+/// A press [`DirectMenus::toggle`] took on, for the link's worker to carry out.
 pub struct MenuPress {
     host: MenuHost,
     /// The link's session in which it was taken on.
@@ -168,8 +159,7 @@ impl MenuPress {
         self.session
     }
 
-    /// Runs the host's script with `evaluate` and logs the outcome. `false` only when the link
-    /// failed: the next press then sends the keyboard shortcut.
+    /// `false` only when the link failed: the next press then sends the keyboard shortcut.
     pub fn carry_out(self, evaluate: impl FnOnce(&str) -> Result<Value, CdpError>) -> bool {
         let host = self.host;
         let answer = match evaluate(&host.script()) {
@@ -200,16 +190,13 @@ impl MenuPress {
     }
 }
 
-/// Big Picture's start page.
 pub const HOME_ROUTE: &str = "/library/home";
-/// Big Picture's route of the user's games.
 pub const LIBRARY_ROUTE: &str = "/library";
 
 /// Right after a start the window is there before the router is.
 pub const START_PATIENCE: Duration = Duration::from_secs(10);
 const PAUSE: Duration = Duration::from_millis(250);
 
-/// The answer of [`expression`] when the router took the route.
 const DONE: &str = "ok";
 
 /// Asks Big Picture's router for `route`. Every step is checked, as a Steam update may move
@@ -234,7 +221,6 @@ pub fn shared_session(port: u16) -> Result<Session, CdpError> {
     Session::connect(port, &url)
 }
 
-/// Runs `script` over a session of its own, which is closed again after it.
 fn attempt(port: u16, script: &str) -> Result<String, CdpError> {
     let answer = shared_session(port)?.evaluate(script)?;
     Ok(answer.as_str().unwrap_or("no answer").to_string())
@@ -264,10 +250,8 @@ const RUNNING_ROUTE: &str = "/apprunning";
 /// layout) on top of whatever page it is on; this only settles what lies underneath.
 const RUNNING_DELAY: Duration = Duration::from_secs(2);
 
-/// Keeps Big Picture on its "a game is running" screen while a game loads, which may take 20 s
-/// and more. Left alone, Big Picture sometimes stays on the game's page, where "Play" has turned
-/// into "Continue" and the launch looks failed. Fire and forget, on its own thread: the caller
-/// is the agent's event loop.
+/// Left alone, Big Picture may stay on the game's page while it loads, where "Play" has become
+/// "Continue" and the launch looks failed. Returns at once: the caller is the agent's event loop.
 pub fn show_running_game(port: u16) {
     let spawned = thread::Builder::new()
         .name("steam-running-screen".into())
@@ -295,15 +279,12 @@ pub fn show_running_game(port: u16) {
     }
 }
 
-/// When to look at Big Picture after a game has ended.
 const AFTER_GAME_SAMPLES: [Duration; 3] = [
     Duration::from_secs(1),
     Duration::from_secs(2),
     Duration::from_secs(4),
 ];
 
-/// What Big Picture thinks of itself: its page, whether its document has the focus and is
-/// visible, and whether its controller navigation is active.
 const UI_STATE: &str = "(function(){try{\
      var w=SteamUIStore.WindowStore.GamepadUIMainWindowInstance;\
      if(!w)return 'Big Picture is not up';\
@@ -314,8 +295,7 @@ const UI_STATE: &str = "(function(){try{\
      running:SteamUIStore.MainRunningApp?SteamUIStore.MainRunningApp.appid:null});\
      }catch(e){return String(e);}})()";
 
-/// Diagnostics for "after a game the controller does nothing until the screen is touched": logs,
-/// a few times, where Windows sends input and Big Picture's own state. Only with debug logging.
+/// Diagnostics for "after a game the controller does nothing until the screen is touched".
 pub fn log_state_after_game(port: u16) {
     if !log::log_enabled!(log::Level::Debug) {
         return;
@@ -359,7 +339,6 @@ mod tests {
 
         assert_eq!(health.record(1, "missing"), Verdict::Missing);
         assert!(!health.usable(1));
-        // Steam has started again, perhaps updated.
         assert!(health.usable(2));
     }
 
@@ -374,7 +353,6 @@ mod tests {
         assert_eq!(health.record(1, error), Verdict::Missing);
         assert!(!health.usable(1));
 
-        // One from the last session does not count in the next.
         assert_eq!(health.record(2, error), Verdict::Failed);
         assert!(health.usable(2));
     }
