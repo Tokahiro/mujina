@@ -278,7 +278,7 @@ fn notes_of(
     notes
 }
 
-/// Not the file itself: every write replaces that.
+/// Beside the file, not on it: every write replaces the file.
 fn lock_path(path: &Path) -> PathBuf {
     path.with_extension("toml.lock")
 }
@@ -1074,6 +1074,7 @@ mod tests {
         let held = lock_file(config.path()).unwrap();
         held.lock().unwrap();
 
+        // While the lock is held, the template is left to the writer holding it.
         config.ensure_template();
         assert!(!config.path().exists());
 

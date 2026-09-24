@@ -19,7 +19,7 @@ impl ExitPolicy {
     }
 }
 
-/// A launcher that dies sooner after watching began is not relaunched: it would only loop.
+/// A launcher dying sooner than this after watching began is not relaunched; it would loop.
 pub const MIN_UPTIME_SECS: u64 = 30;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
