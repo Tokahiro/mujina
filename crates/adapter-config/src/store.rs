@@ -21,6 +21,7 @@ const LOCK_WAIT: Duration = Duration::from_secs(2);
 impl SettingsStore for ConfigFile {
     fn apply(&self, changes: &[SettingChange]) -> PortResult<()> {
         // Held from read to rename, so neither Mujina Settings nor mujinactl loses a change.
+        // Dropping the handle releases it.
         let _lock = lock(&self.path, LOCK_WAIT)?;
         let before = match std::fs::read_to_string(&self.path) {
             Ok(text) => text,
