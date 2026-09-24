@@ -1,6 +1,6 @@
 //! `mujinactl capture`: waits for one key combination, such as the device button, and prints it.
 //! Keys are held back from other programs meanwhile, except what a program with administrator
-//! rights sends (OneXConsole), which Windows delivers anyway.
+//! rights sends (OneXConsole), which Windows delivers anyway (this still sees it).
 //!
 //! Mujina Settings runs it with [`watch`]: a hook on a thread of the app got no key events on a
 //! device where this console program's hook did.

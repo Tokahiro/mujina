@@ -235,7 +235,7 @@ fn hold(chord: KeyChord, timing: HoldTiming) -> bool {
 
 /// Asks for the hook to be reinstalled if our own keystrokes did not pass back through it, which
 /// means Windows dropped it. Meanwhile replays go out at once, since the hook holds back every
-/// key until they come back; another chord waits in `waiting`.
+/// key until they come back and the chord is already released; another chord waits in `waiting`.
 fn verify_hook(jobs: &Receiver<Job>, waiting: &mut VecDeque<Job>) {
     if HOOK_THREAD.load(Ordering::Relaxed) == 0 {
         return;

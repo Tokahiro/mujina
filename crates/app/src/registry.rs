@@ -80,7 +80,8 @@ pub fn device_runtime(id: Option<&str>) -> &'static dyn DeviceRuntime {
 static KEYBOARD: &dyn DeviceRuntime = &mujina_adapter_keyboard::RUNTIME;
 
 /// Whether an agent on runtime `running` must wait for the next session to take over the device
-/// `next` names, which is when another runtime runs it. `None` never waits.
+/// `next` names, which is when another runtime runs it. `None` never waits: every runtime can
+/// switch its button off at once.
 pub fn device_waits(running: &dyn DeviceRuntime, next: Option<&str>) -> bool {
     next.is_some() && !std::ptr::addr_eq(device_runtime(next), running)
 }

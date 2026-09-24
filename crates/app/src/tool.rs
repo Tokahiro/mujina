@@ -1,6 +1,6 @@
 //! What `mujinactl` and Mujina Settings share. Mujina Settings reaches the rest of Mujina only
 //! through here, so that it names no adapter (docs/architecture.md); a test in Mujina Settings
-//! keeps it from naming `compose` or `registry`.
+//! keeps it from naming `compose` or `registry` (arch-check sees crates, not modules).
 
 use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
@@ -136,8 +136,8 @@ pub fn change(changes: &[SettingChange]) -> Result<Applied, PortError> {
     mujina_adapter_windows::settings_signal::notify();
     let (launchers, devices) = (registry::launchers(), registry::devices());
     let now = config.load().settings;
-    // The running launcher, unless it was changed during the session; the agent follows only its
-    // options.
+    // The file's launcher, which is the running one unless it was changed during the session; the
+    // agent follows only its options.
     let named = now.launcher.id;
     // A device another runtime runs waits for the next session, as the agent's log says.
     let device_waits = device_before.is_some_and(|before| {
