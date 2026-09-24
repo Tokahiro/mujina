@@ -1,6 +1,5 @@
-//! A launcher Mujina knows nothing about, driven entirely by the configuration. Menus beyond
-//! `ESC`, navigation, a network indicator and game detection need a dedicated adapter
-//! (`docs/new-launcher.md`).
+//! A launcher Mujina knows nothing about, driven by the configuration. Anything beyond an `ESC`
+//! menu needs a dedicated adapter (`docs/new-launcher.md`).
 
 mod descriptor;
 #[cfg(windows)]

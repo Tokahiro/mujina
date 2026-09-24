@@ -7,8 +7,8 @@ use mujina_winutil::shell;
 const HOME_URI: &str = "mujina://home";
 const GAME_URI: &str = "mujina://game";
 
-/// Activates the home role through the package's own URI scheme. Activated by the shell, the
-/// home app may decide what is in front, which the agent, a background process, may not.
+/// Activated by the shell, the home app may decide what is in front, which the agent, a
+/// background process, may not.
 #[derive(Debug, Default)]
 pub struct ProtocolHomeActivator;
 

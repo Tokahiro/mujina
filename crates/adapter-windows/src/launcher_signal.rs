@@ -1,6 +1,5 @@
 //! Tells a running agent that the home role started the launcher or switched it to its console
-//! UI, so that the agent looks for the launcher's process again. Same pattern as
-//! `settings_signal` (ADR-0010).
+//! UI, so that the agent looks for the launcher's process again (ADR-0010).
 
 use std::os::windows::io::{AsHandle, BorrowedHandle};
 
@@ -23,7 +22,6 @@ pub fn notify() {
     }
 }
 
-/// The launcher was started by the home role, as a wait source of the agent's event loop.
 pub struct LauncherStartedSource(Event);
 
 impl LauncherStartedSource {
@@ -57,8 +55,7 @@ mod tests {
     use super::*;
     use crate::settings_signal::SettingsChangedSource;
 
-    /// A name no other test run uses, and never the agent's own: a running agent on the
-    /// developer's machine must not be told anything.
+    /// Never the agent's own name: a running agent on the developer's machine must not hear it.
     fn unique_name() -> String {
         static COUNT: AtomicU32 = AtomicU32::new(0);
         format!(

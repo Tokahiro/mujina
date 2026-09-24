@@ -1,5 +1,4 @@
-//! Tells a running agent that `config.toml` changed, through a named event in the session's
-//! namespace (ADR-0010).
+//! Tells a running agent that `config.toml` changed, through a named event (ADR-0010).
 
 use std::os::windows::io::{AsHandle, BorrowedHandle};
 
@@ -14,15 +13,13 @@ pub fn listen() -> Option<SettingsChangedSource> {
     SettingsChangedSource::named(NAME)
 }
 
-/// For whoever changed the configuration. Does nothing noticeable without a running agent; the
-/// next agent reads the file when it starts anyway.
+/// Without a running agent this does nothing; the next agent reads the file when it starts.
 pub fn notify() {
     if let Ok(event) = Event::named_auto_reset(NAME) {
         event.set();
     }
 }
 
-/// The configuration changed, as a wait source of the agent's event loop.
 pub struct SettingsChangedSource(Event);
 
 impl SettingsChangedSource {

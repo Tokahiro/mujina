@@ -1,6 +1,5 @@
-//! A synchronous file logger behind the `log` facade: a logging thread would be one more thing
-//! that wakes up. Every role appends to `mujina.log`, rotated to `mujina.log.1` past a size; best
-//! effort, as racing processes may lose the older file.
+//! A synchronous file logger (a logging thread would be one more wake-up). All roles append to
+//! `mujina.log`, rotated to `mujina.log.1`; racing processes may lose the older file.
 
 use std::ffi::OsString;
 use std::fs::{File, OpenOptions};
@@ -26,7 +25,6 @@ struct FileLogger {
 
 struct Sink {
     file: File,
-    /// Lines written since the last size check.
     lines: u32,
 }
 
@@ -53,8 +51,7 @@ impl FileLogger {
         }
     }
 
-    /// Opens the log again by name, even when small: another process may have rotated the file
-    /// this handle still writes to. Should that fail, the old handle stays.
+    /// Reopens even a small log: another process may have rotated the file this handle writes to.
     fn reopen(&self, sink: &mut Sink) {
         sink.lines = 0;
         if let Ok(file) = open(&self.path, self.max_bytes) {
@@ -79,9 +76,8 @@ impl Log for FileLogger {
         self.write(&line);
     }
 
-    /// Nothing is buffered: Windows keeps each written line even if the process ends right after.
-    /// Flushing reopens the log by name, so lines that must be found (the agent's closing lines,
-    /// a panic) land in the current file if they flush first.
+    /// Writes are unbuffered; flushing reopens the log by name, so lines that must be found (the
+    /// agent's closing lines, a panic) land in the current file if they flush first.
     fn flush(&self) {
         if let Ok(mut sink) = self.sink.lock() {
             let _ = sink.file.flush();
@@ -90,7 +86,7 @@ impl Log for FileLogger {
     }
 }
 
-/// Opens the log for appending, rotating it first if it has grown past `max_bytes`.
+/// Rotates the log first if it has grown past `max_bytes`.
 fn open(path: &Path, max_bytes: u64) -> std::io::Result<File> {
     if std::fs::metadata(path).is_ok_and(|meta| meta.len() > max_bytes) {
         let mut older = OsString::from(path);
@@ -105,8 +101,7 @@ fn open(path: &Path, max_bytes: u64) -> std::io::Result<File> {
         .open(path)
 }
 
-/// Starts logging to `<dir>/mujina.log`. `role` tells the processes sharing the file apart.
-/// Panics are logged from then on.
+/// `role` tells the processes sharing the file apart. Panics are logged from then on.
 pub fn init(dir: &Path, role: &'static str, level: LevelFilter) -> std::io::Result<()> {
     std::fs::create_dir_all(dir)?;
     let logger = FileLogger::open(dir.join("mujina.log"), MAX_BYTES, role)?;
@@ -189,9 +184,7 @@ mod tests {
         let path = dir.join("mujina.log");
         let logger = FileLogger::open(path.clone(), MAX_BYTES, "test").unwrap();
         logger.write("before\n");
-        // What another role does when it finds the file too big.
         std::fs::rename(&path, dir.join("mujina.log.1")).unwrap();
-        // Still the handle's file, up to the next look.
         for _ in 1..CHECK_EVERY {
             logger.write("line\n");
         }
@@ -211,7 +204,6 @@ mod tests {
         let logger = FileLogger::open(path.clone(), MAX_BYTES, "test").unwrap();
         logger.write("before\n");
         std::fs::rename(&path, dir.join("mujina.log.1")).unwrap();
-        // What the agent's farewell does: flush, then its closing lines.
         logger.flush();
         logger.write("closing\n");
         drop(logger);

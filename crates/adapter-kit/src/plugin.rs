@@ -1,5 +1,4 @@
-//! Launcher and device plug-ins: each pairs a portable descriptor with its Windows side.
-//! `crates/app/src/registry.rs` lists them (ADR-0013).
+//! Plug-ins: a portable descriptor and its Windows side, listed in `crates/app/src/registry.rs`.
 
 use mujina_application::agent::AgentEvent;
 use mujina_application::device::{DeviceDescriptor, DeviceSelection};
@@ -8,8 +7,7 @@ use mujina_application::launcher::{LauncherDescriptor, OptionTable};
 use mujina_application::ports::{DeviceButtons, HomeLauncher, PortResult, SessionLauncher};
 use mujina_winutil::wait::WaitSource;
 
-/// A launcher's Windows side, built from its configured options. Building must not block: the
-/// home role builds its part on every activation.
+/// `home` and `session` must not block: the home role calls `home` on every activation.
 // TODO: an undo hook for what a runtime changes outside Mujina (Steam's debugging marker), for
 // when a feature is switched off, another launcher is chosen or Mujina is removed.
 pub trait LauncherRuntime: Sync {
@@ -27,35 +25,28 @@ pub trait LauncherRuntime: Sync {
 
 pub struct SessionParts {
     pub launcher: Box<dyn SessionLauncher>,
-    /// The launcher's own wait sources for the agent's event loop, e.g. one reporting
-    /// [`AgentEvent::LauncherStateChanged`] (Steam: its registry key). May be empty; the agent
-    /// still sees the process come and go. A source must not block, and owns what it waits on.
+    /// E.g. one reporting [`AgentEvent::LauncherStateChanged`]; may be empty. A source must not
+    /// block, and owns what it waits on.
     pub sources: Vec<Box<dyn WaitSource<AgentEvent>>>,
 }
 
-/// One launcher, as `registry.rs` lists it.
 pub struct LauncherPlugin {
     pub descriptor: &'static dyn LauncherDescriptor,
     pub runtime: &'static dyn LauncherRuntime,
 }
 
-/// A device's Windows side, for the resident agent. One runtime may serve several devices (all
-/// key-chord devices share the keyboard crate's), so that switching between them applies at
-/// once ([`DeviceButtons::reconfigure`]).
+/// A device's Windows side, for the resident agent. One runtime may serve several devices, so
+/// that switching between them applies at once ([`DeviceButtons::reconfigure`]).
 pub trait DeviceRuntime: Sync {
-    /// Starts the buttons of `device` on the agent's main thread. Its id is `None` while no
-    /// button is mapped (switched off); a later reconfigure may map one. What it starts lasts as
-    /// long as the parts. On failure the agent runs without the button and logs why.
+    /// On the main thread, also with `device.id` `None` (off); stops when the parts drop.
     fn start(&self, device: &DeviceSelection) -> PortResult<DeviceParts>;
 
-    /// What `doctor` should look at for the devices it serves, e.g. the device's own software
-    /// that also reacts to a button.
+    /// What `doctor` should look at, e.g. the device's own software that also reacts to a button.
     fn checks(&self) -> Vec<Box<dyn Check>> {
         Vec::new()
     }
 
-    /// Readies the device when the agent starts, before [`start`](Self::start): a controller
-    /// mode, say. A failure is only logged.
+    /// Runs when the agent starts, before [`start`](Self::start); a failure is only logged.
     fn prepare(&self) -> PortResult<()> {
         Ok(())
     }
@@ -68,17 +59,15 @@ pub struct DeviceParts {
     pub sources: Vec<Box<dyn WaitSource<AgentEvent>>>,
 }
 
-/// One device, as `registry.rs` lists it. A descriptor made at run time (a profile file) must be
-/// kept for the rest of the program, e.g. in a static.
+/// A descriptor made at run time (a profile file) must be kept for the rest of the program.
 #[derive(Clone, Copy)]
 pub struct DevicePlugin {
     pub descriptor: &'static dyn DeviceDescriptor,
     pub runtime: &'static dyn DeviceRuntime,
 }
 
-/// Conformance check for a device crate's tests: the runtime must start switched off (as the
-/// agent starts it; refusing would leave the button unmapped all session), then reconfigure to
-/// off, to `device` and to off again. Returns what failed. `device` should need no hardware.
+/// For a device crate's tests: the runtime must start switched off, then reconfigure to off, to
+/// `device` and to off again. `device` should need no hardware.
 pub fn runtime_conformance(
     runtime: &dyn DeviceRuntime,
     device: &DeviceSelection,

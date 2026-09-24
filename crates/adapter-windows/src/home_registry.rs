@@ -1,7 +1,5 @@
-//! The per-user home app setting of the full screen experience.
-//!
-//! Windows' own settings page writes the same value; on builds where the page lost its picker
-//! this is the only way to choose a home app.
+//! The per-user home app setting of the full screen experience. Windows' settings page writes
+//! the same value; on builds where the page lost its picker this is the only way to choose one.
 
 use mujina_application::ports::{HomeAppRegistry, PortError, PortResult};
 use mujina_winutil::registry::{self, Hive, RegistryError};

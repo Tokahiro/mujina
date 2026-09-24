@@ -1,6 +1,5 @@
-//! The agent's event loop on [`mujina_winutil::wait::EventLoop`]: one thread, blocked in the
-//! kernel, nothing polled. It wakes for Xbox mode ([`FseSource`]), the caller's sources, the
-//! launcher's process ending ([`ProcessExitSource`]) and window messages, in that order.
+//! The agent's event loop: one thread, blocked in the kernel, nothing polled. It wakes for Xbox
+//! mode, the caller's sources, the launcher's process ending and window messages, in that order.
 
 use std::cell::RefCell;
 use std::ptr::null_mut;
@@ -26,7 +25,7 @@ thread_local! {
     static FOREGROUND: RefCell<Option<ForegroundNote>> = const { RefCell::new(None) };
 }
 
-/// A foreground change; the process name is `None` when it could not be determined.
+/// The process name is `None` when it could not be determined.
 struct ForegroundNote(Option<String>);
 
 unsafe extern "system" fn on_foreground(
@@ -63,7 +62,6 @@ fn observe_foreground() {
 
 pub struct AgentLoop<'a> {
     pub fse: &'a WindowsFse,
-    /// Asked where its process is, so that its end can be waited for.
     pub launcher: &'a dyn SessionLauncher,
     /// The session's named events, the device's sources and the launcher's own.
     pub sources: Vec<Box<dyn WaitSource<AgentEvent> + 'a>>,
@@ -72,9 +70,8 @@ pub struct AgentLoop<'a> {
 }
 
 impl AgentLoop<'_> {
-    /// Runs until `handle` returns [`Flow::Exit`], or until waiting fails. When the session
-    /// ends, `last_words` runs first, from inside the message that says so (see
-    /// [`session_end::watch`]); whatever the process does after that is best effort.
+    /// Runs until `handle` returns [`Flow::Exit`] or waiting fails. At the session's end
+    /// `last_words` runs first ([`session_end::watch`]); anything after it is best effort.
     pub fn run(self, handle: &mut dyn FnMut(AgentEvent) -> Flow, last_words: Box<dyn FnOnce()>) {
         let fse = self.fse;
         let mut events = EventLoop::new();
@@ -97,9 +94,8 @@ impl AgentLoop<'_> {
             sources.push(Box::new(FseSource::new(fse, watch)));
         }
         sources.extend(self.sources);
-        // Last: of handles signalled together, the wait reports the first in the array
-        // (MsgWaitForMultipleObjectsEx, Remarks), so what the launcher says about its process is
-        // heard before that process's end.
+        // Last: MsgWaitForMultipleObjectsEx reports the first of handles signalled together, so
+        // what the launcher says about its process is heard before that process's end.
         sources.push(Box::new(ProcessExitSource::new(
             move || launcher.process_id(),
             move |name| launcher.owns_process(name),

@@ -1,6 +1,5 @@
-//! Noticing that the session ends: sign-out, shutdown, or the Restart Manager closing the agent.
-//! Windows tells windows, not processes, so the agent owns a hidden window that receives
-//! `WM_ENDSESSION`.
+//! Noticing that the session ends (sign-out, shutdown, Restart Manager). Windows tells windows,
+//! not processes, so the agent owns a hidden window that receives `WM_ENDSESSION`.
 
 use std::cell::{Cell, RefCell};
 use std::ptr::{null, null_mut};
@@ -32,8 +31,7 @@ unsafe extern "system" fn window_proc(
         WM_ENDSESSION => {
             if wparam != 0 {
                 ENDING.with(|flag| flag.set(true));
-                // Flushing reopens the log by name (see `log_file`), so the closing lines land
-                // in the current file.
+                // Flushing reopens the log, so the closing lines land in the current file.
                 log::logger().flush();
                 log::info!("session ending ({})", cause(lparam));
                 // Taken out first, so the slot is not borrowed while they run.
@@ -48,16 +46,13 @@ unsafe extern "system" fn window_proc(
     }
 }
 
-/// Creates the hidden window on the calling thread, which must pump messages; it lives as long as
-/// the process. Returns whether the session end will be noticed.
-///
-/// `last_words` runs once, inside `WM_ENDSESSION`, since Windows may end the session as soon as
-/// every application has returned from it. It must be quick.
+/// The calling thread must pump messages; `false` if the end will not be noticed. `last_words`
+/// runs once inside `WM_ENDSESSION` and must be quick: Windows may end the session right after.
 pub fn watch(last_words: Box<dyn FnOnce()>) -> bool {
     LAST_WORDS.with(|slot| *slot.borrow_mut() = Some(last_words));
     let class_name = to_wide("MujinaSessionEnd");
-    // SAFETY: plain calls; the class structure and the string outlive the calls that use them;
-    // `window_proc` matches WNDPROC; a failed registration makes CreateWindowExW fail.
+    // SAFETY: the class and the string outlive the calls that use them; `window_proc` matches
+    // WNDPROC; a failed registration makes CreateWindowExW fail.
     let window = unsafe {
         let instance = GetModuleHandleW(null());
         let class = WNDCLASSW {
@@ -91,13 +86,11 @@ pub fn watch(last_words: Box<dyn FnOnce()>) -> bool {
     !window.is_null()
 }
 
-/// Whether the session started ending since the last call.
 pub fn take_ending() -> bool {
     ENDING.with(|flag| flag.replace(false))
 }
 
-/// The `WM_ENDSESSION` flags in words, for the log. No flag means shutdown or restart; the raw
-/// value follows for anything not named here.
+/// The `WM_ENDSESSION` flags in words, for the log.
 fn cause(lparam: LPARAM) -> String {
     // The documented flags all lie in the low 32 bits.
     let flags = u32::try_from(lparam.cast_unsigned() & 0xFFFF_FFFF).unwrap_or_default();

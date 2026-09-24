@@ -5,8 +5,7 @@ use std::ffi::OsStr;
 use mujina_application::ports::{LauncherInstall, PortError, PortResult};
 use mujina_winutil::window::{self, Focused, WindowHandle};
 
-/// Starts the launcher with `args` and hands it the foreground right, so its window may come to
-/// the front by itself.
+/// Hands the launcher the foreground right, so its window may come to the front by itself.
 pub fn launch<S: AsRef<OsStr>>(install: &LauncherInstall, args: &[S]) -> PortResult<()> {
     match window::spawn_with_foreground(&install.executable, args, &install.directory) {
         Ok(handed_over) => {
@@ -31,7 +30,7 @@ fn command_line<S: AsRef<OsStr>>(install: &LauncherInstall, args: &[S]) -> Strin
     line
 }
 
-/// Brings the launcher's UI to the front; `what` names it in the log.
+/// `what` names the UI in the log.
 pub fn focus_ui(handle: WindowHandle, what: &str) -> PortResult<()> {
     match window::focus_with_fallbacks(handle) {
         Ok(Focused::Directly | Focused::BehindLockScreen) => Ok(()),
@@ -43,8 +42,8 @@ pub fn focus_ui(handle: WindowHandle, what: &str) -> PortResult<()> {
     }
 }
 
-/// Brings a game's window back to the front. Home role only: the synthetic key tap this may need
-/// passes through the agent's own keyboard hook, whose thread would be the one waiting here.
+/// Home role only: the synthetic key tap this may need passes through the agent's own keyboard
+/// hook, whose thread would be the one waiting here.
 pub fn focus_game(handle: WindowHandle) -> PortResult<()> {
     if window::claim_foreground(handle) {
         Ok(())

@@ -17,8 +17,8 @@ pub struct GenericRuntime;
 pub static RUNTIME: GenericRuntime = GenericRuntime;
 
 impl GenericRuntime {
-    /// Unusable options, which the configuration reader should never let through, give a
-    /// launcher that finds nothing and says so, rather than Mujina not starting.
+    /// Unusable options, which the configuration reader should refuse, give a launcher that finds
+    /// nothing, rather than Mujina not starting.
     fn launcher(options: &OptionTable) -> GenericLauncher {
         GenericLauncher::new(GenericLauncherConfig::from_options(options).unwrap_or_default())
     }
@@ -67,8 +67,7 @@ impl GenericLauncher {
     }
 }
 
-/// `ESC`, which most full-screen frontends treat as "menu / back". `[launcher] menu` in
-/// `config.toml` overrides it.
+/// Most full-screen frontends treat `ESC` as "menu / back"; `[launcher] menu` overrides it.
 fn escape_chord() -> KeyChord {
     KeyChord::from_keys(&[VirtualKey::ESCAPE])
         .unwrap_or(KeyChord::pair(VirtualKey::ESCAPE, VirtualKey::ESCAPE))

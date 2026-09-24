@@ -17,31 +17,26 @@ const MUTEX_NAME: &str = r"Local\Mujina.agent";
 const HOME_MUTEX_NAME: &str = r"Local\Mujina.home";
 const SETTINGS_APP_MUTEX_NAME: &str = r"Local\Mujina.settings-app";
 
-/// Argument that makes `mujina.exe` run as agent.
 pub const AGENT_ARGUMENT: &str = "agent";
 
 /// A claimed role (agent, home activation or settings app), held while this value lives.
 pub struct AgentInstance {
-    /// Holding the named mutex open is the claim; dropping it closes the mutex.
     _mutex: OwnedHandle,
 }
 
-/// Held by a home activation while it brings the launcher up. Windows may activate the home app
-/// again before it is satisfied (seen three times in one boot); only one may start the launcher.
+/// Windows may activate the home app again before it is satisfied (seen three times in one boot);
+/// only one activation may start the launcher.
 pub type HomeInstance = AgentInstance;
 
 impl AgentInstance {
-    /// Claims the agent role; `None` if another agent already runs in this session.
     pub fn claim() -> Option<Self> {
         Self::claim_named(MUTEX_NAME)
     }
 
-    /// Claims the right to bring the launcher up; `None` while another activation is at it.
     pub fn claim_home() -> Option<Self> {
         Self::claim_named(HOME_MUTEX_NAME)
     }
 
-    /// Claims the settings app's window; `None` if the app is open already.
     pub fn claim_settings_app() -> Option<Self> {
         Self::claim_named(SETTINGS_APP_MUTEX_NAME)
     }
@@ -61,8 +56,7 @@ impl AgentInstance {
     }
 }
 
-/// Whether an agent runs in this session. Only opens the agent's mutex, never creates it, so
-/// asking cannot keep an agent from starting.
+/// Only opens the agent's mutex, never creates it, so asking cannot keep an agent from starting.
 pub fn agent_is_running() -> bool {
     let name = to_wide(MUTEX_NAME);
     // SAFETY: `name` is NUL-terminated; failure is a null handle.
@@ -75,7 +69,6 @@ pub fn agent_is_running() -> bool {
     true
 }
 
-/// Starts the agent as another instance of the running executable.
 #[derive(Debug, Default)]
 pub struct WindowsAgentControl;
 

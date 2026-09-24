@@ -1,7 +1,5 @@
-//! The Windows full screen experience ("Xbox mode") API.
-//!
-//! Documented in the Microsoft GDK (`gamingexperience.h`, SDK 10.0.26100.3916+), but exported
-//! from an API set that older Windows builds do not have, so it is bound at run time.
+//! The Windows full screen experience ("Xbox mode") API, from the GDK's `gamingexperience.h`
+//! (SDK 10.0.26100.3916+). Older Windows builds lack its API set, so it is bound at run time.
 
 use std::ffi::c_void;
 use std::os::windows::io::{AsHandle, BorrowedHandle};
@@ -28,27 +26,23 @@ type UnregisterFn = unsafe extern "system" fn(*mut c_void);
 
 pub struct WindowsFse {
     is_active: Option<IsActiveFn>,
-    /// Bound as a pair, so a registration is only made where it can be undone. The error is kept
-    /// for the log.
+    /// Bound as a pair, so a registration is only made where it can be undone.
     notifications: Win32Result<(RegisterFn, UnregisterFn)>,
 }
 
 unsafe extern "system" fn on_change(context: *mut c_void) {
-    // SAFETY: the context is the event of the FseWatch that registered this callback, which is
-    // never freed (see `Drop for FseWatch`).
+    // SAFETY: the context is the watch's event, which is never freed (see `Drop for FseWatch`).
     let changed = unsafe { &*context.cast::<Event>() };
     changed.set();
 }
 
 impl WindowsFse {
-    /// Binds the API if this Windows build has it.
     pub fn bind() -> Self {
         let library = SystemLibrary::load(API_SET);
         let is_active = library
             .and_then(|library| library.symbol(c"IsGamingFullScreenExperienceActive"))
             .map(|raw| {
-                // SAFETY: the export has exactly this signature per gamingexperience.h, and the
-                // library it lives in is never unloaded.
+                // SAFETY: signature per gamingexperience.h; the library is never unloaded.
                 unsafe { std::mem::transmute::<RawSymbol, IsActiveFn>(raw) }
             })
             .ok();
@@ -71,14 +65,12 @@ impl WindowsFse {
         }
     }
 
-    /// Signals the returned watch's event whenever the experience is switched on or off, until
-    /// the watch is dropped.
+    /// Signals the watch's event on every switch, until the watch is dropped.
     pub fn watch(&self) -> Win32Result<FseWatch> {
         let (register, unregister) = self.notifications?;
         let changed = Arc::new(Event::new()?);
         let mut registration: *mut c_void = null_mut();
-        // SAFETY: bound with the documented signature; the context is the event, which is never
-        // freed (see `Drop for FseWatch`, and below).
+        // SAFETY: documented signature; the context is the event, never freed (see `FseWatch`).
         let result = unsafe {
             register(
                 on_change,
@@ -102,7 +94,6 @@ impl WindowsFse {
     }
 }
 
-/// A registration for changes of the full screen experience, undone when dropped.
 pub struct FseWatch {
     registration: *mut c_void,
     unregister: UnregisterFn,
@@ -120,8 +111,7 @@ impl FseWatch {
 
 impl Drop for FseWatch {
     fn drop(&mut self) {
-        // SAFETY: bound with the documented signature; `registration` came from a successful
-        // registration and is undone exactly once.
+        // SAFETY: documented signature; `registration` is a successful one, undone exactly once.
         unsafe { (self.unregister)(self.registration) };
         // The GDK does not say whether unregistering waits for a running callback, and a second
         // switch may be under way. So the event is leaked: one handle, as the agent watches once.
@@ -142,7 +132,6 @@ impl FullScreenExperience for WindowsFse {
     }
 }
 
-/// Xbox mode switched on or off, as a wait source of the agent's event loop.
 pub struct FseSource<'a> {
     fse: &'a WindowsFse,
     watch: FseWatch,
@@ -175,7 +164,6 @@ mod tests {
 
     #[test]
     fn binding_never_panics_and_a_test_runner_is_not_in_xbox_mode() {
-        // CI runs on Windows Server, where the API set is usually absent.
         assert_ne!(WindowsFse::bind().state(), FseState::Active);
     }
 
@@ -183,11 +171,9 @@ mod tests {
     fn a_watch_is_made_and_undone_where_the_api_exists() {
         let fse = WindowsFse::bind();
         match (fse.watch(), fse.notifications) {
-            // Registering changes nothing; dropping the watch undoes it again.
             (Ok(watch), _) => drop(watch),
-            // Where the API is missing, the watch says what was missing.
             (Err(error), Err(missing)) => assert_eq!(error, missing),
-            // The API is there but refused, e.g. on a Windows Server without the gaming parts.
+            // E.g. a Windows Server without the gaming parts.
             (Err(error), Ok(_)) => eprintln!("the API is there, but: {error}"),
         }
     }

@@ -17,9 +17,7 @@ pub fn developer_mode() -> bool {
     )
 }
 
-/// The id of the check of Developer Mode.
 pub const DEVELOPER_MODE: &str = "developer mode";
-/// The id of the check of the background agent.
 pub const AGENT: &str = "agent";
 
 struct DeveloperMode;
@@ -130,8 +128,7 @@ impl Check for ConflictingTools {
     }
 }
 
-/// All Windows-side checks. `conflicting`: the launcher descriptor's rival programs.
-/// `xbox_mode`: whether Xbox mode is on, the only time the agent has to run.
+/// `conflicting`: the rival programs the launcher's descriptor names.
 pub fn all(conflicting: &'static [&'static str], xbox_mode: FseState) -> Vec<Box<dyn Check>> {
     vec![
         Box::new(DeveloperMode),

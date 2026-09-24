@@ -1,5 +1,4 @@
-//! The generic launcher as the configuration and the tools see it: `[launcher.generic]`, and
-//! how its options become a [`GenericLauncherConfig`].
+//! `[launcher.generic]`: its settings, and how they become a [`GenericLauncherConfig`].
 
 use std::path::PathBuf;
 
@@ -74,15 +73,12 @@ const TEMPLATE: &str = r#"# A launcher Mujina does not know, with kind = "generi
 pub struct GenericLauncherConfig {
     pub executable: PathBuf,
     pub arguments: Vec<String>,
-    /// Class name of the launcher's full-screen window. Without it a running process counts as
-    /// "UI visible", and its main window is what gets focused.
+    /// Without it a running process counts as "UI visible", and its main window is focused.
     pub window_class: Option<String>,
-    /// File name of the launcher's process, e.g. `playnite.fullscreenapp.exe`.
     pub process_name: String,
 }
 
 impl GenericLauncherConfig {
-    /// `[launcher.generic]` as the launcher uses it, or what makes it unusable.
     pub fn from_options(options: &OptionTable) -> Result<Self, String> {
         let executable = text(options, "executable")
             .filter(|executable| !executable.is_empty())
@@ -107,7 +103,6 @@ impl GenericLauncherConfig {
         })
     }
 
-    /// The program's file name, as the pages and the log call the launcher.
     pub fn program_name(&self) -> String {
         let shown = self.executable.display().to_string();
         match shown.rsplit(['\\', '/']).next() {
@@ -142,7 +137,6 @@ impl LauncherDescriptor for GenericDescriptor {
         TEMPLATE
     }
 
-    /// Only a menu (`ESC`); games, an overlay and pages it cannot know.
     fn capabilities(&self, _options: &OptionTable) -> LauncherCaps {
         LauncherCaps {
             game_detection: false,
@@ -231,7 +225,6 @@ mod tests {
         );
         assert_eq!(notes, ["launcher.generic.executable has no file name"]);
 
-        // Missing altogether, it is the configuration's to say.
         let mut notes = Vec::new();
         DESCRIPTOR.validate(&options(&[("process", text("x.exe"))]), &mut notes);
         assert!(notes.is_empty(), "{notes:?}");

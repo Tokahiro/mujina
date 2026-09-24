@@ -1,6 +1,5 @@
-//! The home app's full-screen window while the launcher starts: see-through by default, black on
-//! request. Not topmost, so the launcher's windows appear in front of it. The costly readiness
-//! check runs only when WinEvent hooks report a window shown or brought to the front.
+//! The home app's full-screen window while the launcher starts. Not topmost, so the launcher's
+//! windows come in front; the costly readiness check runs only when WinEvent hooks see a window.
 
 use std::cell::Cell;
 use std::ptr::{null, null_mut};
@@ -65,8 +64,7 @@ fn hook(event: u32) -> HWINEVENTHOOK {
     }
 }
 
-/// One press or release of the left Alt key, tagged with `OWN_INPUT_TAG` so that the agent's
-/// keyboard hook lets it be.
+/// Tagged with `OWN_INPUT_TAG` so that the agent's keyboard hook lets it be.
 fn alt(up: bool) -> INPUT {
     // SAFETY: plain call; it only looks the scan code up.
     let scan = unsafe { MapVirtualKeyW(u32::from(VK_LMENU), MAPVK_VK_TO_VSC) };
@@ -85,9 +83,8 @@ fn alt(up: bool) -> INPUT {
     }
 }
 
-/// Takes the foreground although Windows did not grant it, as when the agent, not Windows, asked
-/// for the home role after a launcher crash. Windows lets the process that produced the last
-/// input take the foreground, hence one synthetic tap of the Alt key.
+/// For when the agent, not Windows, asked for the home role. Windows lets the process that
+/// produced the last input take the foreground, hence one synthetic tap of the Alt key.
 fn claim_foreground(window: HWND) {
     let tap = [alt(false), alt(true)];
     let size = i32::try_from(size_of::<INPUT>()).unwrap_or(0);
@@ -104,7 +101,6 @@ fn claim_foreground(window: HWND) {
     if in_front {
         log::info!("the launch screen is in front (after a synthetic key tap)");
     } else {
-        // Normal behind the lock screen; the launcher comes forward by itself after the unlock.
         log::info!("Windows did not grant the foreground (expected behind the lock screen)");
     }
 }
@@ -122,7 +118,6 @@ fn pump_messages() {
 #[derive(Debug, Default)]
 pub struct WindowsLaunchScreen {
     window: Cell<isize>,
-    /// A window for Windows to see, not for the user: see [`WindowsLaunchScreen::invisible`].
     invisible: bool,
 }
 
@@ -131,9 +126,8 @@ impl WindowsLaunchScreen {
         Self::default()
     }
 
-    /// The same window, but see-through. Windows needs the home app to have a window, or it keeps
-    /// its welcome screen up on a boot and activates the home app again and again. A black one in
-    /// front of the console experience's own backdrop only adds a hand-over (seen as a flash).
+    /// Windows needs the home app to have a window, or it keeps its welcome screen up and activates
+    /// the home app again and again. See-through, as a black one adds a flash.
     pub fn invisible() -> Self {
         Self {
             window: Cell::new(0),
@@ -155,9 +149,8 @@ impl LaunchScreen for WindowsLaunchScreen {
         }
         let class_name = to_wide("MujinaLaunchScreen");
         let title = to_wide("Mujina");
-        // SAFETY: plain calls; the class structure and both strings outlive the calls that use
-        // them; DefWindowProcW is a valid window procedure; a failed registration makes
-        // CreateWindowExW fail, which is handled below.
+        // SAFETY: the class and both strings outlive the calls that use them; a failed
+        // registration makes CreateWindowExW fail, which is handled below.
         let window = unsafe {
             let instance = GetModuleHandleW(null());
             let class = WNDCLASSW {
@@ -261,8 +254,7 @@ impl LaunchScreen for WindowsLaunchScreen {
         if window == 0 {
             return;
         }
-        // SAFETY: the window was created by this thread; position and size are left alone, and
-        // the window keeps whatever activation it has.
+        // SAFETY: the window was created by this thread.
         unsafe {
             SetWindowPos(
                 window as HWND,

@@ -1,5 +1,4 @@
-//! The launcher's process as a wait source of the agent's event loop. The launcher may start
-//! after the agent or restart, so its process is looked up again when there is a reason
+//! The launcher's process as a wait source. It is looked up again when there is a reason
 //! ([`Lookout`]), never on a timer: a lookup may take a snapshot of every process.
 
 use std::cell::Cell;
@@ -11,9 +10,8 @@ use mujina_domain::supervision::LauncherExit;
 use mujina_winutil::process::ProcessWatch;
 use mujina_winutil::wait::WaitSource;
 
-/// Whether an event is a reason to look for the launcher's process again. `owns` is
-/// `SessionLauncher::owns_process`. Other programs' windows are no reason, so that switching
-/// between them never takes a snapshot of every process.
+/// `owns` is `SessionLauncher::owns_process`. Other programs' windows are no reason, so that
+/// switching between them never takes a snapshot of every process.
 pub fn is_reason_to_look(event: &AgentEvent, owns: impl Fn(&str) -> bool) -> bool {
     match event {
         AgentEvent::LauncherStarted | AgentEvent::LauncherStateChanged => true,
@@ -38,7 +36,6 @@ struct Reasons {
 }
 
 impl Lookout {
-    /// Takes note of `event`, if it is a reason to look; `owns` as for [`is_reason_to_look`].
     pub fn note(&self, event: &AgentEvent, owns: impl Fn(&str) -> bool) {
         if is_reason_to_look(event, owns) {
             self.0.look.set(true);
@@ -51,9 +48,9 @@ impl Lookout {
 
 /// Reports [`AgentEvent::LauncherExited`] when the launcher's process ends.
 pub struct ProcessExitSource<'a> {
-    /// Where the launcher says its process is: `SessionLauncher::process_id`.
+    /// `SessionLauncher::process_id`.
     process_id: Box<dyn Fn() -> Option<u32> + 'a>,
-    /// Whether an image name is one of the launcher's: `SessionLauncher::owns_process`.
+    /// `SessionLauncher::owns_process`.
     owns: Box<dyn Fn(&str) -> bool + 'a>,
     watch: Option<ProcessWatch>,
     lookout: Lookout,
@@ -75,7 +72,6 @@ impl<'a> ProcessExitSource<'a> {
         }
     }
 
-    /// A watch on the process with this id, if it is the launcher's and has not ended.
     fn open(&self, pid: u32) -> Option<ProcessWatch> {
         let watch = ProcessWatch::open(pid)?;
         // A process id the launcher left behind may name a process that has ended, whose object
@@ -110,9 +106,8 @@ impl WaitSource<AgentEvent> for ProcessExitSource<'_> {
                 reasons.ask_again.set(false);
                 Some((self.process_id)())
             }
-            // A launcher that restarted itself may name its new process before the old one has
-            // ended; the old one's end is then not reported. One that names none has no process
-            // to supervise.
+            // A restarted launcher may name its new process before the old one ends; that end is
+            // then not reported. One that names none has no process to supervise.
             Some(watched) if reasons.ask_again.take() => {
                 let pid = (self.process_id)();
                 (pid != Some(watched)).then(|| {
@@ -162,8 +157,7 @@ mod tests {
 
     use super::*;
 
-    /// A launcher stand-in that never ends by itself (it is created suspended). Ended when
-    /// dropped too, so that a failing test leaves no process behind.
+    /// Created suspended, so it never ends by itself; killed on drop so a failing test leaves none.
     struct StandIn(Child);
 
     impl StandIn {
@@ -235,8 +229,7 @@ mod tests {
 
     fn signalled_now(source: &mut ProcessExitSource<'_>) -> bool {
         let handle = source.handle().unwrap().as_raw_handle();
-        // SAFETY: a process handle the source holds until it is next asked for one; a zero
-        // timeout only tests it.
+        // SAFETY: the source holds this handle until next asked; a zero timeout only tests it.
         unsafe { WaitForSingleObject(handle, 0) == WAIT_OBJECT_0 }
     }
 
@@ -259,7 +252,6 @@ mod tests {
             source.handle().is_some(),
             "looked for before the first wait"
         );
-        // A window of its own is a reason only while none is watched.
         let in_front = AgentEvent::ForegroundChanged {
             process_name: Some("cmd.exe".into()),
         };
@@ -277,7 +269,6 @@ mod tests {
         let mut out = Vec::new();
         source.signalled(&mut out);
         assert_eq!(exit_code(&out), Some(1));
-        // The reasons seen while it ran have their look now, which finds it gone.
         assert!(source.handle().is_none());
         assert_eq!(at.asked.get(), 2);
 
@@ -305,7 +296,6 @@ mod tests {
         assert_eq!(exit_code(&out), Some(1), "and its end is reported too");
     }
 
-    /// A launcher that restarted itself may name its new process before the old one has ended.
     #[test]
     fn a_process_the_launcher_names_anew_is_watched_in_place_of_the_old() {
         let at = Whereabouts::default();
@@ -345,7 +335,6 @@ mod tests {
         at.pid.set(None);
         lookout.note(&AgentEvent::LauncherStateChanged, stand_in);
         assert!(source.handle().is_none());
-        // Its word was the reason, and it has been answered.
         lookout.note(&AgentEvent::ButtonPressed(ButtonId(0)), stand_in);
         assert!(source.handle().is_none());
         assert_eq!(at.asked.get(), 2);
@@ -363,7 +352,6 @@ mod tests {
         assert_eq!(at.asked.get(), 1);
     }
 
-    /// An id left behind may have been given to another program since.
     #[test]
     fn a_process_the_launcher_does_not_own_is_not_watched() {
         let at = Whereabouts::default();
@@ -384,7 +372,6 @@ mod tests {
             AgentEvent::LauncherStarted,
             AgentEvent::LauncherStateChanged,
             foreground(Some("CMD.EXE")),
-            // Whose window it is could not be told: it may be the launcher's.
             foreground(None),
         ] {
             assert!(is_reason_to_look(&reason, stand_in), "{reason:?}");
@@ -422,7 +409,6 @@ mod tests {
     fn a_launcher_brought_back_is_supervised_again_every_time() {
         let at = Whereabouts::default();
         let lookout = Lookout::default();
-        // The home role's signal, and any other wake (the device button, say).
         let started = Rc::new(Event::new().unwrap());
         let pressed = Rc::new(Event::new().unwrap());
         let mut events = EventLoop::new();
@@ -436,7 +422,6 @@ mod tests {
                 .add(Box::new(Nudge(Rc::clone(event), means)))
                 .unwrap();
         }
-        // Ends a test whose loop is broken, which would otherwise wait for ever.
         let watchdog = Instant::now() + Duration::from_secs(10);
         events.wake_at(watchdog, AgentEvent::SessionEnding);
 
@@ -455,7 +440,6 @@ mod tests {
                     _ => '?',
                 });
                 match event {
-                    // The source has looked since the last start: its process is watched.
                     AgentEvent::ButtonPressed(_) if at.asked.get() == exits + 1 => running.end(),
                     AgentEvent::ButtonPressed(_) => {
                         assert_eq!(at.asked.get(), exits, "looked on a wake without reason");
@@ -463,7 +447,6 @@ mod tests {
                     }
                     AgentEvent::LauncherExited(_) if exits < 2 => {
                         exits += 1;
-                        // Brought back, and some other wake before the home role says so.
                         running = StandIn::start();
                         at.pid.set(Some(running.pid()));
                         pressed.set();
