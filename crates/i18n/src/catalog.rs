@@ -44,7 +44,7 @@ enum Field {
 }
 
 impl Catalog {
-    /// Obsolete entries (`#~`) are skipped like any other comment.
+    /// Reads `po`; obsolete entries (`#~`) are skipped like any other comment.
     pub fn parse(po: &str) -> Result<Self, ParseError> {
         let mut catalog = Self::default();
         let mut entry = Entry::default();

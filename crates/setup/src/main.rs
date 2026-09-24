@@ -1,7 +1,6 @@
 //! Mujina Setup: installs, updates and removes Mujina (ADR-0012, ADR-0015). [`cli::USAGE`] lists
 //! the options; `--elevated` (the administrator part) and `--cleanup` (the check at sign-in) are
-//! internal. Everything that decides is pure and tested on any system; only `host_windows` and
-//! `ui` need Windows.
+//! internal.
 
 #![cfg_attr(windows, windows_subsystem = "windows")]
 

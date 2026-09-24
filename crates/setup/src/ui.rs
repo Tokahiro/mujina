@@ -52,8 +52,8 @@ pub fn run(mode: Mode, log: Option<PathBuf>) -> ExitCode {
     let Ok(window) = SetupWindow::new() else {
         return ExitCode::FAILURE;
     };
-    // The first Windows display language Setup has. Slint wants a window to exist first; this
-    // fails only without bundled translations, which the build always has.
+    // No language chosen (Setup has no config.toml): the first Windows display language it has.
+    // Slint wants a window to exist first; this fails only without bundled translations.
     let _ = slint::select_bundled_translation(locale::language("", &LANGUAGES));
     let log = host_windows::log_file(log);
     let version = payload::attached().map_or_else(
@@ -364,8 +364,8 @@ fn open_settings() {
     }
 }
 
-/// Swaps Slint's window icon for the executable's own, once Slint has made the window (when the
-/// event loop starts). Tries `attempts` times.
+/// Swaps Slint's one large window icon for the executable's own small images, once Slint has
+/// made the window (when the event loop starts). Tries `attempts` times.
 fn use_own_icon(attempts: u8) {
     slint::Timer::single_shot(Duration::from_millis(50), move || {
         if !winutil_window::use_own_icon() && attempts > 1 {

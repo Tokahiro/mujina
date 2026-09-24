@@ -56,7 +56,7 @@ pub struct Facts {
     /// `None` if it could not be read, which blocks nothing.
     pub os_build: Option<u32>,
     pub dev_mode: bool,
-    /// Exactly this installer's certificate, not merely one with the same name (a renewal).
+    /// Exactly this installer's certificate, not one with the same name from before a renewal.
     pub cert_trusted: bool,
     /// The version of this package family installed for the user.
     pub installed: Option<Version>,
@@ -133,8 +133,8 @@ pub enum Step {
     /// Developer Mode on and the certificate trusted, whichever is missing, with one prompt.
     Prepare(Preparation),
     Package(Package),
-    /// A check at sign-in that gives the home app back once Mujina has been removed through
-    /// Settings → Apps, where Windows runs nothing of Mujina's (ADR-0012).
+    /// A check at sign-in that gives the home app back once Mujina is removed through Settings →
+    /// Apps, where Windows runs nothing of Mujina's (ADR-0012). Idle while Mujina is installed.
     ArrangeCleanup,
     MakeHomeApp,
     GiveHomeAppBack,
@@ -179,8 +179,8 @@ pub fn home_app_default(facts: &Facts) -> bool {
     facts.installed.is_none() || facts.home_app_is_this
 }
 
-/// `Add-AppxPackage -ForceApplicationShutdown` ends a running agent; Xbox mode starts it again
-/// the next time.
+/// `Add-AppxPackage -ForceApplicationShutdown` ends a running agent; it starts again the next
+/// time Xbox mode starts Mujina.
 pub fn stops_agent(facts: &Facts) -> bool {
     facts.installed.is_some() && facts.agent_running
 }

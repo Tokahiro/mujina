@@ -66,8 +66,8 @@ impl Localizer {
         self.text(msg.english())
     }
 
-    /// For a text that comes as data. i18n-check cannot see it here, so the crate it comes from
-    /// must also write it as a `Msg`.
+    /// `english` in the language set, for a text that comes as data. i18n-check cannot see it
+    /// here, so the crate it comes from must also write it as a `Msg`.
     pub fn text<'a>(&'a self, english: &'a str) -> &'a str {
         self.current.get(english).map_or(english, String::as_str)
     }

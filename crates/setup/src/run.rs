@@ -93,7 +93,7 @@ pub enum ErrorKind {
     Damaged,
     /// Any other deployment error; `code` says which.
     DeploymentFailed,
-    /// Removing: this Mujina (this package family) is not installed.
+    /// This Mujina (this package family) is not installed.
     NotInstalled,
     /// The home app setting could not be read or changed.
     HomeApp,
