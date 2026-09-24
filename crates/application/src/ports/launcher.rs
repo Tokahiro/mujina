@@ -83,7 +83,8 @@ pub enum Direct {
 
 /// What the resident agent needs of a running launcher.
 pub trait SessionLauncher {
-    /// Whether this image name is the launcher's: its window in front counts as the launcher UI.
+    /// Whether this image name is the launcher's: its window in front counts as the launcher UI,
+    /// and a [`process_id`](Self::process_id) is watched only if its image passes (ids get reused).
     fn owns_process(&self, process_name: &str) -> bool;
 
     fn process_id(&self) -> Option<u32>;
@@ -98,6 +99,7 @@ pub trait SessionLauncher {
         false
     }
 
+    /// Whether the running game's window can be found at all.
     fn game_findable(&self) -> bool {
         false
     }
@@ -120,12 +122,12 @@ pub trait SessionLauncher {
     /// Must not block.
     fn game_ended(&self) {}
 
-    /// Opens the main menu while its UI has the focus. Read on each press, so it may change.
+    /// The chord for the main menu while its UI has the focus. Read on each press: it may change.
     fn menu_shortcut(&self) -> Option<KeyChord> {
         None
     }
 
-    /// Opens the overlay while a game has the focus. May read the launcher's files.
+    /// The chord for the overlay while a game has the focus. May read the launcher's files.
     fn overlay_shortcut(&self) -> Option<KeyChord> {
         None
     }

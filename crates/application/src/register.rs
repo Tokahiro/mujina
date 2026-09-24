@@ -11,7 +11,6 @@ pub enum RegisterOutcome {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum UnregisterOutcome {
-    /// The previous home app was put back.
     Restored(String),
     /// There was no previous home app; the setting was removed.
     Cleared,

@@ -20,8 +20,8 @@ pub trait HomeActivator {
 /// What the user looks at while the launcher starts.
 pub trait LaunchScreen {
     fn show(&self);
-    /// Waits until `ready` (checked on each window event) or `timeout`; true if it got ready.
-    /// The screen stays up.
+    /// Waits until `ready` (checked when a window appears or comes to the front) or `timeout`;
+    /// true if it got ready. The screen stays up.
     fn hold_until(&self, ready: &dyn Fn() -> bool, timeout: std::time::Duration) -> bool;
     /// Puts the screen above every window, the launcher's too; for the hand-over only.
     fn raise(&self) {}

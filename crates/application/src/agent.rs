@@ -1283,6 +1283,7 @@ mod tests {
         let live: OptionTable = selection("fake", &[("start_screen", false)]).options;
         assert_eq!(rig.launcher.reconfigured(), std::slice::from_ref(&live));
 
+        // Only `link` changes, and it waits for the next session.
         rig.settings.set(Settings {
             launcher: selection("fake", &[("start_screen", false), ("link", true)]),
             ..configured()

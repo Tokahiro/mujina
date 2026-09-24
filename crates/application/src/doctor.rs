@@ -16,7 +16,7 @@ pub enum Severity {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Finding {
-    /// Stable, lower case, e.g. `developer mode`: Mujina Settings looks the finding up by it.
+    /// Stable, English and lower case, e.g. `developer mode`; Mujina Settings looks it up by this.
     pub id: &'static str,
     /// Its name in Mujina Settings, e.g. "Developer Mode", translated by its crate's catalog.
     pub title: Msg,

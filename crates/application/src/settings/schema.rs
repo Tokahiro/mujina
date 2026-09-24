@@ -12,7 +12,7 @@ pub struct SettingSpec {
     pub key: &'static str,
     pub kind: SettingKind,
     /// A short English name and its translation key. Write it as `Msg::new("…").english()` so
-    /// `cargo xtask i18n-check` finds it.
+    /// `cargo xtask i18n-check` finds it. Core settings stay English: Mujina Settings words them.
     pub title: &'static str,
     /// A sentence or two shown under the title; English, like the title.
     pub help: &'static str,
@@ -457,7 +457,6 @@ mod tests {
             "launcher.kind",
             "features.launch_screen",
             "launcher.fake.link",
-            // Unknown.
             "features.surprise",
             "launcher.fake.surprise",
             "launcher.other.link",
