@@ -1,5 +1,4 @@
-//! The release notes: a version's section of CHANGELOG.md, as it appears on the release page,
-//! with Slint's badge under it.
+//! The release notes: a version's section of CHANGELOG.md, with Slint's badge under it.
 
 use std::fs;
 
@@ -12,7 +11,6 @@ const SLINT_BADGE: &str = "<a href=\"https://slint.dev\"><img src=\"https://slin
                            MadeWithSlint-logo-whitebg.png\" height=\"60\" alt=\"Made with \
                            Slint\"></a>";
 
-/// Prints the section of `tag` (default: `$GITHUB_REF_NAME`) from CHANGELOG.md, then the badge.
 pub fn release_notes(tag: Option<&str>) -> TaskResult {
     let tag = match tag {
         Some(tag) => tag.to_string(),

@@ -1,8 +1,5 @@
-//! @NAME@ as a device of Mujina's: a handheld whose extra buttons reach
-//! Windows some other way than as key chords, such as a vendor HID report.
-//!
-//! Made by `cargo xtask new-device @ID@`; each `TODO` needs knowledge of the device
-//! (docs/new-device.md, section 4). [`DESCRIPTOR`] builds everywhere; the buttons need Windows.
+//! @NAME@ as a device of Mujina's: a handheld whose extra buttons send no key chords.
+//! Each `TODO` needs knowledge of the device (docs/new-device.md, section 4).
 
 mod descriptor;
 #[cfg(windows)]

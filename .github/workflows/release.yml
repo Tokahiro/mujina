@@ -17,8 +17,7 @@ env:
   CARGO_TERM_COLOR: always
 
 # preflight + keys -> build -> sign -> publish (docs/signing.md)
-# Only sign uses the key, a secret of the `release` environment, which admits only v* tags. It
-# runs no cargo and nothing cargo built. Only publish may write to the repository.
+# The key is a secret of the `release` environment, which admits only v* tags.
 
 jobs:
   preflight:
@@ -55,8 +54,7 @@ jobs:
           run='first(.workflow_runs[] | select(.conclusion == "success") | .id)
             // (if any(.workflow_runs[]; .status != "completed") then "running" else "missing" end)'
           # Whether the build and test jobs passed, by their names in ci.yml; skipped is not passed.
-          # All attempts count: a job not re-run passed in an earlier one, and one that failed in
-          # the last would have failed the run.
+          # All attempts count: a job not re-run passed before; a failure in the last fails the run.
           built='["portable (Linux)", "Windows (clippy, test)", "Windows (package)"]
             - [.jobs[] | select(.conclusion == "success") | .name] | length == 0'
           # An API error is no verdict: the question is asked again, as for a run still going.
@@ -106,7 +104,7 @@ jobs:
             exit 1
           fi
 
-  # All cargo builds, without a secret; the sign job attaches the package to Setup (ADR-0015).
+  # All cargo builds, without a secret (ADR-0015).
   build:
     name: build (unsigned)
     needs: [preflight, keys]
@@ -193,7 +191,7 @@ jobs:
     needs: [preflight, sign]
     runs-on: ubuntu-latest
     permissions:
-      # The release itself. No other job can write to the repository.
+      # No other job can write to the repository.
       contents: write
       # The attestation: a token to get its signing certificate from Sigstore, and the right
       # to store it with the repository.
@@ -208,7 +206,6 @@ jobs:
         with:
           name: release
           path: out
-      # Users get Mujina-Setup-vX.Y.Z.exe; the package and certificate are for experts (ADR-0015).
       - name: Checksums
         working-directory: out
         run: |

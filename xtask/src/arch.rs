@@ -1,7 +1,4 @@
 //! Enforces the onion's dependency rule: dependencies point inward only.
-//!
-//! Each member names its ring in `[package.metadata.mujina] ring`; none or an unknown one fails.
-//! [`MATRIX`] says which rings each ring may use; a test keeps docs/architecture.md's table equal.
 
 use serde_json::Value;
 
@@ -28,7 +25,6 @@ enum Ring {
 }
 
 impl Ring {
-    /// The name in the manifest and in docs/architecture.md.
     fn name(self) -> &'static str {
         match self {
             Domain => "domain",
@@ -63,10 +59,9 @@ impl Outside {
     }
 }
 
-/// One row of the ring matrix.
 struct Rule {
     ring: Ring,
-    /// The rings whose crates a crate of this ring may depend on.
+    /// The rings this ring may depend on.
     rings: &'static [Ring],
     outside: Outside,
 }
@@ -97,7 +92,6 @@ const MATRIX: &[Rule] = &[
         rings: &[],
         outside: Outside::Nothing,
     },
-    // What several adapters share, in Mujina's types.
     Rule {
         ring: AdapterSupport,
         rings: &[Domain, Application, Plumbing],
@@ -109,7 +103,7 @@ const MATRIX: &[Rule] = &[
         rings: &[Domain, Application, Plumbing, AdapterSupport],
         outside: Outside::Any,
     },
-    // Sees every inner ring. Nothing builds on the settings app, the installer or the tooling.
+    // Nothing builds on the settings app, the installer or the tooling.
     Rule {
         ring: Root,
         rings: &[Domain, Application, Plumbing, AdapterSupport, Adapter],
@@ -121,8 +115,7 @@ const MATRIX: &[Rule] = &[
         rings: &[Domain, Application, Plumbing, Leaf, Root],
         outside: Outside::Any,
     },
-    // Runs the home app rule in-process with adapter-windows' registry adapter (a row cannot name
-    // one crate). Knows no launcher or device; uses the leaf through the application ring.
+    // Only adapter-windows' registry adapter, for the home app rule; a row cannot name one crate.
     Rule {
         ring: Installer,
         rings: &[Domain, Application, Plumbing, Leaf, Adapter],
@@ -137,7 +130,6 @@ const MATRIX: &[Rule] = &[
 
 pub fn check() -> TaskResult {
     let metadata = workspace::metadata()?;
-    // With --no-deps these are exactly the workspace members.
     let members = metadata["packages"]
         .as_array()
         .ok_or("cargo metadata has no packages")?;
@@ -151,7 +143,7 @@ pub fn check() -> TaskResult {
     }
 }
 
-/// Every way `members`, the workspace's packages as `cargo metadata` lists them, break the rule.
+/// Every way `members`, as `cargo metadata` lists them, break the rule.
 fn violations(members: &[Value]) -> Vec<String> {
     let mut violations = Vec::new();
     for member in members {
@@ -178,7 +170,6 @@ fn violations(members: &[Value]) -> Vec<String> {
     violations
 }
 
-/// The row of the ring `package` names in its Cargo.toml.
 fn rule(package: &Value) -> Result<&'static Rule, String> {
     let name = name(package);
     let rings = || {
@@ -210,7 +201,6 @@ fn rule(package: &Value) -> Result<&'static Rule, String> {
     }
 }
 
-/// What is wrong with `member`, of `rule`'s ring, depending on `dependency`, if anything.
 fn violation(member: &Value, rule: &Rule, dependency: &Value, members: &[Value]) -> Option<String> {
     let (name, ring) = (name(member), rule.ring.name());
     // Workspace crates are path dependencies (no `source`, a `path`), whatever their name says.
@@ -258,12 +248,10 @@ mod tests {
         })
     }
 
-    /// A path dependency, as cargo metadata lists one.
     fn path(name: &str) -> Value {
         json!({ "name": name, "source": null, "kind": null, "path": format!("/w/crates/{name}") })
     }
 
-    /// A crates.io dependency, as cargo metadata lists one.
     fn registry(name: &str) -> Value {
         json!({
             "name": name,
@@ -326,7 +314,6 @@ mod tests {
         assert!(allowed("settings-app", "leaf"));
         assert!(allowed("application", "leaf"));
         assert!(allowed("installer", "leaf"));
-        // Not yet: no crate of this ring uses one.
         assert!(!allowed("domain", "leaf"));
     }
 
@@ -398,16 +385,13 @@ mod tests {
         ] {
             assert!(allowed("root", ring), "root on {ring}");
         }
-        // There is one composition root; a second one building on it would be a new row.
         assert!(!allowed("root", "root"));
         for ring in ["domain", "application", "plumbing", "leaf", "root"] {
             assert!(allowed("settings-app", ring), "settings-app on {ring}");
         }
-        // Through the composition root's tool module, never an adapter of its own.
         assert!(!allowed("settings-app", "adapter"));
         assert!(!allowed("settings-app", "adapter-support"));
         assert!(allowed_outside("settings-app", "slint"));
-        // The home app rule runs in-process, with the registry adapter: no mujinactl.exe to find.
         for ring in ["domain", "application", "plumbing", "leaf", "adapter"] {
             assert!(allowed("installer", ring), "installer on {ring}");
         }
@@ -484,7 +468,6 @@ mod tests {
 
     #[test]
     fn a_workspace_crate_counts_by_its_ring_not_its_name() {
-        // No mujina- prefix, still a crate of the workspace.
         let workspace = [
             member("mujina-adapter-steam", Some("adapter"), &[path("playnite")]),
             member("playnite", Some("adapter"), &[]),
@@ -517,7 +500,6 @@ mod tests {
             )]),
             ["mujina-domain (domain) must not depend on mujina-app, a crate from outside"]
         );
-        // Not a workspace member although one has that name: it comes from a registry.
         let workspace = [
             member(
                 "mujina-adapter-steam",
@@ -570,8 +552,7 @@ mod tests {
         );
     }
 
-    /// The rings table between the arch-check markers in docs/architecture.md: for every row,
-    /// the ring, the rings it may depend on and the crates from outside it may use, as written.
+    /// Each row of the rings table in docs/architecture.md: ring, rings it may use, outside crates.
     fn documented() -> Vec<[String; 3]> {
         let doc = include_str!("../../docs/architecture.md");
         let begin = doc
@@ -582,7 +563,6 @@ mod tests {
             .expect("docs/architecture.md has no arch-check end marker");
         doc[begin..end]
             .lines()
-            // The rows, not the header, the separator or the markers.
             .filter(|line| line.starts_with("| `"))
             .map(|line| {
                 let cells: Vec<&str> = line.split('|').map(str::trim).collect();

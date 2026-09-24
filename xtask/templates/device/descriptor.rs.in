@@ -1,6 +1,5 @@
-//! @NAME@ as the configuration and the tools see it: which machines it is,
-//! its buttons and its options under `[device.@ID@]`. Portable, so its rules are tested on
-//! every system.
+//! @NAME@ as the configuration and the tools see it: its machines, buttons and options.
+//! Portable, so its rules are tested on every system.
 
 use mujina_application::Msg;
 use mujina_application::device::{

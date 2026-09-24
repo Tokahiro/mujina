@@ -1,6 +1,5 @@
-# Draws Mujina's icons (the SVG, the package logos, mujina.ico and the window icon) from the mark:
-# two squares, 狢 in the front one (ui/assets/mark-glyph.svg). Below 40 px the character would be
-# too small, so the front square alone fills the icon. Windows only: it draws with WPF.
+# Draws Mujina's icons from the mark: two squares, 狢 in the front one. Below 40 px the character
+# would be too small, so the front square alone fills the icon. Windows only: it draws with WPF.
 #
 #   powershell -NoProfile -File packaging\icons.ps1
 
@@ -96,7 +95,7 @@ $svg = @"
 New-Item -ItemType Directory -Force "$root\docs\images" | Out-Null
 [System.IO.File]::WriteAllText("$root\docs\images\mujina.svg", $svg, (New-Object System.Text.UTF8Encoding $false))
 
-# Package logos. The plain ones are drawn at twice their nominal size, for high-density screens.
+# The plain package logos are drawn at twice their nominal size, for high-density screens.
 $assets = "$root\packaging\Assets"
 Get-ChildItem $assets -Filter *.png | Remove-Item
 Save-Png 300 "$assets\Square150x150Logo.png"

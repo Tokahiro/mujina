@@ -1,6 +1,5 @@
 //! `cargo xtask i18n-check`: each `.po` under a crate's `lang/` must translate every text the
-//! crate shows. Texts are the `@tr("…")` of its `.slint` files and the shared `ui/` (looked up by
-//! component) and every `Msg::new("…")` of its Rust code (looked up without a context).
+//! crate shows: `@tr("…")` in its `.slint` files and the shared `ui/`, `Msg::new("…")` in Rust.
 
 use std::collections::BTreeSet;
 use std::fmt;
@@ -9,13 +8,12 @@ use std::process::Command;
 
 use crate::{TaskResult, workspace};
 
-/// A text as a catalog finds it.
 #[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord)]
 struct Key {
     context: Option<String>,
     /// The English, gettext's msgid.
     id: String,
-    /// The English with a count other than one, for a text with a count.
+    /// The English plural, gettext's msgid_plural.
     plural: Option<String>,
 }
 
@@ -32,7 +30,6 @@ impl fmt::Display for Key {
     }
 }
 
-/// One entry of a `.po` or `.pot` file.
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Entry {
     key: Key,
@@ -42,8 +39,7 @@ struct Entry {
 }
 
 impl Entry {
-    /// Whether Slint and the Localizer use the translation: there is one for every form, and
-    /// nobody marked it as a guess.
+    /// Whether Slint and the Localizer use it: every form translated, not marked fuzzy.
     fn translated(&self) -> bool {
         let forms = if self.key.plural.is_some() { 2 } else { 1 };
         !self.fuzzy
@@ -125,9 +121,8 @@ pub fn check() -> TaskResult {
     }
 }
 
-/// slint-tr-extractor of Cargo.lock's Slint version, so it reads `.slint` files as the compiler
-/// does. Installed on first use under `MUJINA_TOOLS` if set (CI caches it there), else under
-/// `target/tools`, never into the user's cargo.
+/// slint-tr-extractor of Cargo.lock's Slint version, so it reads `.slint` as the compiler does.
+/// Installed under `MUJINA_TOOLS` (CI caches it there) or `target/tools`, never the user's cargo.
 fn extractor(root: &Path) -> Result<PathBuf, String> {
     let lock = read(&root.join("Cargo.lock"))?;
     let version = locked_version(&lock, "slint").ok_or("Cargo.lock has no slint")?;
@@ -159,7 +154,6 @@ fn extractor(root: &Path) -> Result<PathBuf, String> {
     Ok(program)
 }
 
-/// The version of `package` that `lock`, a Cargo.lock, pins.
 fn locked_version(lock: &str, package: &str) -> Option<String> {
     let name = format!("name = \"{package}\"");
     let mut lines = lock.lines();
@@ -172,7 +166,6 @@ fn locked_version(lock: &str, package: &str) -> Option<String> {
         .map(str::to_string)
 }
 
-/// The texts of `files`, as slint-tr-extractor writes them to `pot`.
 fn extract(extractor: &Path, files: &[PathBuf], pot: &Path) -> Result<Vec<Entry>, String> {
     if let Some(dir) = pot.parent() {
         std::fs::create_dir_all(dir).map_err(|error| format!("{}: {error}", dir.display()))?;
@@ -194,8 +187,7 @@ fn extract(extractor: &Path, files: &[PathBuf], pot: &Path) -> Result<Vec<Entry>
     parse(&read(pot)?).map_err(|error| format!("{}: {error}", pot.display()))
 }
 
-/// Every `Msg::new("…")` in the Rust files under `src`. A `Msg::new` with anything but a string
-/// literal is a failure: the check could not see what it says.
+/// Every `Msg::new("…")` under `src`; one without a string literal goes to `failures`.
 fn rust_texts(src: &Path, root: &Path, failures: &mut Vec<String>) -> Result<Vec<String>, String> {
     let mut texts = Vec::new();
     for file in files(src, "rs")? {
@@ -245,9 +237,8 @@ fn msgs(source: &str) -> Result<Vec<String>, String> {
     Ok(texts)
 }
 
-/// The line that ends the item after a `#[cfg(test)]`, given the lines after it, when that item
-/// is an inline module; `None` for any other item. rustfmt, which CI enforces, closes a block at
-/// the indentation of the line that opens it.
+/// The closing line of the inline module after a `#[cfg(test)]`; `None` for any other item.
+/// Relies on rustfmt, which CI enforces, closing a block at the indentation that opened it.
 fn test_module_end(after: &[&str]) -> Option<String> {
     let item = after.iter().map(|line| line.trim_end()).find(|line| {
         let code = line.trim_start();
@@ -297,8 +288,7 @@ fn rust_string(code: &str) -> Option<(String, &str)> {
     None
 }
 
-/// Each `.po` under `dir/lang`: `<language>/LC_MESSAGES/*.po` for an app (Slint's layout),
-/// `<language>.po` for a crate whose texts only Rust looks up.
+/// Each `.po` under `dir/lang`, in Slint's `<language>/LC_MESSAGES/` or as `<language>.po`.
 fn catalogs(dir: &Path) -> Result<Vec<(PathBuf, Vec<Entry>)>, String> {
     let lang = dir.join("lang");
     if !lang.is_dir() {
@@ -362,8 +352,7 @@ fn compare(texts: &BTreeSet<Key>, entries: &[Entry]) -> (Vec<String>, Vec<Key>) 
     (missing, unused)
 }
 
-/// For the scaffolding's tests: i18n-check's findings for the catalog `po` of a crate whose texts
-/// are the `Msg::new("…")` of `sources` alone.
+/// For scaffold's tests: i18n-check's findings for `po` against the `Msg::new` texts of `sources`.
 #[cfg(test)]
 pub(crate) fn rust_catalog_problems(sources: &[String], po: &str) -> Result<Vec<String>, String> {
     let mut texts = BTreeSet::new();
@@ -382,9 +371,8 @@ pub(crate) fn rust_catalog_problems(sources: &[String], po: &str) -> Result<Vec<
         .collect())
 }
 
-/// The first translation of `entry` whose placeholders differ from its English, with both lists.
-/// `msgstr[0]` is compared with the msgid, other forms with the plural: German uses `msgstr[0]`
-/// for exactly one, so it may leave out a `{n}` the msgid leaves out.
+/// The first translation whose placeholders differ from its English, with both lists.
+/// `msgstr[0]`, exactly one in German, is held to the msgid; other forms to the plural.
 fn lost_placeholder(entry: &Entry) -> Option<(&str, Vec<&str>, Vec<&str>)> {
     entry
         .translations
@@ -421,8 +409,7 @@ fn placeholders(text: &str) -> Vec<&str> {
     found
 }
 
-/// The entries of a gettext catalog, read by rspolib as the Slint build reads it: without the
-/// header, and without the obsolete entries (`#~`), which the build never uses.
+/// A catalog's entries as the Slint build reads them (rspolib), without the obsolete `#~` ones.
 fn parse(text: &str) -> Result<Vec<Entry>, String> {
     // rspolib refuses most broken catalogs but panics on some, such as a msgstr without a msgid;
     // the Slint build stops there as well, so either way the catalog is unusable.
@@ -450,7 +437,6 @@ fn parse(text: &str) -> Result<Vec<Entry>, String> {
     Ok(entries)
 }
 
-/// The crates of the workspace, by directory, in name order.
 fn crate_dirs(crates: &Path) -> Result<Vec<PathBuf>, String> {
     let mut dirs: Vec<PathBuf> = std::fs::read_dir(crates)
         .map_err(|error| format!("{}: {error}", crates.display()))?
@@ -466,8 +452,7 @@ fn slint_files(dir: &Path) -> Result<Vec<PathBuf>, String> {
     files(dir, "slint")
 }
 
-/// The files under `dir` with the extension `extension`, in path order; none if `dir` does not
-/// exist.
+/// The files under `dir` with `extension`, sorted; none if `dir` does not exist.
 fn files(dir: &Path, extension: &str) -> Result<Vec<PathBuf>, String> {
     let mut found = Vec::new();
     if !dir.is_dir() {
@@ -609,8 +594,6 @@ msgstr ""
         );
         assert_eq!(unused, Vec::<Key>::new());
 
-        // A count needs the plural forms, which Slint looks for; a text without one, the
-        // single translation.
         let counted: BTreeSet<Key> = [key(Some("StatusPage"), "Check again", Some("{n}"))].into();
         let (missing, unused) = compare(&counted, &entries);
         assert_eq!(
@@ -619,7 +602,6 @@ msgstr ""
         );
         assert_eq!(unused.len(), 3);
 
-        // The plural must be the text's, and each form keep the placeholders of its English.
         let reworded = parse(
             r#"
 msgctxt "StatusPage"
@@ -703,8 +685,7 @@ mod tests {
         let computed = "const NAME: Msg = Msg::new(name);";
         assert!(msgs(computed).unwrap_err().contains("line 1"));
 
-        // Only an inline test module is left out: not a test module in a file of its own, not
-        // another item for tests, and not what follows a test module.
+        // Only inline test modules are left out, not `mod fakes;` or other `#[cfg(test)]` items.
         let mixed = r#"
 #[cfg(test)]
 mod fakes;

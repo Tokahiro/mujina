@@ -20,11 +20,9 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
 
-# Actions are pinned to a commit (the only immutable reference); Dependabot keeps them current.
 # `rustup toolchain install` without arguments installs what rust-toolchain.toml pins.
-# Caches are saved on main only (tags can restore main's, not each other's), except the small
-# slint-tr-extractor cache. release.yml finds portable, win-check and win-package by their names:
-# rename them in both files together.
+# Caches are saved on main only: tags can restore main's, not each other's.
+# release.yml finds portable, win-check and win-package by their names: rename them in both files.
 
 jobs:
   changes:
@@ -45,8 +43,7 @@ jobs:
           BEFORE: ${{ github.event.before }}
           FORCED: ${{ github.event.forced }}
         run: |
-          # Documentation alone skips the build jobs. Anything else, and any doubt (a manual run,
-          # a force push, a new branch whose "before" is all zeros), builds.
+          # Documentation alone skips the build jobs; a manual run, force push or new branch builds.
           since=''
           case "$EVENT" in
             pull_request) since=$BASE ;;
@@ -86,8 +83,7 @@ jobs:
           name: rustfmt-patch
           path: rustfmt.patch
 
-  # Every crate builds on Linux (Windows code is behind cfg(windows)), so a new crate is checked
-  # here without an edit.
+  # Windows code is behind cfg(windows), so every crate, a new one too, is checked here.
   portable:
     name: portable (Linux)
     needs: changes
@@ -102,9 +98,8 @@ jobs:
         with:
           shared-key: linux
           save-if: ${{ github.ref == 'refs/heads/main' }}
-      # i18n-check's slint-tr-extractor, cached by Slint's version outside target/, where
-      # rust-cache keeps only build output. Pull requests save it too, so a Slint update builds it
-      # once. No restore-keys: another version's is no use.
+      # slint-tr-extractor, cached by Slint's version outside target/, where rust-cache keeps only
+      # build output. Pull requests save it too. No restore-keys: another version's is no use.
       - name: Slint version
         id: slint
         run: |
@@ -120,7 +115,6 @@ jobs:
       - run: cargo test --locked --workspace --all-features
       - name: Dependency rule
         run: cargo xtask arch-check
-      # Builds slint-tr-extractor if the cache above had none.
       - name: Translations
         run: MUJINA_TOOLS="$HOME/.cache/mujina-tools" cargo xtask i18n-check
 
@@ -202,8 +196,7 @@ jobs:
           name: setup-unsigned
           path: target/release/mujina-setup.exe
           if-no-files-found: error
-      # attach-payload.ps1 otherwise runs only where a key is. Trying it here with a throwaway
-      # in-memory certificate makes a broken script or runner fail this job, not the next release.
+      # With a throwaway certificate, so a broken script or runner fails here, not the next release.
       - name: Attach the package to Mujina Setup (dry run, no key)
         if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
         run: |
@@ -280,7 +273,6 @@ jobs:
           name: msix-signed
           path: msix/
           if-no-files-found: error
-      # What testers download and run: the dev package inside, trusted with one prompt.
       - if: env.HAS_KEY == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:

@@ -1,10 +1,5 @@
-//! Builds the MSIX package, unsigned: `packaging/sign.ps1` signs it in a job that runs no cargo
-//! (docs/signing.md).
-//!
-//! - `MSIX_PUBLISHER`: the manifest's publisher (default `CN=Mujina Dev`). It must equal the
-//!   signing certificate's subject and never change between releases: the package family
-//!   derives from it.
-//! - `MSIX_REVISION`: fourth component of the package version (default `0`).
+//! Builds the unsigned MSIX package (docs/signing.md). `MSIX_PUBLISHER` must be the signing
+//! certificate's subject and never change: the package family derives from it.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -61,7 +56,6 @@ pub fn run(arguments: &[String]) -> TaskResult {
     Ok(())
 }
 
-/// Builds the package and returns its path; `build_binaries` runs cargo first.
 pub fn unsigned(build_binaries: bool) -> Result<PathBuf, String> {
     build(&Options {
         build: build_binaries,
@@ -116,8 +110,7 @@ fn build(options: &Options) -> Result<PathBuf, String> {
     fs::write(layout.join("AppxManifest.xml"), manifest)
         .map_err(|error| format!("AppxManifest.xml: {error}"))?;
 
-    // resources.pri: only through it does Windows find the logo's other sizes and forms, such as
-    // the taskbar's unplated 24 px one.
+    // Only through resources.pri does Windows find the logo's other sizes, such as the taskbar's.
     let makepri = sdk_tool("makepri.exe")?;
     let config = out.join("priconfig.xml");
     run_tool(
@@ -150,8 +143,7 @@ fn build(options: &Options) -> Result<PathBuf, String> {
     Ok(msix)
 }
 
-/// An environment variable, treating "set but empty" (how CI passes an undefined variable) as
-/// unset.
+/// Treats a variable set but empty, as CI passes an undefined one, as unset.
 pub(crate) fn env_or(name: &str, default: &str) -> String {
     std::env::var(name)
         .ok()

@@ -1,5 +1,4 @@
-//! The device's buttons at work: what wakes the agent on a press, and what the agent asks of the
-//! device in return. How the buttons reach Windows is marked `TODO`.
+//! The device's buttons at work: what wakes the agent on a press, and what it asks in return.
 
 use std::os::windows::io::{AsHandle, BorrowedHandle};
 
@@ -52,7 +51,6 @@ impl DeviceButtons for @TYPE@Buttons {
     fn pass_on(&self, _button: ButtonId) {}
 }
 
-/// Wakes the agent's event loop when the device reports a press, and says which button it was.
 struct PressSource {
     press: Event,
 }

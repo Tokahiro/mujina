@@ -1,9 +1,5 @@
-//! `cargo xtask dist`: the files a release publishes, built and signed into `target/dist` the way
-//! the release workflow does it (ADR-0015), but on one machine, the developer's.
-//!
-//! The password of the `--pfx` certificate comes from `SIGNING_PFX_PASSWORD`, and
-//! `MSIX_PUBLISHER` must be its subject. signtool leaves a copy of the private key in the user's
-//! key store: use a development certificate (docs/signing.md), never the release one.
+//! `cargo xtask dist`: the files a release publishes, built and signed into `target/dist`.
+//! signtool leaves a copy of the `--pfx` key in the user's key store: never use the release one.
 
 use std::fmt::Write as _;
 use std::fs;
@@ -125,8 +121,7 @@ pub fn run(arguments: &[String]) -> TaskResult {
     Ok(())
 }
 
-/// A `packaging/` script, run by PowerShell 7 if installed, else by Windows PowerShell; the
-/// execution policy is bypassed for this one process, as on GitHub's runners.
+/// `script` as GitHub's runners run it: PowerShell 7 if installed, execution policy bypassed.
 fn powershell(script: &Path) -> Command {
     let program = if Command::new("pwsh").arg("-Version").output().is_ok() {
         PathBuf::from("pwsh")
@@ -146,7 +141,7 @@ fn powershell(script: &Path) -> Command {
     command
 }
 
-/// The SHA-256 of `file`, in lower-case hex, as Windows' `Get-FileHash` computes it.
+/// The SHA-256 of `file`, in lower-case hex.
 fn sha256(file: &Path) -> Result<String, String> {
     let output = Command::new(windows_powershell())
         .args([

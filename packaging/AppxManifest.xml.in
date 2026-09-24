@@ -76,8 +76,7 @@
         </uap5:Extension>
       </Extensions>
     </Application>
-    <!-- The settings app: its own Start menu entry. The home app above must keep Id="App",
-         because Windows stores it as "<package family>!App". -->
+    <!-- The home app above must keep Id="App": Windows stores it as "<package family>!App". -->
     <Application Id="Settings" Executable="mujina-settings.exe" EntryPoint="Windows.FullTrustApplication">
       <uap:VisualElements
         DisplayName="Mujina Settings"

@@ -3,13 +3,10 @@
     Attaches Mujina's signed package to a built Mujina Setup. Needs no cargo.
 
 .DESCRIPTION
-    Mujina Setup is built without its package; this script adds the package, its certificate
-    and a few lines about them as RT_RCDATA resources, with Windows' UpdateResource. Run it
+    Adds the package, its certificate and a few lines about them as RT_RCDATA resources. Run it
     before signing: the Authenticode hash leaves out only the checksum and the certificate
-    table, so the signature covers them (Microsoft's PE format reference).
-
-    The certificate must be the package's signer and its subject the manifest's Publisher, so
-    a mismatched pair fails here, not on a user's device. The result is read back as data,
+    table, so the signature covers them (Microsoft's PE format reference). A certificate that does
+    not match the package fails here, not on a user's device. The result is read back as data,
     never run: this runs where the signing key is (docs/signing.md).
 
 .PARAMETER Setup
@@ -26,7 +23,7 @@
 
 .PARAMETER AllowUnsignedPackage
     For a dry run with an unsigned package: the signer is not checked, and the Setup cannot
-    install its package. CI's win-package job uses it and uploads nothing it made.
+    install its package.
 
 .EXAMPLE
     pwsh packaging/attach-payload.ps1 -Setup target/release/mujina-setup.exe -Msix msix/Mujina_0.28.0.0_x64.msix -Certificate msix/Mujina.cer -Output out/Mujina-Setup-v0.28.0.exe

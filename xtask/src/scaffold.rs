@@ -1,8 +1,5 @@
 //! `cargo xtask new-launcher` and `new-device`: a skeleton that builds and passes the checks, with
-//! `TODO`s for what only knowledge of the launcher or device can fill in (docs/new-launcher.md,
-//! docs/new-device.md). A crate is listed after its kind's lines in the root `Cargo.toml`,
-//! `crates/app/Cargo.toml` and `crates/app/src/registry.rs`; if a file has none, nothing is
-//! written and the error says what to add by hand.
+//! `TODO`s for what only knowledge of the launcher or device can fill in.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -51,8 +48,7 @@ const PROFILE: &str = include_str!("../templates/device/profile.toml.in");
 /// Keys of `[launcher]` itself, read before the launchers' sections (application's `CORE`).
 const RESERVED_LAUNCHER_IDS: &[&str] = &["kind", "on_exit", "menu", "overlay"];
 
-/// Values and keys `[device]` gives a meaning of its own, and the button of one's own
-/// (`adapter-keyboard`'s `OWN_ID`).
+/// Values and keys of `[device]` itself, and `adapter-keyboard`'s `OWN_ID`.
 const RESERVED_DEVICE_IDS: &[&str] = &["auto", "none", "button", "profile", "custom"];
 
 /// How an id is spelt, so that users can write it in `config.toml` and it makes a crate name.
@@ -65,8 +61,7 @@ const DEVICE_ID_RULE: &str = "lower case letters, digits, _ and -, beginning wit
 const LAUNCHER_TYPES: &[&str] = &["Descriptor", "Launcher", "Options", "Runtime"];
 const DEVICE_TYPES: &[&str] = &["Buttons", "Descriptor", "Runtime"];
 
-/// Imported names an id could clash with: `home` would make a second `HomeLauncher` and the crate
-/// would not build. A test holds these lists to the templates.
+/// Imported names an id could clash with: `home` would make a second `HomeLauncher`.
 const LAUNCHER_IMPORTS: &[&str] = &[
     "HomeLauncher",
     "LauncherDescriptor",
@@ -80,8 +75,7 @@ enum Kind {
     Launcher,
     /// A device crate, for buttons that are no key chords.
     Device,
-    /// A profile in `profiles/devices/`, for buttons that are key chords. adapter-keyboard's build
-    /// script finds it, so no list is edited.
+    /// A profile in `profiles/devices/`, for key chords; adapter-keyboard's build script finds it.
     Profile,
 }
 
@@ -116,8 +110,7 @@ pub fn new_device(args: &[String]) -> TaskResult {
     )
 }
 
-/// What `cargo xtask <task> --help` adds to the task's usage: how its id is spelt and which ids
-/// it refuses. `None` for a task that makes nothing.
+/// What `--help` adds to a skeleton task's usage; `None` for any other task.
 pub fn id_help(task: &str) -> Option<String> {
     let (rule, reserved, example) = match task {
         "new-launcher" => (
@@ -142,8 +135,7 @@ pub fn id_help(task: &str) -> Option<String> {
     ))
 }
 
-/// `<id> [--name <text>] [--profile]`: the id, the name if given, and whether a profile is asked
-/// for (only where `profile` may be, for a device).
+/// `<id> [--name <text>] [--profile]`, where `profile` says whether `--profile` is allowed.
 fn arguments(args: &[String], profile: bool) -> Result<(String, Option<String>, bool), String> {
     let mut id = None;
     let mut name = None;
@@ -278,8 +270,7 @@ fn words(id: &str) -> Vec<String> {
         .collect()
 }
 
-/// Checks `id` against [`LAUNCHER_ID_RULE`] or [`DEVICE_ID_RULE`] (as the conformance tests do),
-/// the ids `config.toml` reserves, and the names the templates import.
+/// Checks the spelling as the conformance tests do, then refuses reserved ids and imported names.
 fn check_id(kind: Kind, id: &str) -> Result<(), String> {
     let (what, rule, reserved, types, imports) = match kind {
         Kind::Launcher => (
@@ -422,7 +413,6 @@ fn plan(root: &Path, skeleton: &Skeleton) -> Result<Vec<Change>, String> {
     Ok(changes)
 }
 
-/// Refuses an id that a device profile, the file or its `id`, has already.
 fn refuse_taken_device_id(root: &Path, id: &str) -> TaskResult {
     let folder = root.join("profiles/devices");
     let entries =
@@ -470,8 +460,7 @@ fn workspace_dependency(text: &str, package: &str, line: &str) -> Result<String,
     Ok(inserted(text, &lines, start + 1 + last + 1, line))
 }
 
-/// `crates/app/Cargo.toml` with `line` after the lines of the block whose comment begins with
-/// `block` (the launchers, the devices).
+/// `crates/app/Cargo.toml` with `line` at the end of the block whose comment begins with `block`.
 fn app_dependency(text: &str, block: &str, package: &str, line: &str) -> Result<String, Unlisted> {
     let lines: Vec<&str> = text.lines().collect();
     if lines.iter().any(|line| is_dependency(line, package)) {
@@ -505,7 +494,6 @@ fn is_dependency(line: &str, package: &str) -> bool {
         .is_some_and(|rest| rest.starts_with([' ', '=', '.']))
 }
 
-/// `text`, split into `lines`, with `line` inserted before `lines[at]`.
 fn inserted(text: &str, lines: &[&str], at: usize, line: &str) -> String {
     let mut all: Vec<&str> = lines.to_vec();
     all.insert(at, line);
@@ -557,10 +545,8 @@ fn registry_entry(text: &str, list: &str, entry: &str) -> Result<String, Unliste
 /// Why an edit of one of the three lists wrote nothing.
 #[derive(Debug)]
 enum Unlisted {
-    /// The file lists the crate already, although its folder is not there: left over from one
-    /// removed by hand, say.
+    /// The file lists the crate already, though its folder is gone (removed by hand, say).
     Already(String),
-    /// The file has no place the edit knows to put it.
     NoPlace(String),
 }
 
@@ -576,8 +562,6 @@ impl From<&str> for Unlisted {
     }
 }
 
-/// What to do about an edit that wrote nothing: remove what is left of an earlier crate of that
-/// name, or add `line` by hand where the edit found no place for it.
 fn refused(path: &Path, why: Unlisted, line: &str) -> String {
     match why {
         Unlisted::Already(listed) => format!(
@@ -597,7 +581,7 @@ fn read(root: &Path, path: &Path) -> Result<String, String> {
     std::fs::read_to_string(root.join(path)).map_err(|error| format!("{}: {error}", shown(path)))
 }
 
-/// Writes `changes` under `root`. A new file is never written over one that exists.
+/// A new file is never written over one that exists.
 fn write(root: &Path, changes: &[Change]) -> TaskResult {
     for change in changes {
         let path = root.join(&change.path);
@@ -615,7 +599,7 @@ fn write(root: &Path, changes: &[Change]) -> TaskResult {
     Ok(())
 }
 
-/// Formats the Rust files `changes` wrote as `cargo fmt` would; only says so where it cannot.
+/// Formats the Rust files `changes` wrote; if rustfmt fails, only says so.
 fn rustfmt(root: &Path, changes: &[Change]) {
     let files: Vec<PathBuf> = changes
         .iter()
@@ -632,9 +616,8 @@ fn rustfmt(root: &Path, changes: &[Change]) {
     }
 }
 
-/// Adds the new crate to `Cargo.lock` and leaves every other entry as it is ("Other packages are
-/// updated only if they don't already exist in the lockfile", cargo-update's `--workspace`):
-/// without the network first, since a skeleton uses no crate the lock does not have.
+/// `--workspace` keeps every other entry ("Other packages are updated only if they don't already
+/// exist in the lockfile", cargo-update); offline first, since a skeleton needs no new crate.
 fn lock(root: &Path) -> TaskResult {
     let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
     for offline in [true, false] {
@@ -661,8 +644,7 @@ fn shown(path: &Path) -> String {
 mod tests {
     use super::*;
 
-    /// A copy of what the task reads and edits, from this workspace, in a folder of its own: the
-    /// two manifests, the registry, the profiles, and an empty folder for each crate.
+    /// A temporary copy of the manifests, registry and profiles, with an empty folder per crate.
     struct Workspace(PathBuf);
 
     impl Workspace {
@@ -715,9 +697,6 @@ mod tests {
         }
     }
 
-    /// Every file of a new crate reads as what it is: the manifest as TOML with the adapter's
-    /// ring, the Rust files as Rust, and the catalog as i18n-check reads it, translating exactly
-    /// the texts of the sources.
     fn check_crate(copy: &Workspace, dir: &str, package: &str) {
         let manifest: toml::Table = copy.read(&format!("{dir}/Cargo.toml")).parse().unwrap();
         assert_eq!(manifest["package"]["name"].as_str(), Some(package));
@@ -739,7 +718,6 @@ mod tests {
         assert!(problems.is_empty(), "{dir}/lang/de.po: {problems:?}");
     }
 
-    /// The package `manifest`, the root one or the app's, lists as a dependency.
     fn dependency<'a>(manifest: &'a toml::Table, section: &str, package: &str) -> &'a toml::Value {
         let dependencies = match section {
             "workspace" => &manifest["workspace"]["dependencies"],
@@ -750,7 +728,6 @@ mod tests {
             .unwrap_or_else(|| panic!("{package} is not a dependency"))
     }
 
-    /// The entries of the list `list` in registry.rs, which must read as Rust.
     fn registry_list(copy: &Workspace, list: &str) -> Vec<String> {
         let source = copy.read("crates/app/src/registry.rs");
         let file = syn::parse_file(&source).unwrap();
@@ -815,7 +792,6 @@ mod tests {
             dependency(&app, "app", "mujina-adapter-made-up")["workspace"].as_bool(),
             Some(true)
         );
-        // After the launchers, before the devices' comment.
         let app_text = copy.read("crates/app/Cargo.toml");
         let at = |text: &str| app_text.find(text).unwrap();
         assert!(at("mujina-adapter-generic.workspace") < at("mujina-adapter-made-up.workspace"));
@@ -825,7 +801,6 @@ mod tests {
         expected.push("mujina_adapter_made_up::PLUGIN".to_string());
         assert_eq!(registry_list(&copy, "LAUNCHERS"), expected);
 
-        // Made once only.
         let again = copy.make(Kind::Launcher, "made_up").unwrap_err();
         assert!(
             again.contains("crates/adapter-made-up exists already"),
@@ -880,7 +855,6 @@ mod tests {
         for key in ["key", "label", "chord"] {
             assert!(buttons[0][key].is_str(), "{key}");
         }
-        // Only the keys adapter-keyboard's reader knows (it refuses any other).
         let known = ["id", "name", "match", "buttons"];
         assert!(profile.keys().all(|key| known.contains(&key.as_str())));
 
@@ -920,7 +894,6 @@ mod tests {
             (Kind::Device, "rog-_ally", "no two of _ and - in a row"),
             (Kind::Launcher, "big__box", "no two _ in a row"),
             (Kind::Launcher, "", "beginning with a letter"),
-            // Types named after them would be the ports and traits the crate imports.
             (Kind::Launcher, "home", "HomeLauncher, which clashes"),
             (Kind::Launcher, "session", "SessionLauncher, which clashes"),
             (
@@ -933,16 +906,13 @@ mod tests {
             let refused = copy.make(kind, id).unwrap_err();
             assert!(refused.contains(says), "{kind:?} {id:?}: {refused}");
         }
-        // Nothing was written.
         assert_eq!(
             copy.read("Cargo.toml"),
             std::fs::read_to_string(workspace::root().join("Cargo.toml")).unwrap()
         );
-        // A profile names no type.
         assert!(Skeleton::new(Kind::Profile, "device", None).is_ok());
     }
 
-    /// The names of `use` items in `source`, as the file sees them.
     fn imported(source: &str) -> Vec<String> {
         fn leaves(tree: &syn::UseTree, out: &mut Vec<String>) {
             match tree {
@@ -975,8 +945,6 @@ mod tests {
         out
     }
 
-    /// What `check_id` refuses by is what the templates make and import: the type names they
-    /// make of the id, and each name they import that one of those could be.
     #[test]
     fn the_names_an_id_could_clash_with_are_those_the_templates_import() {
         for (kind, files, types, imports) in [
@@ -1109,7 +1077,6 @@ mod tests {
         assert!(arguments(&args(&["a", "b"]), true).is_err());
         assert!(arguments(&args(&[]), true).is_err());
         assert!(arguments(&args(&["a", "--name"]), true).is_err());
-        // Without an id, an example of the task that was asked for.
         let which = |list: &[&str], profile| arguments(&args(list), profile).unwrap_err();
         assert!(which(&[], false).contains("`cargo xtask new-launcher "));
         assert!(which(&[], true).contains("`cargo xtask new-device rog-ally`"));
