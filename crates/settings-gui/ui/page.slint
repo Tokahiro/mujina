@@ -1,19 +1,14 @@
-// What every page is: its title, what it shows scrolled as a whole with a thumb, and the
-// controller's keys. Up and down move between the rows the controller can land on (and read on
-// past the last one), left, right and A go to the current row, B back to the rail. A page with
-// rows of its own drawing (a button, the log) takes up, down and A on them first, and scrolls
-// them into view itself when they become current.
+// The frame of every page: title, scrolled content, and the controller's keys. Up/down move
+// between rows, left/right/A go to the current row, B back to the rail.
 
 import { Theme } from "@mujina/theme.slint";
 import { Nav, PageState, PageKey, Focus } from "nav.slint";
 
 export component ScrollPage inherits Rectangle {
     in property <string> title;
-    // Whether this is the page shown, which its page binds to its own `visible`: every page
-    // exists all the time, and only the one shown may take the controller back or scroll to a
-    // row. Its own `visible` stays true when the page around it is hidden.
+    // Bound to the page's `visible`: only the page shown may take focus back or scroll. This
+    // element's own `visible` stays true when the page around it is hidden.
     in property <bool> shown;
-    // Right of the title, e.g. when the checks were done.
     in property <string> aside;
     in property <length> spacing: 30 * Theme.u;
     // Which rows the controller can land on, in order.
@@ -26,19 +21,15 @@ export component ScrollPage inherits Rectangle {
         key: root.key,
         presses: root.presses
     };
-    // Up (-1) or down (1) on the current row, before the page moves: true when the page did
-    // something else with it, such as reading its log on.
+    // Up (-1) or down (1), before the page moves: true if the page used it, e.g. to scroll its log.
     callback step(int) -> bool;
-    // A on the current row: true when the page acted itself, on a row of its own drawing;
-    // otherwise the row acts.
+    // A on the current row: true if the page handled it; otherwise the row acts.
     callback activate(int) -> bool;
-    // The current row changed by up or down, for a page to scroll a row of its own drawing into
-    // view.
+    // The current row changed, so a page can scroll a row it draws itself into view.
     callback moved(int);
     // B: back to the rail.
     callback leave();
 
-    // The last key pressed on the current row.
     property <PageKey> key;
     property <int> presses;
 
@@ -53,7 +44,6 @@ export component ScrollPage inherits Rectangle {
         keys.focus();
     }
 
-    // Scrolls by `delta` within the page's bounds.
     public function scroll-by(delta: length) {
         flick.content-y = max(min(0px, flick.height - flick.content-height), min(0px, flick.content-y + delta));
     }
@@ -73,7 +63,7 @@ export component ScrollPage inherits Rectangle {
         }
     }
 
-    // Where a row lies within the page, for a page that tests whether it is scrolled out of view.
+    // A window y as a position within the page.
     public pure function top-of(y: length) -> length {
         y - flick.absolute-position.y
     }
@@ -91,14 +81,12 @@ export component ScrollPage inherits Rectangle {
         root.moved(row);
     }
 
-    // A row that became current reports where it is.
     property <int> rows-shown: Focus.rows-shown;
     changed rows-shown => {
         if (root.shown) {
             root.reveal(Focus.row-y, Focus.row-height);
         }
     }
-    // A text field done with editing hands the controller back.
     property <int> returns: Focus.returns;
     changed returns => {
         if (root.shown) {
@@ -181,7 +169,7 @@ export component ScrollPage inherits Rectangle {
             }
         }
 
-        // Where the page is scrolled to, when there is more of it than fits.
+        // The scroll thumb.
         if flick.content-height > flick.height: Rectangle {
             x: flick.width - 8 * Theme.u;
             width: 5 * Theme.u;

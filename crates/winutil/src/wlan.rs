@@ -1,10 +1,5 @@
-//! A client of the WLAN service: its handle, the change notifications it asked for, and what it
-//! can ask about an interface.
-//!
-//! The service calls back on a thread of its own, with a context the client hands it. The
-//! client owns that context and frees it only after the service let go of it: unregistering and
-//! closing the handle each wait for a callback that is running (see WlanRegisterNotification
-//! and WlanCloseHandle).
+//! A WLAN service client. Its callback context is freed only after the service lets go of it:
+//! unregistering and WlanCloseHandle each wait for a running callback.
 
 use std::ffi::c_void;
 use std::ptr::{null, null_mut};
@@ -21,51 +16,46 @@ use windows_sys::core::GUID;
 
 use crate::error::{Win32Error, Win32Result, checked};
 
-/// A notification from the WLAN service, valid for the callback that receives it.
+/// Valid only during the callback that receives it.
 #[derive(Debug, Clone, Copy)]
 pub struct Notification<'a> {
     /// One of the `WLAN_NOTIFICATION_SOURCE_*` values.
     pub source: u32,
-    /// What happened; its meaning depends on the source.
+    /// Its meaning depends on `source`.
     pub code: u32,
-    /// The data that comes with it, if any; its layout depends on source and code.
+    /// Its layout depends on `source` and `code`; empty if there is none.
     pub data: &'a [u8],
 }
 
-/// A wireless interface.
 #[derive(Clone, Copy)]
 pub struct Interface {
     pub guid: GUID,
     pub connected: bool,
 }
 
-/// The connection of an interface.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Connection {
-    /// The network name as the access point sends it: up to 32 bytes, not necessarily UTF-8.
+    /// Up to 32 bytes as the access point sends them, not necessarily UTF-8.
     pub ssid: Vec<u8>,
     /// 0 to 100.
     pub signal_quality: u32,
 }
 
-/// What the service calls, behind one thin pointer that can travel as the callback's context.
+/// Sized, so that a thin pointer to it can be the callback's context.
 struct Handler(Box<dyn Fn(&Notification<'_>) + Send + Sync>);
 
 unsafe extern "system" fn on_notification(data: *mut L2_NOTIFICATION_DATA, context: *mut c_void) {
-    // SAFETY: the service passes a valid notification for the duration of the callback (null is
-    // tolerated for robustness).
+    // SAFETY: the service passes a notification valid during the callback, or null.
     let Some(data) = (unsafe { data.as_ref() }) else {
         return;
     };
     let bytes = if data.pData.is_null() {
         &[][..]
     } else {
-        // SAFETY: `pData` points to the `dwDataSize` bytes of the notification's data, valid for
-        // the duration of the callback.
+        // SAFETY: `pData` points to `dwDataSize` bytes, valid during the callback.
         unsafe { std::slice::from_raw_parts(data.pData.cast::<u8>(), data.dwDataSize as usize) }
     };
-    // SAFETY: the context is the handler of the client that registered this callback, which
-    // keeps it until the service has let go of it (see `Drop for WlanClient`).
+    // SAFETY: the context is the registering client's handler, kept until the service lets go.
     let handler = unsafe { &*context.cast::<Handler>() };
     (handler.0)(&Notification {
         source: data.NotificationSource,
@@ -74,17 +64,15 @@ unsafe extern "system" fn on_notification(data: *mut L2_NOTIFICATION_DATA, conte
     });
 }
 
-/// A session with the WLAN service, closed when dropped.
 pub struct WlanClient {
     handle: HANDLE,
-    /// The context handed to the service with the last registration, whether that went through
-    /// or not, until the service let go of it. Behind an `Arc`, so its address stays put while
-    /// the client moves.
+    /// The last registration's context, even a refused one, until the service lets go of it. An
+    /// `Arc`, so its address stays put while the client moves.
     handler: Option<Arc<Handler>>,
 }
 
 impl WlanClient {
-    /// Opens a session (client version 2, Vista and later).
+    /// Client version 2 (Vista and later).
     pub fn open() -> Win32Result<Self> {
         let mut negotiated: u32 = 0;
         let mut handle: HANDLE = null_mut();
@@ -97,31 +85,21 @@ impl WlanClient {
         })
     }
 
-    /// Has `handler` called for every notification from `sources` (`WLAN_NOTIFICATION_SOURCE_*`
-    /// flags), duplicates left out, until the client is dropped. It runs on a thread of the
-    /// service and must be quick; it must not use this client, whose drop waits for it. A
-    /// handler registered before is replaced, and so is one whose registration failed: calling
-    /// again with fewer sources after a refusal is how to get what is granted.
+    /// Calls `handler` for notifications from `sources` (`WLAN_NOTIFICATION_SOURCE_*`) until
+    /// dropped, replacing any earlier one. It runs on a service thread: it must be quick and must
+    /// not use this client, whose drop waits for it. After a refusal, retry with fewer sources.
     pub fn notify(
         &mut self,
         sources: u32,
         handler: impl Fn(&Notification<'_>) + Send + Sync + 'static,
     ) -> Win32Result<()> {
-        // Unregistering first also after a failed registration, whose handler the service may
-        // hold, and not only for that: a registration the service refuses leaves the one before
-        // it in place, with its callback's context (seen on build 26200, where a refused
-        // replacement still reported the earlier sources when unregistering). Unregistering
-        // with nothing registered is confirmed all the same (same build), so a call after a
-        // refusal does not fail for that.
+        // A refused registration leaves the previous one in place; unregistering with none
+        // registered succeeds (both seen on build 26200).
         self.unregister()?;
-        // Kept even if registering fails: Microsoft does not say that a failed registration
-        // leaves nothing behind (one for several sources, say, of which only some are refused),
-        // so the handler goes only the way of a successful one, which waits for the service.
+        // Kept even if registering fails: Microsoft does not say a failed one holds no context.
         let context = Arc::as_ptr(self.handler.insert(Arc::new(Handler(Box::new(handler)))));
-        // SAFETY: valid client handle; the callback matches WLAN_NOTIFICATION_CALLBACK; the
-        // context is the handler just stored in `self`, which keeps it until the service has let
-        // go of it (see `unregister` and `Drop`); the reserved pointer is null and the previous
-        // sources are not asked for.
+        // SAFETY: valid handle; the callback matches WLAN_NOTIFICATION_CALLBACK; the context lives
+        // in `self` until the service lets go of it; the reserved pointers are null.
         let status = unsafe {
             WlanRegisterNotification(
                 self.handle,
@@ -136,13 +114,12 @@ impl WlanClient {
         checked("WlanRegisterNotification", status)
     }
 
-    /// Ends the notifications, if any. The handler is let go only once the service confirmed it.
+    /// The handler is let go only once the service confirmed the unregistration.
     fn unregister(&mut self) -> Win32Result<()> {
         if self.handler.is_none() {
             return Ok(());
         }
-        // SAFETY: valid client handle; no callback is needed to unregister; the reserved pointer
-        // is null. It waits for a callback that is running.
+        // SAFETY: valid handle, no callback, null reserved pointers; waits for a running callback.
         let status = unsafe {
             WlanRegisterNotification(
                 self.handle,
@@ -154,24 +131,20 @@ impl WlanClient {
                 null_mut(),
             )
         };
-        // Named apart from registering: after a refused registration, `notify` fails here or
-        // there, and the log is to tell which.
+        // A name of its own, so that the log tells which step of `notify` failed.
         checked("WlanRegisterNotification (unregister)", status)?;
         self.handler = None;
         Ok(())
     }
 
-    /// The wireless interfaces of this machine.
     pub fn interfaces(&self) -> Win32Result<Vec<Interface>> {
         let mut list: *mut WLAN_INTERFACE_INFO_LIST = null_mut();
-        // SAFETY: valid client handle; the reserved pointer is null; `list` receives memory the
-        // WLAN API owns.
+        // SAFETY: valid handle; null reserved pointer; `list` receives memory the WLAN API owns.
         let status = unsafe { WlanEnumInterfaces(self.handle, null(), &raw mut list) };
         checked("WlanEnumInterfaces", status)?;
         let list = WlanMemory::new(list, "WlanEnumInterfaces")?;
-        // SAFETY: on success `list` points to a list allocated by the WLAN API whose
-        // `InterfaceInfo` holds `dwNumberOfItems` contiguous entries; it is freed only after the
-        // last use below, when `list` is dropped.
+        // SAFETY: the WLAN API's list holds `dwNumberOfItems` contiguous entries; it is freed only
+        // when `list` drops, after the last use.
         let entries = unsafe { interfaces(list.0) };
         Ok(entries
             .iter()
@@ -182,16 +155,14 @@ impl WlanClient {
             .collect())
     }
 
-    /// The current connection of an interface. Since Windows 11 24H2 this needs the location
-    /// permission: without it the code is ERROR_ACCESS_DENIED, and the first call may show the
-    /// consent prompt and block until the user answers.
+    /// Since Windows 11 24H2 this needs the location permission (else ERROR_ACCESS_DENIED); the
+    /// first call may show the consent prompt and block until the user answers.
     pub fn current_connection(&self, interface: &GUID) -> Win32Result<Connection> {
         const CALL: &str = "WlanQueryInterface";
         // Written, but not needed: the opcode says what the data is.
         let mut size: u32 = 0;
         let mut data: *mut c_void = null_mut();
-        // SAFETY: valid client handle and interface GUID; the reserved pointer is null; `data`
-        // receives memory the WLAN API owns.
+        // SAFETY: valid handle and GUID; null reserved pointer; `data` receives WLAN API memory.
         let status = unsafe {
             WlanQueryInterface(
                 self.handle,
@@ -205,8 +176,7 @@ impl WlanClient {
         };
         checked(CALL, status)?;
         let data = WlanMemory::new(data.cast::<WLAN_CONNECTION_ATTRIBUTES>(), CALL)?;
-        // SAFETY: for this opcode `data` points to a WLAN_CONNECTION_ATTRIBUTES, valid until
-        // `data` is dropped.
+        // SAFETY: for this opcode a WLAN_CONNECTION_ATTRIBUTES, valid until `data` drops.
         let attributes = unsafe { &*data.0 };
         let association = &attributes.wlanAssociationAttributes;
         let length = (association.dot11Ssid.uSSIDLength as usize).min(32);
@@ -220,9 +190,8 @@ impl WlanClient {
 impl Drop for WlanClient {
     fn drop(&mut self) {
         let unregistered = self.unregister().is_ok();
-        // SAFETY: the handle came from WlanOpenHandle and is closed exactly once; the reserved
-        // pointer is null. Closing undoes a registration too, and waits for a callback that is
-        // running.
+        // SAFETY: from WlanOpenHandle, closed exactly once; null reserved pointer. Closing also
+        // unregisters and waits for a running callback.
         let closed = unsafe { WlanCloseHandle(self.handle, null()) } == ERROR_SUCCESS;
         // If neither went through, the service may still call back: the handler stays for good.
         if !unregistered && !closed {
@@ -231,7 +200,6 @@ impl Drop for WlanClient {
     }
 }
 
-/// Memory the WLAN API allocated for an answer, freed when dropped.
 struct WlanMemory<T>(*mut T);
 
 impl<T> WlanMemory<T> {
@@ -254,9 +222,8 @@ impl<T> Drop for WlanMemory<T> {
     }
 }
 
-/// The entries of an interface list. `InterfaceInfo` is declared with one element but holds
-/// `dwNumberOfItems`, so the pointer is taken from the field's place: going through a reference
-/// to the declared one-element array (`.as_ptr()`) would only grant access to the first entry.
+/// `InterfaceInfo` is declared with one element but holds `dwNumberOfItems`: the pointer comes
+/// from the field's place, as a reference to the declared array would reach only the first.
 ///
 /// # Safety
 /// `list` points to a list whose `InterfaceInfo` holds `dwNumberOfItems` initialised entries,
@@ -288,11 +255,8 @@ mod tests {
         second: WLAN_INTERFACE_INFO,
     }
 
-    /// A layout and arithmetic test: `interfaces` finds the second entry where the WLAN API puts
-    /// it, and reads as many entries as the list says. It does not show that the pointer may
-    /// reach past the first entry: it passes the same way with `.as_ptr()`, whose fault is an
-    /// aliasing rule a normal test run does not check. That needs Miri (`cargo +nightly miri
-    /// test -p mujina-winutil wlan::tests`), which was not at hand when this was written.
+    /// Checks layout and count only: it would also pass with `.as_ptr()`, whose aliasing fault
+    /// only Miri finds (`cargo +nightly miri test -p mujina-winutil wlan::tests`).
     #[test]
     fn every_entry_of_an_interface_list_is_read() {
         assert_eq!(
@@ -316,7 +280,6 @@ mod tests {
         assert_eq!(entries[1].InterfaceGuid.data1, 42);
     }
 
-    /// Calls the callback the way the service does, with a handler as a client registers it.
     fn deliver(handler: &Arc<Handler>, source: u32, code: u32, data: &mut [u8]) {
         let mut notification = L2_NOTIFICATION_DATA {
             NotificationSource: source,
@@ -329,8 +292,7 @@ mod tests {
                 data.as_mut_ptr().cast()
             },
         };
-        // SAFETY: a valid notification whose data outlives the call, and a live handler as the
-        // context.
+        // SAFETY: a valid notification whose data outlives the call; a live handler as context.
         unsafe {
             on_notification(
                 &raw mut notification,
@@ -368,8 +330,7 @@ mod tests {
         assert_eq!(Arc::strong_count(&second), 1, "dropped, so let go");
     }
 
-    /// A null handle, which every WLAN call refuses with ERROR_INVALID_PARAMETER: nothing ever
-    /// says the service let go of the handler, so it is never freed.
+    /// With a null handle every WLAN call fails, so the service never confirms letting go.
     #[test]
     fn a_handler_is_kept_while_the_service_may_hold_it() {
         let mut client = WlanClient {
@@ -389,7 +350,6 @@ mod tests {
             2,
             "kept although registering failed"
         );
-        // Now there is a handler to unregister, which fails too, and says so by its name.
         let error = client
             .notify(WLAN_NOTIFICATION_SOURCE_ACM, |_| {})
             .unwrap_err();
@@ -403,10 +363,7 @@ mod tests {
         );
     }
 
-    /// A registration the service refuses, then another: the second goes through, and the first
-    /// one's handler is let go once the service confirmed unregistering. The refusal is one the
-    /// documentation promises (no callback for a source other than NONE); what `notify` leaves
-    /// behind after it, the handler, is put in place by hand.
+    /// Refused as documented (no callback for a source other than NONE); handler set by hand.
     #[test]
     fn a_refused_registration_does_not_stand_in_the_way_of_the_next() {
         let Ok(mut client) = WlanClient::open() else {
@@ -417,8 +374,7 @@ mod tests {
         let context = Arc::as_ptr(client.handler.insert(Arc::new(Handler(Box::new(move |_| {
             let _ = &held;
         })))));
-        // SAFETY: valid client handle; the context is the handler stored in the client, as
-        // `notify` stores it; the reserved pointer is null.
+        // SAFETY: valid handle; the context is the client's handler, as `notify` stores it.
         let status = unsafe {
             WlanRegisterNotification(
                 client.handle,

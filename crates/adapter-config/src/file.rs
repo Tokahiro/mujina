@@ -1,12 +1,4 @@
-//! The shape of `config.toml` and how it becomes [`Settings`].
-//!
-//! The file is read key by key, not as one typed document: a key Mujina does not know, or one
-//! holding the wrong kind of value, is skipped with a note of its own, and the rest still
-//! counts. Only text that is no TOML at all loses the whole file.
-//!
-//! A launcher's section, `[launcher.<id>]`, and a device's, `[device.<id>]`, are read against the
-//! settings its descriptor names, the same way; this module knows no launcher and no device by
-//! name.
+//! The shape of `config.toml` and how it becomes [`Settings`], key by key.
 
 use std::collections::BTreeMap;
 
@@ -42,8 +34,7 @@ struct RawLauncher {
     on_exit: Option<String>,
     menu: Option<String>,
     overlay: Option<String>,
-    /// `[launcher.<id>]` of every launcher compiled in that has one, as read against its
-    /// settings.
+    /// `[launcher.<id>]` of each launcher compiled in, read against its settings.
     tables: BTreeMap<String, OptionTable>,
 }
 
@@ -55,8 +46,7 @@ struct RawDevice {
     sections: BTreeMap<String, OptionTable>,
 }
 
-/// `[device.button]`, a button of one's own. Each key is optional, so a missing one is a note of
-/// the device's, not a file that cannot be read.
+/// `[device.button]`. Each key is optional: a missing one is the device's note, not a parse error.
 #[derive(Debug, Default)]
 struct RawOwnButton {
     modifier: Option<String>,
@@ -65,8 +55,8 @@ struct RawOwnButton {
 }
 
 impl RawOwnButton {
-    /// The section as options of the device it describes; none when neither key could be read,
-    /// since `injected_only` alone describes no button and must not take the profile's place.
+    /// Empty when neither key could be read: `injected_only` alone describes no button and must
+    /// not take the profile's place.
     fn options(&self) -> OptionTable {
         let mut options = OptionTable::new();
         if self.modifier.is_none() && self.key.is_none() {
@@ -103,14 +93,12 @@ struct RawInterface {
     language: Option<String>,
 }
 
-/// The file as read, and what was skipped on the way.
 #[derive(Debug, Default)]
 pub struct Parsed {
     pub raw: RawConfig,
     pub skipped: Vec<Skipped>,
 }
 
-/// A key or section the reader passed over, with the note that says why.
 #[derive(Debug)]
 pub struct Skipped {
     /// Dotted name, e.g. `features.surprise`, or `featurs` for a whole section.
@@ -127,7 +115,7 @@ impl Skipped {
 }
 
 impl Parsed {
-    /// The settings the file amounts to; the notes on what was skipped come first.
+    /// The notes on what was skipped come first.
     pub fn resolve(
         self,
         system: &SystemIdentity,
@@ -140,9 +128,7 @@ impl Parsed {
     }
 }
 
-/// Reads the text of `config.toml`, with `launchers` and `devices` for what their sections may
-/// hold. Fails only on text that is no TOML; anything else that is wrong is skipped where it
-/// stands.
+/// Fails only on text that is no TOML; anything else that is wrong is skipped with a note.
 pub fn parse(
     text: &str,
     launchers: &Launchers,
@@ -158,8 +144,7 @@ pub fn parse(
     Ok(Parsed { raw, skipped })
 }
 
-/// One table of the file, taken apart key by key: each read takes its key out, and whatever is
-/// left at the end is no setting.
+/// One table of the file. Each read takes its key out; what is left at the end is no setting.
 struct Section {
     /// Dotted name; empty for the top of the file.
     path: String,
@@ -191,8 +176,7 @@ impl Section {
         read
     }
 
-    /// Takes out the table `key` and reads it as a `T`. `None` when there is none, or when
-    /// `key` holds something else (with a note); then the defaults apply to that part alone.
+    /// Takes out the table `key` as a `T`; `None` when absent or not a table (with a note).
     fn section<T: Read>(&mut self, key: &str, skipped: &mut Vec<Skipped>) -> Option<T> {
         self.section_with(key, skipped, T::read)
     }
@@ -223,8 +207,7 @@ impl Section {
         }
     }
 
-    /// Takes out each of `specs`' keys, as the kind of value it names; one of another kind is
-    /// skipped with a note.
+    /// Takes out each of `specs`' keys; a value of another kind is skipped with a note.
     fn options(&mut self, specs: &[SettingSpec], skipped: &mut Vec<Skipped>) -> OptionTable {
         let mut options = OptionTable::new();
         for spec in specs {
@@ -260,8 +243,7 @@ impl Section {
     }
 }
 
-/// A value as a note shows it, on one line. What would take more than a line, or has no plain
-/// spelling, is named by its kind.
+/// A value for a note, on one line; what would not fit or has no plain spelling is named by kind.
 fn shown(value: &Value) -> String {
     match value {
         Value::String(text) if text.contains(['\n', '\r']) => "text over several lines".to_string(),
@@ -271,8 +253,6 @@ fn shown(value: &Value) -> String {
     }
 }
 
-/// A value as settings hold it; `None` for the kinds no setting takes (floats, dates, tables,
-/// lists of anything but text).
 fn setting_value(value: &Value) -> Option<SettingValue> {
     match value {
         Value::Boolean(flag) => Some(SettingValue::Bool(*flag)),
@@ -293,8 +273,6 @@ trait Read: Default {
 }
 
 impl RawConfig {
-    /// The whole file; `launchers` and `devices` say which of `[launcher]`'s and `[device]`'s
-    /// sections are theirs.
     fn read_with(
         section: &mut Section,
         launchers: &[&dyn LauncherDescriptor],
@@ -331,8 +309,7 @@ impl Read for RawFeatures {
 }
 
 impl RawLauncher {
-    /// `[launcher]`, with the section of each of `launchers` read against its settings.
-    /// Another launcher's section is none Mujina knows, and noted as such.
+    /// Reads each of `launchers`' sections against its settings; any other is noted as unknown.
     fn read_with(
         section: &mut Section,
         launchers: &[&dyn LauncherDescriptor],
@@ -362,8 +339,7 @@ impl RawLauncher {
 }
 
 impl RawDevice {
-    /// `[device]`, with `[device.button]` and the section of each of `devices` that has options,
-    /// read against them. Another device's section is none Mujina knows, and noted as such.
+    /// Reads the section of each device that has options; any other is noted as unknown.
     fn read_with(section: &mut Section, devices: &Devices, skipped: &mut Vec<Skipped>) -> Self {
         let profile = section.value("profile", skipped);
         let button = section.section("button", skipped);
@@ -390,7 +366,7 @@ impl RawDevice {
 
 impl Read for RawOwnButton {
     fn read(section: &mut Section, skipped: &mut Vec<Skipped>) -> Self {
-        // Written at all, even with a value of the wrong kind, which has a note of its own.
+        // Named at all, even with a value of the wrong kind (which gets its own note).
         let names_a_key =
             section.table.contains_key("modifier") || section.table.contains_key("key");
         let modifier = section.value("modifier", skipped);
@@ -503,7 +479,6 @@ fn launcher(raw: &RawConfig, launchers: &Launchers, notes: &mut Vec<String>) -> 
     }
 }
 
-/// The options of `launcher` as read; empty without its section.
 fn options_of(
     launcher: &dyn LauncherDescriptor,
     tables: &BTreeMap<String, OptionTable>,
@@ -790,7 +765,6 @@ mod tests {
             notes,
             ["launcher.generic.executable = \"C:\\\" cannot be used; using \"steam\""]
         );
-        // With Steam's own options.
         assert_eq!(settings.launcher.id, "steam");
         assert_eq!(
             settings.launcher.options,
@@ -814,7 +788,6 @@ mod tests {
             OptionTable::from([("wifi_indicator".to_string(), SettingValue::Bool(false))])
         );
 
-        // Also the section of a launcher not in use.
         let text = "[launcher.generic]\narguments = \"--fullscreen\"\n";
         let (settings, notes) = resolve_text(text, "ONE-NETBOOK");
         assert_eq!(
@@ -829,7 +802,7 @@ mod tests {
 
     #[test]
     fn a_removed_key_is_an_unknown_one_and_carries_nothing_over() {
-        // No migration (ADR-0013, amended): the old Wi-Fi switch is a key like any typo.
+        // No migration of removed keys (ADR-0013).
         let (settings, notes) = resolve_text("[features]\nwifi_indicator = false", "ONE-NETBOOK");
         assert_eq!(
             notes,
@@ -900,7 +873,6 @@ mod tests {
         assert!(settings.button_remap);
         assert_eq!(settings.exit_policy, ExitPolicy::Nothing);
 
-        // Also under a known section, as a launcher Mujina does not have yet.
         let text = "[launcher]\nkind = \"steam\"\n[launcher.playnite]\npath = 'C:\\P.exe'";
         let (settings, notes) = resolve_text(text, "ONE-NETBOOK");
         assert_eq!(notes, ["[launcher.playnite] ignored: unknown section"]);
@@ -999,7 +971,6 @@ mod tests {
             resolve_text("[device.button]\nmodifier = \"LCTRL\"", "ONE-NETBOOK");
         assert_eq!(notes.len(), 1, "{notes:?}");
         assert!(notes[0].starts_with("[device.button] ignored"), "{notes:?}");
-        // The profile's button is used instead.
         assert_eq!(settings.device.id.as_deref(), Some("onexplayer"));
 
         // A section left empty by unsetting both keys says nothing.
@@ -1008,7 +979,6 @@ mod tests {
         assert!(notes.is_empty(), "{notes:?}");
         assert_eq!(settings.device.id.as_deref(), Some("onexplayer"));
 
-        // injected_only on its own describes no button and changes nothing.
         let text = "[device.button]\n# modifier = \"LCTRL\"\ninjected_only = false";
         let (settings, notes) = resolve_text(text, "ONE-NETBOOK");
         assert_eq!(
@@ -1023,8 +993,6 @@ mod tests {
 
     #[test]
     fn a_button_of_ones_own_whose_keys_cannot_be_read_leaves_the_profile_in_charge() {
-        // Both keys of the wrong kind: skipped with notes of their own, and injected_only, which
-        // is kept since the section named keys, describes no button without them.
         let text = "[device.button]\nmodifier = 5\nkey = 5\ninjected_only = false";
         let (settings, notes) = resolve_text(text, "ONE-NETBOOK");
         assert_eq!(settings.device.id.as_deref(), Some("onexplayer"));
@@ -1039,7 +1007,6 @@ mod tests {
         assert_eq!(settings.device.id.as_deref(), Some("onexplayer"));
         assert_eq!(notes.len(), 1, "{notes:?}");
 
-        // One key readable: half a button, which is said, and the profile stays.
         let text = "[device.button]\nmodifier = 5\nkey = \"D\"\ninjected_only = false";
         let (settings, notes) = resolve_text(text, "ONE-NETBOOK");
         assert_eq!(settings.device.id.as_deref(), Some("onexplayer"));

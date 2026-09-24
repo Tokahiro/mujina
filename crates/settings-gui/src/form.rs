@@ -1,5 +1,4 @@
-//! Between the pages and `config.toml`: which choice means which value, and how a text field
-//! becomes a change. Kept free of the window so it can be tested.
+//! Between the pages and `config.toml`: choice indices to values, text fields to changes.
 
 use mujina_application::settings::schema::{self, SettingKind, SettingSpec, TextFormat};
 use mujina_application::settings::{SettingChange, SettingValue};
@@ -9,9 +8,8 @@ use crate::feedback::Refusal;
 
 /// The first two entries of the device profile list; built-in profiles follow.
 pub const PROFILE_CHOICES: [&str; 2] = ["auto", "none"];
-/// The values of the core choice `key` (`launcher.on_exit`, `interface.language`), in the order
-/// of the list that shows them; the first is the default. The languages are as Windows, then
-/// those `lang/` has, English (the texts as written) first.
+/// The values of the core choice `key` in list order; the first is the default. For
+/// `interface.language`: "auto", then the languages `lang/` has, English first.
 pub fn choices(key: &str) -> &'static [&'static str] {
     match schema::find(key, &[], &[]).map(|spec| spec.kind) {
         Some(SettingKind::Choice { values, .. }) => values,
@@ -28,7 +26,7 @@ pub fn index_of(choices: &[&str], value: &str) -> i32 {
         .unwrap_or(0)
 }
 
-/// The value a list entry stands for; the first entry is the default and is stored as "unset".
+/// `None`, the default entry, unsets `key`.
 pub fn choice(key: &str, value: Option<&str>) -> SettingChange {
     match value {
         Some(value) => SettingChange::set(key, SettingValue::Text(value.to_string())),
@@ -36,9 +34,8 @@ pub fn choice(key: &str, value: Option<&str>) -> SettingChange {
     }
 }
 
-/// What a text field asks for, as the setting it edits (`spec`, where there is one) takes a text:
-/// a key combination checked, a list split as a command line, anything else as typed. An empty
-/// field restores the default.
+/// The changes for a text field: a key combination is checked, a list split like a command line,
+/// anything else stored as typed. An empty field restores the default.
 pub fn text_changes(
     key: &str,
     text: &str,
@@ -91,7 +88,6 @@ fn button_changes(text: &str) -> Result<Vec<SettingChange>, Refusal> {
     }
 }
 
-/// How the button field shows `[device.button]`.
 pub fn button_text(modifier: &str, key: &str) -> String {
     if modifier.is_empty() || key.is_empty() {
         String::new()
@@ -100,7 +96,7 @@ pub fn button_text(modifier: &str, key: &str) -> String {
     }
 }
 
-/// A switch's change. The detailed log is a level in the file, not a flag.
+/// The detailed log is a level in the file, not a flag.
 pub fn flag_change(key: &str, on: bool) -> SettingChange {
     match key {
         "logging.debug" if on => {
@@ -111,7 +107,6 @@ pub fn flag_change(key: &str, on: bool) -> SettingChange {
     }
 }
 
-/// A stored value as a field shows it.
 pub fn as_text(value: Option<SettingValue>) -> String {
     match value {
         Some(SettingValue::Text(text)) => text,
@@ -122,16 +117,13 @@ pub fn as_text(value: Option<SettingValue>) -> String {
     }
 }
 
-/// A launcher's arguments as typed on a command line, split by the Microsoft C runtime's rules,
-/// which Rust programs follow too: spaces and tabs separate, quotes group, and backslashes escape
-/// only in front of a quote. `CommandLineToArgvW` differs only in reading two quotes inside
-/// quotes, which [`join_arguments`] never writes. The text holds arguments only, so the program
-/// name's rules do not apply.
+/// Splits a launcher's arguments by the Microsoft C runtime's rules, which Rust programs follow
+/// too. Arguments only: the program name's rules do not apply.
+/// `CommandLineToArgvW` differs only on `""` inside quotes, which [`join_arguments`] never writes.
 pub fn split_arguments(text: &str) -> Vec<String> {
     let mut arguments = Vec::new();
     let mut current = String::new();
-    // `""` is an argument too, an empty one: being in an argument is not the same as having
-    // text in it.
+    // `""` is an empty argument, so being in one differs from having text in it.
     let mut in_argument = false;
     let mut in_quotes = false;
     let mut chars = text.chars().peekable();
@@ -184,9 +176,7 @@ pub fn split_arguments(text: &str) -> Vec<String> {
     arguments
 }
 
-/// The arguments as one line that [`split_arguments`] reads back the same: an empty argument or
-/// one with a space or tab in quotes, and every quote escaped with the backslashes in front of it
-/// doubled.
+/// Joins arguments into one line that [`split_arguments`] reads back unchanged.
 pub fn join_arguments(arguments: &[String]) -> String {
     let mut line = String::new();
     for (index, argument) in arguments.iter().enumerate() {
@@ -222,8 +212,7 @@ pub fn join_arguments(arguments: &[String]) -> String {
 mod tests {
     use super::*;
 
-    /// A text field's change, as the page makes it: by the setting of `key` among those Mujina
-    /// has.
+    /// `super::text_changes` with the spec looked up as the page does.
     fn text_changes(key: &str, text: &str) -> Result<Vec<SettingChange>, Refusal> {
         let launchers = mujina_app::tool::launchers();
         let spec = schema::find(key, launchers.all, mujina_app::tool::devices().all);
@@ -355,7 +344,6 @@ mod tests {
             let list = owned(list);
             assert_eq!(split_arguments(&join_arguments(&list)), list, "{list:?}");
         }
-        // Typed text keeps its arguments through being stored and shown again.
         for line in [r#"a"b"" c d"#, r#"a\\\\"b c" d e"#, r#""ab\"c" "\\" d"#] {
             let arguments = split_arguments(line);
             assert_eq!(split_arguments(&join_arguments(&arguments)), arguments);

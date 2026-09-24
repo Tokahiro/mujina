@@ -29,10 +29,8 @@ use windows_sys::Win32::System::Threading::{
 use crate::error::Win32Error;
 use crate::wide::{from_wide, to_wide};
 
-/// `GetExitCodeProcess` reports this while the process has not exited.
 const STILL_ACTIVE: u32 = 259;
 
-/// Opens another process with `access`; `None` if it is gone or not ours to open.
 fn open(pid: u32, access: PROCESS_ACCESS_RIGHTS) -> Option<OwnedHandle> {
     // SAFETY: plain call; failure is reported as a null handle.
     let handle = unsafe { OpenProcess(access, 0, pid) };
@@ -40,7 +38,6 @@ fn open(pid: u32, access: PROCESS_ACCESS_RIGHTS) -> Option<OwnedHandle> {
     (!handle.is_null()).then(|| unsafe { OwnedHandle::from_raw_handle(handle) })
 }
 
-/// Whether this process runs with administrator rights (an elevated token).
 pub fn is_elevated() -> bool {
     let mut token: HANDLE = std::ptr::null_mut();
     // SAFETY: the pseudo handle of the current process needs no closing; `token` is writable.
@@ -64,7 +61,6 @@ pub fn is_elevated() -> bool {
     ok != 0 && elevation.TokenIsElevated != 0
 }
 
-/// Whether a process with this id exists and has not exited.
 pub fn is_running(pid: u32) -> bool {
     let Some(process) = open(pid, PROCESS_QUERY_LIMITED_INFORMATION) else {
         return false;
@@ -75,34 +71,30 @@ pub fn is_running(pid: u32) -> bool {
     ok != 0 && code == STILL_ACTIVE
 }
 
-/// Whether the process has a package identity (a packaged app, such as the Xbox app or a Store
-/// app). `false` also when the process cannot be opened.
+/// Whether the process has a package identity; `false` also when it cannot be opened.
 pub fn is_packaged(pid: u32) -> bool {
     let Some(process) = open(pid, PROCESS_QUERY_LIMITED_INFORMATION) else {
         return false;
     };
     let mut length: u32 = 0;
-    // SAFETY: valid process handle with the access right GetPackageFamilyName asks for; a null
-    // buffer with length 0 asks for the length, which only a packaged process has.
+    // SAFETY: valid handle with query access; a null buffer with length 0 asks for the length,
+    // which only a packaged process has.
     let status =
         unsafe { GetPackageFamilyName(process.as_raw_handle(), &raw mut length, null_mut()) };
     status == ERROR_INSUFFICIENT_BUFFER
 }
 
-/// File name of the process image, e.g. `steamwebhelper.exe`.
 pub fn image_name(pid: u32) -> Option<String> {
     image_name_of(&open(pid, PROCESS_QUERY_LIMITED_INFORMATION)?)
 }
 
-/// Full path of the process image, e.g. `C:\Program Files (x86)\Steam\steam.exe`. Read from
-/// what Windows keeps about the process (`PROCESS_QUERY_LIMITED_INFORMATION`), not from the
-/// process's memory.
+/// Needs only `PROCESS_QUERY_LIMITED_INFORMATION`, not access to the process's memory.
 pub fn image_path(pid: u32) -> Option<String> {
     image_path_of(&open(pid, PROCESS_QUERY_LIMITED_INFORMATION)?)
 }
 
-/// The running processes whose image path `matches`. Opens every process there is to read its
-/// path: for a button press, not for polling. Processes that cannot be opened are left out.
+/// Processes whose image path `matches`. Opens every process to read its path: for a button
+/// press, not for polling. Processes that cannot be opened are left out.
 pub fn running_from(mut matches: impl FnMut(&str) -> bool) -> Vec<u32> {
     let mut ids = Vec::new();
     walk_processes(|entry| {
@@ -113,15 +105,12 @@ pub fn running_from(mut matches: impl FnMut(&str) -> bool) -> Vec<u32> {
     ids
 }
 
-/// File name of the image of the process that `process` is a handle on, which needs
-/// `PROCESS_QUERY_LIMITED_INFORMATION` or more (QueryFullProcessImageNameW).
 fn image_name_of(process: &OwnedHandle) -> Option<String> {
     let path = image_path_of(process)?;
     path.rsplit(['\\', '/']).next().map(str::to_string)
 }
 
-/// Full path of the image of the process that `process` is a handle on; as for
-/// [`image_name_of`].
+/// `process` needs `PROCESS_QUERY_LIMITED_INFORMATION` or more.
 fn image_path_of(process: &OwnedHandle) -> Option<String> {
     let mut buffer = [0u16; 1024];
     let mut length = u32::try_from(buffer.len()).ok()?;
@@ -140,8 +129,7 @@ fn image_path_of(process: &OwnedHandle) -> Option<String> {
     Some(from_wide(&buffer[..length as usize]))
 }
 
-/// Shows `visit` the processes running right now, one by one, until it breaks. Shows none if
-/// Windows takes no snapshot of them.
+/// Calls `visit` for each process until it breaks; for none if Windows takes no snapshot.
 fn walk_processes(mut visit: impl FnMut(&PROCESSENTRY32W) -> ControlFlow<()>) {
     // SAFETY: plain call; failure is reported as INVALID_HANDLE_VALUE.
     let snapshot = unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) };
@@ -162,7 +150,7 @@ fn walk_processes(mut visit: impl FnMut(&PROCESSENTRY32W) -> ControlFlow<()>) {
     }
 }
 
-/// File names of all running processes, lower-cased. For occasional diagnosis, not for polling.
+/// Lower-cased. For occasional diagnosis, not for polling.
 pub fn running_image_names() -> Vec<String> {
     let mut names = Vec::new();
     walk_processes(|entry| {
@@ -172,8 +160,7 @@ pub fn running_image_names() -> Vec<String> {
     names
 }
 
-/// Process id of a running process with this image file name, compared without case. For
-/// occasional lookup, not for polling.
+/// Compares the image file name without case. For occasional lookup, not for polling.
 pub fn pid_of_image(name: &str) -> Option<u32> {
     let mut found = None;
     walk_processes(|entry| {
@@ -213,19 +200,15 @@ impl ProcessWatch {
         self.handle.as_raw_handle()
     }
 
-    /// How long this watch has existed.
     pub fn observed_for(&self) -> Duration {
         self.since.elapsed()
     }
 
-    /// File name of the process image, e.g. `steam.exe`. Asked through the watch's own handle,
-    /// which keeps the process object, and with it the id, from being reused: the name is that of
-    /// the process watched, even if it has ended since.
+    /// Still the watched process's name after it ended, as the handle keeps the id from reuse.
     pub fn image_name(&self) -> Option<String> {
         image_name_of(&self.handle)
     }
 
-    /// The exit code, once the process has exited.
     pub fn exit_code(&self) -> Option<u32> {
         let mut code: u32 = 0;
         // SAFETY: valid process handle with query access; `code` is writable.
@@ -240,23 +223,14 @@ impl AsHandle for ProcessWatch {
     }
 }
 
-/// `PROCESS_CREATION_DESKTOP_APP_BREAKAWAY_ENABLE_PROCESS_TREE`: "The process being created will
-/// create any child processes outside of the desktop app runtime environment" (Microsoft's
-/// UpdateProcThreadAttribute reference). Defined here rather than taken from the windows-sys
-/// feature that carries it.
+/// `PROCESS_CREATION_DESKTOP_APP_BREAKAWAY_ENABLE_PROCESS_TREE`: the child's own children start
+/// outside the desktop app runtime (see UpdateProcThreadAttribute).
 const DESKTOP_APP_BREAKAWAY_ENABLE_PROCESS_TREE: u32 = 0x01;
 
-/// Starts `program` with `arguments` and does not wait for it, in a way that keeps what it
-/// starts in turn out of this process's package: a program that may remove the package it was
-/// started from (Mujina Setup, started by Mujina Settings) must not be one of that package's
-/// processes, which the removal stops.
-///
-/// When this process runs from a package, the child is created with the desktop app policy
-/// `BREAKAWAY_ENABLE_PROCESS_TREE`, which puts the child's own children outside the package. The
-/// child itself should check [`crate::package::family_name`] and start itself once more if it
-/// still has the package's identity. `arguments` are plain words such as `--uninstall`: anything
-/// with a space or a quote is refused, so no quoting rules are involved. The child starts in the
-/// system directory, not in a folder it might want to delete.
+/// Starts `program` without waiting, so that what it starts is outside this process's package
+/// and survives the package's removal. From a package only the child's children break away: a
+/// child that [`crate::package::family_name`] still finds packaged should restart itself.
+/// `arguments` must be plain words (no space or quote). The child starts in the system directory.
 pub fn spawn_outside_package(program: &Path, arguments: &[&str]) -> Result<(), Win32Error> {
     const INVALID_PARAMETER: Win32Error = Win32Error {
         call: "CreateProcessW",
@@ -292,10 +266,8 @@ pub fn spawn_outside_package(program: &Path, arguments: &[&str]) -> Result<(), W
     }
     // SAFETY: PROCESS_INFORMATION is plain data for which all-zero is a valid value.
     let mut process: PROCESS_INFORMATION = unsafe { std::mem::zeroed() };
-    // SAFETY: the strings are NUL-terminated and outlive the call; the command line is writable,
-    // as CreateProcessW requires; `startup` carries its size and, with
-    // EXTENDED_STARTUPINFO_PRESENT, an initialised attribute list that outlives the call; no
-    // handles are inherited.
+    // SAFETY: NUL-terminated strings outlive the call; the command line is writable, as required;
+    // `startup` has its size and, when flagged, an initialised list that outlives the call.
     let created = unsafe {
         CreateProcessW(
             application.as_ptr(),
@@ -321,7 +293,6 @@ pub fn spawn_outside_package(program: &Path, arguments: &[&str]) -> Result<(), W
     Ok(())
 }
 
-/// A process creation attribute list with one attribute, deleted and freed when dropped.
 struct AttributeList {
     /// The list's memory, in pointer-sized units so that it is aligned for it.
     buffer: Vec<usize>,
@@ -330,11 +301,9 @@ struct AttributeList {
 }
 
 impl AttributeList {
-    /// The desktop app policy [`DESKTOP_APP_BREAKAWAY_ENABLE_PROCESS_TREE`].
     fn desktop_app_breakaway() -> Result<Self, Win32Error> {
         let mut size: usize = 0;
-        // SAFETY: a null list with a size to fill is the documented way to ask for the size; it
-        // fails with ERROR_INSUFFICIENT_BUFFER, which is expected.
+        // SAFETY: a null list asks for the size; it then fails with ERROR_INSUFFICIENT_BUFFER.
         unsafe { InitializeProcThreadAttributeList(null_mut(), 1, 0, &raw mut size) };
         let mut buffer = vec![0usize; size.div_ceil(size_of::<usize>()).max(1)];
         // SAFETY: `buffer` is writable for at least `size` bytes, the size just asked for.
@@ -347,8 +316,7 @@ impl AttributeList {
             ));
         }
         let policy = Box::new(DESKTOP_APP_BREAKAWAY_ENABLE_PROCESS_TREE);
-        // SAFETY: the list is initialised; the value is a DWORD, as the attribute wants, and is
-        // boxed so that it stays where it is for as long as the list lives.
+        // SAFETY: initialised list; the value is a DWORD, boxed so it lives as long as the list.
         let updated = unsafe {
             UpdateProcThreadAttribute(
                 buffer.as_mut_ptr().cast(),
@@ -392,8 +360,7 @@ fn parentage() -> Vec<(u32, u32)> {
     pairs
 }
 
-/// The processes started by `root`, by those, and so on; `root` itself is not included. A chain
-/// ends where a process in between has exited. For a rare event, not for polling.
+/// Excludes `root`; a chain ends where a process in between has exited. Not for polling.
 pub fn descendants(root: u32) -> Vec<u32> {
     descendants_in(&parentage(), root)
 }

@@ -1,11 +1,9 @@
-// The controls Mujina Settings and Mujina Setup share: a card, the focus frame, the outlined
-// button and the spinner. Sizes are in `Theme.u`: the handheld scale in Settings, 1 px in Setup,
-// which never sets the density. Colours come from the theme.
+// Controls shared by Mujina Settings and Mujina Setup. Sizes are in `Theme.u`, which is 1 px in
+// Setup: it never sets the density.
 
 import { Theme } from "theme.slint";
 import { Icons } from "icons.slint";
 
-// A group of rows.
 export component Card inherits Rectangle {
     in property <length> inset-x: 8 * Theme.u;
     in property <length> inset-y: 8 * Theme.u;
@@ -25,9 +23,8 @@ export component Card inherits Rectangle {
     }
 }
 
-// What a focusable thing looks like when the controller or the keyboard is on it, pressed, or
-// switched off. `glow` is the design's outer shadow; Slint has no negative spread, so it is a
-// smaller blur. What it is to assistive technology says the control that uses it.
+// How a focusable control looks when focused, pressed or disabled; its user sets the accessible
+// role. `glow`: Slint has no negative shadow spread, so the design's shadow is a smaller blur.
 export component FocusFrame inherits Rectangle {
     in property <bool> focused;
     in property <bool> pressed;
@@ -49,8 +46,7 @@ export component FocusFrame inherits Rectangle {
     animate background { duration: 120ms; }
 }
 
-// An outlined button with an icon. `accent` draws the accent outline and text, otherwise a
-// neutral one. `turns` rotates the icon once per increment (Check again).
+// `turns` spins the icon once per increment.
 export component OutlineButton inherits FocusFrame {
     in property <image> icon;
     in property <string> text;
@@ -105,7 +101,6 @@ export component OutlineButton inherits FocusFrame {
     }
 }
 
-// A faint ring with a bright quarter turning on it, once every 0.8 s.
 export component Spinner inherits Rectangle {
     in property <length> size: 17 * Theme.u;
     in property <color> tint: Theme.accent-focus;

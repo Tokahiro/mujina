@@ -17,9 +17,7 @@ pub fn developer_mode() -> bool {
     )
 }
 
-/// The id of the check of Developer Mode.
 pub const DEVELOPER_MODE: &str = "developer mode";
-/// The id of the check of the background agent.
 pub const AGENT: &str = "agent";
 
 struct DeveloperMode;
@@ -107,8 +105,8 @@ impl Check for ConflictingTools {
     }
 
     fn examine(&self) -> Finding {
-        // Home-app competitors fight whatever the launcher. `steambackmenu.exe` stays among
-        // them until it is known whether it takes the device button with any launcher.
+        // Home-app competitors conflict with any launcher. `steambackmenu.exe` stays here until it
+        // is known whether it takes the device button with any launcher.
         const KNOWN: [&str; 3] = ["steambackmenu.exe", "anyfse.exe", "omniconsole.exe"];
         let running = process::running_image_names();
         let found: Vec<&str> = KNOWN
@@ -130,9 +128,7 @@ impl Check for ConflictingTools {
     }
 }
 
-/// All Windows-side checks. `conflicting`: the programs that fight with Mujina over the launcher
-/// in use (its descriptor's list). `xbox_mode`: whether Xbox mode is on, where the agent has to
-/// run.
+/// `conflicting`: the rival programs the launcher's descriptor names.
 pub fn all(conflicting: &'static [&'static str], xbox_mode: FseState) -> Vec<Box<dyn Check>> {
     vec![
         Box::new(DeveloperMode),

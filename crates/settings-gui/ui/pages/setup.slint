@@ -1,6 +1,4 @@
-// Setup: what starts in Xbox mode, the device button, what Mujina fixes, and the details under
-// Advanced. Every change is stored at once; Rust answers with a toast. The core settings have
-// rows of their own here; a launcher's and a device's come from Rust, built from their settings.
+// Setup: the core settings' rows are here; a launcher's and a device's own rows come from Rust.
 
 import { Theme } from "@mujina/theme.slint";
 import { Icons } from "@mujina/icons.slint";
@@ -9,16 +7,14 @@ import { Group } from "../controls.slint";
 import { ScrollPage } from "../page.slint";
 import { RowItem, RowData, RowKind, RowSection, Rows, PluginRows } from "../rows.slint";
 
-// What config.toml says, as the pages show it. Choices are indices into the lists the pages and
-// the Rust side agree on; an empty text means "the default".
+// Choices are indices into the lists the pages and Rust agree on; an empty text means the default.
 export struct Config {
-    // Into the launcher names, which Rust lists from the launchers Mujina has: the one shown,
-    // which may be one being chosen.
+    // Index into the launcher names; may be a launcher being chosen.
     launcher-kind: int,
     // The launcher shown tells when a game runs, so the starting screen row applies.
     game-detection: bool,
-    // It cannot keep its starting screen with its options as they are: without the setting
-    // `start-screen-needs` names (in the app's language), where one of its switches is it.
+    // The starting screen is unavailable with the options as they are; `start-screen-needs`
+    // names the one switch that would allow it, if there is one.
     start-screen-off: bool,
     start-screen-needs: string,
     on-exit: int,
@@ -38,7 +34,7 @@ export struct Config {
 
 export component SetupPage inherits Rectangle {
     in property <Config> config;
-    // The launchers Mujina has, by name, in the order Rust lists them.
+    // In the order Rust lists them.
     in property <[string]> launcher-names;
     // Automatic, None, then the built-in profiles.
     in property <[string]> profiles;
@@ -53,7 +49,7 @@ export component SetupPage inherits Rectangle {
     property <bool> games: root.config.game-detection;
     property <bool> advanced;
 
-    // The rows, by group. Changes go to Rust through `Change`, by key.
+    // Changes go to Rust through `Change`, by key.
     property <[RowData]> start-rows: [
         {
             kind: RowKind.choice,
@@ -181,8 +177,7 @@ export component SetupPage inherits Rectangle {
         }
     ];
 
-    // Where each group's rows start: the page's rows are numbered in order, each group after the
-    // ones before it.
+    // Where each group's rows start in the page's numbering.
     property <int> launcher-at: root.start-rows.length;
     property <int> button-at: root.launcher-at + root.launcher.main.length;
     property <int> device-at: root.button-at + root.button-rows.length;
@@ -208,7 +203,6 @@ export component SetupPage inherits Rectangle {
         { rows: root.device.advanced, hidden: !root.advanced }
     ]);
 
-    // A button row or the Advanced header.
     function pressed(key: string) {
         if (key == "capture") {
             root.capture();
@@ -221,7 +215,6 @@ export component SetupPage inherits Rectangle {
         page.enter();
     }
 
-    // Back from the capture overlay, on the same row.
     public function resume() {
         page.resume();
     }

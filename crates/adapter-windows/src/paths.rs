@@ -4,12 +4,8 @@ use std::path::PathBuf;
 
 use mujina_winutil::package;
 
-/// The copy of Mujina Setup that stays after installing the package of `family`,
-/// `%LOCALAPPDATA%\Mujina\<family>\mujina-setup.exe`: the check at sign-in runs it, and Mujina
-/// Settings' "Remove Mujina" starts it. Outside the package, so that it outlives it; one per
-/// family, so that a CI build installed beside a release keeps its own and removes only itself.
-/// `None` without `LOCALAPPDATA`; the file may not exist (a package installed some other way has
-/// none).
+/// Mujina Setup's copy for `family`, kept outside the package to outlive it, and per family so a
+/// CI build beside a release removes only itself. `None` without `LOCALAPPDATA`; may not exist.
 pub fn retained_setup(family: &str) -> Option<PathBuf> {
     let local = std::env::var_os("LOCALAPPDATA")?;
     Some(
@@ -20,10 +16,8 @@ pub fn retained_setup(family: &str) -> Option<PathBuf> {
     )
 }
 
-/// The directory for logs and configuration.
-///
-/// Packaged: the package's `LocalState` folder, which Windows removes on uninstall. Unpackaged
-/// (development): next to the executable.
+/// For logs and configuration: the package's `LocalState` folder, which Windows removes on
+/// uninstall, or next to the executable when unpackaged (development).
 pub fn data_dir() -> PathBuf {
     if let (Some(family), Some(local)) = (package::family_name(), std::env::var_os("LOCALAPPDATA"))
     {

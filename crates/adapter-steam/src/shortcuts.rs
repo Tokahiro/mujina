@@ -1,9 +1,5 @@
-//! Steam's keyboard shortcuts.
-//!
-//! `Ctrl+1` (Steam menu) and `Ctrl+2` (quick access) are fixed in Big Picture. The in-game
-//! overlay shortcut is a user setting, stored per account in `localconfig.vdf` as
-//! `"InGameOverlayShortcutKey"  "Shift\tKEY_TAB"`; the entry is absent while the default
-//! (`Shift+Tab`) is in effect.
+//! Steam's keyboard shortcuts. The overlay's is set per account in `localconfig.vdf`, as
+//! `"InGameOverlayShortcutKey"  "Shift\tKEY_TAB"`; absent while the default is in effect.
 
 use std::path::Path;
 
@@ -11,6 +7,7 @@ use mujina_domain::keys::{KeyChord, VirtualKey};
 
 const SETTING: &str = "\"InGameOverlayShortcutKey\"";
 
+/// Fixed in Big Picture, unlike the overlay's.
 pub fn menu() -> KeyChord {
     KeyChord::pair(VirtualKey::LCONTROL, VirtualKey::DIGIT_1)
 }
@@ -30,7 +27,6 @@ pub fn configured_overlay(steam_directory: &Path, account_id: u32) -> Option<Key
     parse_overlay(&String::from_utf8_lossy(&text))
 }
 
-/// Finds the setting in VDF text and translates its value.
 pub fn parse_overlay(vdf: &str) -> Option<KeyChord> {
     let line = vdf
         .lines()
@@ -49,7 +45,6 @@ pub fn parse_overlay(vdf: &str) -> Option<KeyChord> {
     KeyChord::from_keys(&keys?)
 }
 
-/// Steam names modifiers `Shift`/`Ctrl`/`Alt` and keys `KEY_<NAME>`.
 fn translate(token: &str) -> Option<VirtualKey> {
     match token.to_ascii_uppercase().as_str() {
         "SHIFT" => Some(VirtualKey::LSHIFT),

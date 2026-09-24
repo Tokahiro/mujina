@@ -1,8 +1,6 @@
 version: 2
 updates:
-  # Crates: one grouped pull request per week for compatible updates; majors come one by one.
-  # Every build uses --locked, so Cargo.lock only changes through these pull requests (or a
-  # deliberate `cargo update` in a pull request of its own).
+  # Compatible updates in one weekly pull request; majors come one by one.
   - package-ecosystem: cargo
     directory: /
     schedule:

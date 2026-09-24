@@ -30,12 +30,10 @@ use crate::registry;
 /// Windows may start the home app a little before it reports the experience as active.
 const FSE_GRACE: Duration = Duration::from_secs(120);
 
-/// The configuration as the agent re-reads it when told it changed: says in the log what it
-/// found, follows the log level, and names what waits for the next session.
+/// Re-read when the configuration changed; logs what it found and what waits for the next session.
 struct AgentConfig {
     file: ConfigFile,
     started_with: Settings,
-    /// The launcher running this session.
     launcher: &'static dyn LauncherDescriptor,
     /// What runs the device this session started with.
     device_runtime: &'static dyn DeviceRuntime,
@@ -66,8 +64,6 @@ impl SettingsSource for AgentConfig {
         } else {
             log::info!("the launcher changes the next time Xbox mode is entered");
         }
-        // Another device of the same runtime (another key-chord device) is taken over at once, and
-        // so is none; a device another runtime runs has to wait.
         if registry::device_waits(self.device_runtime, loaded.settings.device.id.as_deref()) {
             log::info!("the device changes the next time Xbox mode is entered");
         }
@@ -86,7 +82,7 @@ fn level(detailed: bool) -> LevelFilter {
 /// `standalone`: keep running on the desktop (troubleshooting).
 pub fn run(standalone: bool) -> ExitCode {
     let data_dir = paths::data_dir();
-    // The `debug` marker file still works; the configuration is the documented way.
+    // An undocumented alternative to the configuration's log level.
     let debug_marker = data_dir.join("debug").exists();
     let _ = log_file::init(&data_dir, "agent", level(debug_marker));
 
@@ -99,15 +95,11 @@ pub fn run(standalone: bool) -> ExitCode {
         "started: version {}, standalone {standalone}",
         env!("CARGO_PKG_VERSION")
     );
-    // Opened first, so that as little as possible of what the home role signals while the agent
-    // gets ready is missed: the home role starts the agent, then the launcher. A signal before
-    // this point is lost with its event (`launcher_signal::notify`); the look for the launcher's
-    // process before the first wait finds a launcher started meanwhile all the same.
+    // Opened first: the home role starts the agent, then the launcher, and a signal sent before
+    // this point is lost. A launcher started meanwhile is still found by its process.
     let mut sources = signals();
-    // This thread activates the home role through ShellExecute, which wants COM first. The
-    // shell wrapper enters an STA for each call anyway; entered here for the thread's life, COM
-    // is not closed, nor what the shell loaded unloaded, after every activation. The thread
-    // pumps messages throughout, as an STA thread must.
+    // ShellExecute, which activates the home role, wants COM; an STA for the thread's life keeps
+    // it from being torn down after every activation (ADR-0014).
     let _apartment = com::Apartment::sta().inspect_err(|code| {
         log::warn!("COM could not be initialised (error {code:#x}); activations may fail");
     });
@@ -180,20 +172,16 @@ pub fn run(standalone: bool) -> ExitCode {
         said: Cell::new(false),
     });
     let last_words = Rc::clone(&farewell);
-    // What the button led to is named as the user knows it, e.g. "Steam Big Picture".
     let launcher_name = adapters.launcher.display_name();
     event_loop.run(
         &mut |event| {
-            // After the closing lines nothing is counted or logged (only the session ending
-            // comes then), so they stay the last lines and their count stays true.
+            // After the closing lines nothing is counted or logged, so they stay the last lines.
             if !farewell.said.get() {
                 farewell.events.set(farewell.events.get() + 1);
                 log::debug!("{event:?}");
             }
             let flow = service.handle(&event);
-            // One line per press, in roles only: it shows that the press arrived, and what it
-            // came to and why, without the names of what the user had open. Taken in any case,
-            // and after the closing lines not logged, as the events are not.
+            // Roles only, no names of what the user had open. Always taken, even when not logged.
             if let Some(press) = service.take_press_report()
                 && !farewell.said.get()
             {
@@ -204,8 +192,6 @@ pub fn run(standalone: bool) -> ExitCode {
             }
             flow
         },
-        // What ends the session (a sign-out, a shutdown, the Restart Manager) is logged just
-        // before, by `session_end`, which has the message's flags.
         Box::new(move || last_words.say()),
     );
 
@@ -213,12 +199,11 @@ pub fn run(standalone: bool) -> ExitCode {
     ExitCode::SUCCESS
 }
 
-/// The session's closing lines. Said once: when the event loop ends, or before that from inside
+/// The session's closing lines, said once: when the event loop ends, or earlier from inside
 /// `WM_ENDSESSION`, after which Windows may end the process at any moment.
 struct Farewell {
     started: Instant,
     startup: Option<ProcessCost>,
-    /// Events handled before the closing lines; what comes after them is not counted.
     events: Cell<u64>,
     said: Cell<bool>,
 }
@@ -238,7 +223,6 @@ impl Farewell {
     }
 }
 
-/// Says why the agent leaves after `event`, before the closing lines.
 fn say_why_leaving(event: &AgentEvent) {
     match event {
         // Said just before, by `session_end`, which has the message's flags.
@@ -252,8 +236,7 @@ fn say_why_leaving(event: &AgentEvent) {
     }
 }
 
-/// The named events through which other Mujina processes speak to the agent, as wait sources
-/// of its event loop.
+/// The named events through which other Mujina processes speak to the agent.
 fn signals() -> Vec<Box<dyn WaitSource<AgentEvent>>> {
     let mut sources: Vec<Box<dyn WaitSource<AgentEvent>>> = Vec::new();
     match settings_signal::listen() {
@@ -271,7 +254,6 @@ fn signals() -> Vec<Box<dyn WaitSource<AgentEvent>>> {
     sources
 }
 
-/// What the agent starts with, for the log.
 fn describe(adapters: &Adapters) {
     for note in &adapters.settings.notes {
         log::warn!("configuration: {note}");
@@ -288,8 +270,7 @@ fn describe(adapters: &Adapters) {
     );
 }
 
-/// States what the session cost, so that "idle means idle" is a number anyone can check on their
-/// own device rather than a claim.
+/// Logs what the session cost, so that "idle means idle" can be checked on any device.
 fn log_cost(startup: Option<ProcessCost>, session: Duration, events: u64) {
     let (Some(startup), Some(total)) = (startup, cost::of_this_process()) else {
         return;

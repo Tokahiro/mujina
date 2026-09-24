@@ -1,7 +1,5 @@
-//! A minimal client for the Chrome DevTools Protocol endpoint of Steam's embedded browser.
-//!
-//! Always `127.0.0.1`, never `localhost`: the latter resolves to `::1` first, where Steam does
-//! not listen.
+//! A minimal Chrome DevTools Protocol client for Steam's embedded browser. Always `127.0.0.1`,
+//! never `localhost`: that resolves to `::1` first, where Steam does not listen.
 
 use std::io::{ErrorKind, Read, Write};
 use std::net::{Ipv4Addr, SocketAddr, TcpStream};
@@ -10,8 +8,7 @@ use std::time::{Duration, Instant};
 use serde_json::{Value, json};
 use tungstenite::{Message, WebSocket};
 
-/// Loopback only: a listening port answers within a millisecond, so waiting longer than this only
-/// slows down probing for a Steam that is not up yet.
+/// A listening loopback port answers within a millisecond; longer only slows down probing.
 const CONNECT_TIMEOUT: Duration = Duration::from_millis(300);
 /// Also how long a call waits for its reply, whatever arrives meanwhile.
 const IO_TIMEOUT: Duration = Duration::from_secs(10);
@@ -20,8 +17,7 @@ const IO_TIMEOUT: Duration = Duration::from_secs(10);
 pub enum CdpError {
     /// The endpoint is not there, or the exchange with it failed.
     Link(String),
-    /// A call was sent, and no reply came in time. Unlike a [`Link`](Self::Link) failure, it may
-    /// have been carried out all the same.
+    /// No reply in time. Unlike a [`Link`](Self::Link) failure, the call may have been carried out.
     Timeout(String),
     /// A script ran and threw. The link itself works.
     Script(String),
@@ -65,7 +61,6 @@ fn open(port: u16) -> Result<TcpStream, CdpError> {
     Ok(stream)
 }
 
-/// Fetches the target list (`GET /json`).
 fn targets(port: u16) -> Result<Value, CdpError> {
     let mut stream = open(port)?;
     let request =
@@ -91,7 +86,6 @@ fn targets(port: u16) -> Result<Value, CdpError> {
     serde_json::from_slice(body).map_err(|cause| error("target list", cause))
 }
 
-/// The body of an HTTP response once it has arrived completely.
 fn complete_body(response: &[u8], closed: bool) -> Option<&[u8]> {
     let split = response
         .windows(4)
@@ -108,12 +102,10 @@ fn complete_body(response: &[u8], closed: bool) -> Option<&[u8]> {
     }
 }
 
-/// What Steam's embedded browser currently hosts, as far as Mujina cares.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct SteamUi {
     /// Websocket URL of the shared JavaScript context; it exists from early in Steam's start-up.
     pub shared_context: Option<String>,
-    /// Whether the Big Picture UI has been created.
     pub big_picture: bool,
 }
 
@@ -142,7 +134,7 @@ pub fn steam_ui(port: u16) -> Result<SteamUi, CdpError> {
     })
 }
 
-/// One debugging session. Scripts registered through it live exactly as long as it stays open.
+/// Scripts registered through a session live exactly as long as it stays open.
 pub struct Session {
     socket: WebSocket<TcpStream>,
     next_id: u64,
@@ -156,7 +148,6 @@ impl Session {
         Ok(Self { socket, next_id: 0 })
     }
 
-    /// Calls a protocol method and returns its `result`.
     pub fn call(&mut self, method: &str, params: &Value) -> Result<Value, CdpError> {
         self.call_until(method, params, Instant::now() + IO_TIMEOUT)
     }
@@ -213,8 +204,7 @@ impl Session {
         }
     }
 
-    /// Evaluates JavaScript and returns the resulting value. A script that throws is an error,
-    /// although the protocol answers it like any other.
+    /// A script that throws is an error, although the protocol answers it like any other.
     pub fn evaluate(&mut self, expression: &str) -> Result<Value, CdpError> {
         let result = self.call(
             "Runtime.evaluate",
@@ -224,8 +214,7 @@ impl Session {
     }
 }
 
-/// The value in the `result` of `Runtime.evaluate`, or what the script threw instead. A reply of
-/// another shape has no value.
+/// The value in a `Runtime.evaluate` result, or what the script threw. Any other shape is null.
 fn evaluated(mut result: Value) -> Result<Value, CdpError> {
     let Some(details) = result.get("exceptionDetails") else {
         // Not `result["result"]["value"]`: taking it needs the mutable index, which panics on
@@ -272,7 +261,6 @@ mod tests {
         Session::connect(port, &format!("ws://127.0.0.1:{port}/devtools/page/ABC")).unwrap()
     }
 
-    /// Reads the next request and returns its id.
     fn request_id(socket: &mut WebSocket<TcpStream>) -> Value {
         let text = socket.read().unwrap().into_text().unwrap();
         serde_json::from_str::<Value>(text.as_str()).unwrap()["id"].clone()
@@ -337,7 +325,6 @@ mod tests {
     fn a_reply_is_found_behind_any_number_of_events() {
         let port = fake_endpoint(|socket| {
             let id = request_id(socket);
-            // More than the 200 the client used to put up with.
             for _ in 0..500 {
                 let event = json!({ "method": "Page.frameNavigated", "params": {} });
                 socket.send(Message::text(event.to_string())).unwrap();
@@ -366,8 +353,7 @@ mod tests {
             .call_until("Runtime.evaluate", &json!({}), deadline)
             .unwrap_err();
         assert!(matches!(error, CdpError::Timeout(_)), "{error:?}");
-        // At the deadline, after skipping the event, not at the socket's own timeout; the rest is
-        // room for a slow runner.
+        // At the deadline, not at the socket's own timeout; the rest is room for a slow runner.
         let waited = started.elapsed();
         assert!(
             waited >= Duration::from_millis(250) && waited < Duration::from_secs(2),
@@ -375,8 +361,6 @@ mod tests {
         );
     }
 
-    /// Steam closed a session that was kept open (its web helper restarted, say): a call over it
-    /// fails at once, and as a broken link, not as a call that may have got through.
     #[test]
     fn a_session_closed_at_the_other_end_is_a_broken_link() {
         let port = fake_endpoint(|_| {});

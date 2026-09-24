@@ -1,29 +1,19 @@
-//! Recognition of device buttons that arrive as keyboard chords.
-//!
-//! Handheld companion software usually reports extra hardware buttons as synthetic keyboard
-//! chords: the `OneXPlayer` "show desktop" button is an injected `LWIN`+`D`, other buttons send
-//! three keys. [`ChordSetMatcher`] is the state machine that decides, key event by key event, what
-//! the input hook does, for every button of a device at once.
-//!
-//! It is allocation-free and constant-time because it runs inside a low-level keyboard hook,
-//! where Windows silently removes hooks that answer too slowly.
+//! Device buttons that arrive as keyboard chords. [`ChordSetMatcher`] runs inside a low-level
+//! keyboard hook, which Windows removes if it answers too slowly: no allocation, constant time.
 
 use core::fmt;
 
 use crate::button::ButtonId;
 use crate::keys::{ChordParseError, KeyChord, MAX_CHORD_KEYS, VirtualKey};
 
-/// Whether a key went down or up.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Direction {
     Down,
     Up,
 }
 
-/// Where a key event came from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Origin {
-    /// A real keyboard.
     Physical,
     /// Synthesized by another program.
     Injected,
@@ -34,36 +24,27 @@ pub enum Origin {
     Replayed,
 }
 
-/// One keyboard transition as seen by the input hook.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct KeyEvent {
     pub key: VirtualKey,
     pub direction: Direction,
     pub origin: Origin,
-    /// How the keyboard reported the key beyond its virtual key, so that an event held back goes
-    /// on as it came. The matcher never looks at it.
+    /// Carried so a held-back event is sent on exactly as it came; the matcher never reads it.
     pub scan: ScanCode,
 }
 
-/// A key's scan code, as the hook reported it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct ScanCode {
-    /// The hardware scan code; for a character a program typed as such (`VK_PACKET`), the UTF-16
-    /// unit it carries. Programs that read scan codes rather than virtual keys (many games) tell
-    /// keys apart by it.
+    /// The hardware scan code; for a `VK_PACKET` character, the UTF-16 unit it carries.
     pub code: u16,
-    /// Whether it is an extended scan code (`0xE0` first): the right Ctrl and Alt, the arrows and
-    /// the block above them, the keypad's Enter and Divide, the Windows keys. Without it a right
-    /// Ctrl reads as the left one, and an arrow as a keypad digit.
+    /// An `0xE0`-prefixed scan code; without it a right Ctrl reads as the left one.
     pub extended: bool,
 }
 
-/// The chord a device button produces: its keys pressed in order, the last one (the trigger)
-/// while the others are held, then all of them released.
+/// A device button's chord: the last key (the trigger) goes down while the others are held.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TriggerChord {
-    /// One to four different keys; the last is the trigger. The held ones may go down in any
-    /// order, since firmware does not always keep one.
+    /// One to four different keys. Firmware may press the held ones in any order.
     pub keys: KeyChord,
     /// Only react to synthesized input, so the same chord on a real keyboard keeps working.
     pub injected_only: bool,
@@ -83,7 +64,6 @@ impl TriggerChord {
         })
     }
 
-    /// The key that completes the chord.
     pub fn trigger(&self) -> VirtualKey {
         self.keys.keys().last().copied().unwrap_or(VirtualKey(0))
     }
@@ -94,7 +74,6 @@ impl TriggerChord {
         &keys[..keys.len().saturating_sub(1)]
     }
 
-    /// Whether an event of this origin can be part of the chord.
     fn admits(&self, origin: Origin) -> bool {
         match origin {
             Origin::Injected => true,
@@ -104,31 +83,22 @@ impl TriggerChord {
     }
 }
 
-/// What the hook must do with the event it just fed in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Verdict {
-    /// Let the event through untouched.
     Pass,
-    /// Hide the event from the rest of the system.
     Swallow,
-    /// Hide the event; this button was pressed.
     SwallowAndFire(ButtonId),
-    /// Hide the event: it, and whatever the matcher held back before it, is to be sent on again
-    /// in order ([`ChordSetMatcher::take_replay`]). Happens when held-back keys turned out to
-    /// start no button's chord, so nothing another program sends is ever lost.
+    /// Hide the event; it and everything held back before it are to be sent on in order
+    /// ([`ChordSetMatcher::take_replay`]), so no input is lost when keys start no chord after all.
     SwallowAndReplay,
 }
 
-/// How many events one replay holds: far more than arrive between the hook holding one back and
-/// its thread handing them on, which takes a single turn of the thread's message loop. Should a
-/// burst ever outgrow it, what does not fit passes as it comes, ahead of what is still queued:
-/// reordered, which may leave a key down, but not lost.
+/// Far more events than arrive in one turn of the hook thread's message loop. Overflow passes at
+/// once, ahead of the queue: reordered (a key may stay down), but not lost.
 pub const REPLAY_CAPACITY: usize = 64;
 
-/// How long, in milliseconds, events sent on may take to come back through the hook. They take
-/// milliseconds; one that never comes (another program's hook, installed later and so called
-/// first, took it; or Windows dropped it without saying so, as `SendInput` may) would otherwise
-/// keep the matcher holding keys back for as long as keys keep coming.
+/// How long replayed events may take to come back through the hook. One may never return: a hook
+/// installed later ran first and took it, or `SendInput` dropped it silently.
 pub const REPLAY_GIVE_UP_MS: u32 = 1000;
 
 /// Events to send on again, oldest first.
@@ -144,7 +114,6 @@ impl Replay {
     }
 }
 
-/// [`ChordSetMatcher::set`] was given more buttons than the matcher has room for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TooManyButtons {
     pub limit: usize,
@@ -180,19 +149,13 @@ enum State {
         chord: usize,
         down: u8,
     },
-    /// Swallowed keys started no chord and are being sent on. Until every one of them has come
-    /// back through the hook, what follows is held back and sent on after them: it was queued
-    /// before them, and would otherwise overtake them.
+    /// Swallowed keys started no chord and are being sent on. Until all have come back through the
+    /// hook, later events are held back too, or they would overtake the replay.
     Replaying,
 }
 
-/// State machine recognising the chords of up to `N` buttons (at most 32).
-///
-/// A whole chord is swallowed, the held keys included: letting `LWIN` through and swallowing only
-/// the trigger would make the shell open the Start menu when `LWIN` is released. Keys that begin
-/// some chord are held back until the next key decides; if it completes a chord the button
-/// fires, and if it shows that no chord is coming, everything held back is sent on in order.
-/// Where one chord is the beginning of another, the shorter fires.
+/// Recognises the chords of up to `N` (at most 32) buttons. A whole chord is swallowed, since a
+/// lone `LWIN` release would open Start; where one chord begins another, the shorter fires.
 #[derive(Debug)]
 pub struct ChordSetMatcher<const N: usize> {
     buttons: [Option<(ButtonId, TriggerChord)>; N],
@@ -206,10 +169,8 @@ pub struct ChordSetMatcher<const N: usize> {
     queued: usize,
     /// Sent on and not yet seen back.
     in_flight: usize,
-    /// When the replays still waited for began to go out (in_flight rose from 0), in the
-    /// caller's milliseconds: not the latest batch, so that keys arriving again and again cannot
-    /// put off giving up on one that never returns. It can be earlier than the oldest replay
-    /// still out, which only makes the wait end sooner.
+    /// When `in_flight` last rose from 0, in the caller's milliseconds. Not the latest batch, so a
+    /// stream of keys cannot put off giving up on one that never returns.
     in_flight_since: u32,
 }
 
@@ -220,7 +181,6 @@ impl<const N: usize> Default for ChordSetMatcher<N> {
 }
 
 impl<const N: usize> ChordSetMatcher<N> {
-    /// A matcher without buttons, which passes everything.
     pub const fn new() -> Self {
         const { assert!(N <= 32, "the candidates of a prefix are the bits of a u32") };
         Self {
@@ -250,15 +210,13 @@ impl<const N: usize> ChordSetMatcher<N> {
         Ok(())
     }
 
-    /// Starts over, for a hook that was installed again: a chord under way is given up as by
-    /// [`set`](Self::set), and what was sent on before is no longer waited for, since it may have
-    /// passed while there was no hook to see it.
+    /// For after the hook was installed again: gives up a chord under way as [`set`](Self::set)
+    /// does, and stops waiting for replays, which may have passed while no hook saw them.
     pub fn reset(&mut self) {
         self.give_up_chord();
         self.forget_in_flight();
     }
 
-    /// Feeds one event.
     pub fn feed(&mut self, event: KeyEvent) -> Verdict {
         match event.origin {
             Origin::Own => return Verdict::Pass,
@@ -286,14 +244,12 @@ impl<const N: usize> ChordSetMatcher<N> {
         }
     }
 
-    /// Whether events wait to be sent on.
     pub fn replay_pending(&self) -> bool {
         self.queued > 0
     }
 
-    /// The events to send on, oldest first, sent on at `now` (milliseconds, any clock that wraps
-    /// like `GetTickCount`); from now on they are waited for until they come back as
-    /// [`Origin::Replayed`], or until [`give_up_if_late`](Self::give_up_if_late) says so.
+    /// The events to send on, oldest first; `now` in milliseconds, on a clock that wraps like
+    /// `GetTickCount`. They are waited for until fed back as [`Origin::Replayed`].
     pub fn take_replay(&mut self, now: u32) -> Replay {
         let replay = Replay {
             events: self.queue,
@@ -308,9 +264,8 @@ impl<const N: usize> ChordSetMatcher<N> {
         replay
     }
 
-    /// Stops waiting for what was sent on once the replays have been going out longer than
-    /// [`REPLAY_GIVE_UP_MS`] at `now`, on the clock [`take_replay`](Self::take_replay) was given;
-    /// whether it gave up. Called before each [`feed`](Self::feed).
+    /// Stops waiting for replays out longer than [`REPLAY_GIVE_UP_MS`]; whether it gave up. Call it
+    /// before each [`feed`](Self::feed), on the clock of [`take_replay`](Self::take_replay).
     pub fn give_up_if_late(&mut self, now: u32) -> bool {
         if self.in_flight > 0 && now.wrapping_sub(self.in_flight_since) > REPLAY_GIVE_UP_MS {
             self.forget_in_flight();
@@ -319,21 +274,18 @@ impl<const N: usize> ChordSetMatcher<N> {
         false
     }
 
-    /// `count` events of a replay could not be sent (Windows refused them), so they will not
-    /// come back.
+    /// `count` events of a replay could not be sent, so they will not come back.
     pub fn replay_lost(&mut self, count: usize) {
         self.in_flight = self.in_flight.saturating_sub(count);
         self.settle();
     }
 
-    /// Stops waiting for events sent on: they did not come back, because another program's hook
-    /// took them before this one saw them.
+    /// Stops waiting for events sent on, for when they cannot come back through this hook.
     pub fn forget_in_flight(&mut self) {
         self.in_flight = 0;
         self.settle();
     }
 
-    /// How many events sent on have not come back yet.
     pub fn in_flight(&self) -> usize {
         self.in_flight
     }
@@ -342,7 +294,6 @@ impl<const N: usize> ChordSetMatcher<N> {
         if event.direction == Direction::Up {
             return Verdict::Pass;
         }
-        // A button of one key fires on it straight away.
         if let Some(index) = self.first(concerned, |chord| {
             chord.held().is_empty() && chord.trigger() == event.key
         }) {
@@ -382,8 +333,7 @@ impl<const N: usize> ChordSetMatcher<N> {
                 return Verdict::Swallow;
             }
         }
-        // Another key, or a held one let go: no chord is coming. The prefix and this event go
-        // back out in the order they came.
+        // Another key, or a held one let go: no chord is coming.
         for index in 0..self.prefix_len {
             self.push(self.prefix[index]);
         }
@@ -440,8 +390,7 @@ impl<const N: usize> ChordSetMatcher<N> {
         Verdict::SwallowAndFire(id)
     }
 
-    /// A chord under way is given up: the prefix is to be sent on, a fired chord's remaining
-    /// releases pass.
+    /// The prefix is to be sent on; a fired chord's remaining releases pass.
     fn give_up_chord(&mut self) {
         match self.state {
             State::Prefix => {
@@ -475,7 +424,6 @@ impl<const N: usize> ChordSetMatcher<N> {
         }
     }
 
-    /// The buttons whose chord takes events of `origin`.
     fn admitting(&self, origin: Origin) -> u32 {
         self.having(u32::MAX, |chord| chord.admits(origin))
     }
@@ -491,7 +439,6 @@ impl<const N: usize> ChordSetMatcher<N> {
             .fold(0, |bits, (index, _)| bits | (1 << index))
     }
 
-    /// The first button among `among` whose chord is `wanted`.
     fn first(&self, among: u32, wanted: impl Fn(&TriggerChord) -> bool) -> Option<usize> {
         let found = self.having(among, wanted);
         (found != 0)
@@ -500,9 +447,8 @@ impl<const N: usize> ChordSetMatcher<N> {
     }
 }
 
-/// Reads a device button out of observed key events: the keys pressed in order until the first
-/// of them is released, when that is at least two. Mujina's own keystrokes are ignored, and so
-/// are single keys pressed and released on their own.
+/// Reads a device button out of observed key events: the keys pressed until the first release,
+/// when at least two. Mujina's own keystrokes and single keys on their own are ignored.
 pub fn suggest_trigger(events: &[KeyEvent]) -> Option<TriggerChord> {
     let mut held = [VirtualKey(0); MAX_CHORD_KEYS];
     let mut len = 0;
@@ -595,12 +541,10 @@ mod tests {
         matcher
     }
 
-    /// The OneXPlayer's button: an injected LWIN+D.
     fn onexplayer() -> ChordSetMatcher<4> {
         matcher(&[(0, "LWIN+D", true)])
     }
 
-    /// Feeds each event and checks the verdict, naming the step that differs.
     fn table<const N: usize>(matcher: &mut ChordSetMatcher<N>, steps: &[(KeyEvent, Verdict)]) {
         for (step, (event, verdict)) in steps.iter().enumerate() {
             assert_eq!(matcher.feed(*event), *verdict, "step {step}: {event:?}");
@@ -618,7 +562,6 @@ mod tests {
                 (injected(D, Down), Swallow),
                 (injected(D, Up), Swallow),
                 (injected(LWIN, Up), Swallow),
-                // Back to idle: an unrelated key passes.
                 (injected(E, Down), Pass),
             ],
         );
@@ -703,8 +646,7 @@ mod tests {
 
     #[test]
     fn a_burst_after_a_mismatch_is_replayed_in_order() {
-        // Another program's LWIN+E sent in one go: E's release and LWIN's arrive before the
-        // replay was sent, and must not overtake it.
+        // Another program's LWIN+E sent in one go: the releases arrive before the replay is sent.
         let mut m = onexplayer();
         table(
             &mut m,
@@ -719,7 +661,6 @@ mod tests {
             first.events(),
             [injected(LWIN, Down), injected(E, Down), injected(E, Up)]
         );
-        // Queued before the replay, so seen before it comes back: held back as well.
         table(&mut m, &[(injected(LWIN, Up), SwallowAndReplay)]);
         let second = m.take_replay(0);
         assert_eq!(second.events(), [injected(LWIN, Up)]);
@@ -729,7 +670,6 @@ mod tests {
             assert_eq!(m.feed(replayed(*event)), Pass);
         }
         assert_eq!(m.in_flight(), 0);
-        // Everything came back: the button is recognised again.
         table(
             &mut m,
             &[
@@ -795,9 +735,6 @@ mod tests {
         for _ in 2..REPLAY_CAPACITY {
             assert_eq!(m.feed(injected(E, Down)), SwallowAndReplay);
         }
-        // The trade-off: E's release goes out now, ahead of the presses still queued, which is
-        // better than never. No hook call has come near this; the thread hands a replay on
-        // after each one.
         assert_eq!(m.feed(injected(E, Up)), Pass);
         assert_eq!(m.take_replay(0).events().len(), REPLAY_CAPACITY);
     }
@@ -817,8 +754,7 @@ mod tests {
         assert_eq!(m.feed(replayed(first.events()[0])), Pass);
         assert_eq!(m.in_flight(), 1);
 
-        // Keys another program sends every half second are held back and sent on after it, and
-        // each comes back; that does not put off giving up on E.
+        // Another program's keys, every half second, each come back; they do not put off E.
         for now in [500, 1000] {
             assert!(!m.give_up_if_late(now), "{now} ms");
             assert_eq!(m.feed(injected(E, Down)), SwallowAndReplay, "{now} ms");
@@ -827,7 +763,6 @@ mod tests {
         }
         assert_eq!(m.in_flight(), 1);
 
-        // More than a second after E went out, the button works again.
         assert!(m.give_up_if_late(1001));
         assert_eq!(m.in_flight(), 0);
         table(
@@ -853,12 +788,10 @@ mod tests {
         );
         let _ = m.take_replay(start);
         table(&mut m, &[(injected(E, Up), SwallowAndReplay)]);
-        // A later replay while the first is out keeps the first one's time.
         let _ = m.take_replay(start.wrapping_add(900));
         assert!(!m.give_up_if_late(start.wrapping_add(1000)));
         assert!(m.give_up_if_late(start.wrapping_add(1001)));
 
-        // Once everything came back, the next replay starts the clock afresh.
         table(
             &mut m,
             &[
@@ -943,7 +876,6 @@ mod tests {
                 (injected(O, Up), Swallow),
                 (injected(RCTRL, Up), Swallow),
                 (injected(LWIN, Up), Swallow),
-                // No O typed into the game, no stray LWIN: then the other button.
                 (injected(LWIN, Down), Swallow),
                 (injected(D, Down), SwallowAndFire(ButtonId(0))),
                 (injected(D, Up), Swallow),
@@ -975,7 +907,6 @@ mod tests {
 
     #[test]
     fn a_key_from_elsewhere_during_a_prefix_is_left_to_its_stream() {
-        // The injected prefix waits; a real key in between is none of its business.
         let mut m = onexplayer();
         table(
             &mut m,

@@ -1,6 +1,4 @@
-//! The window: shows at once, finds out about the device on a thread of its own, shows the plan,
-//! runs it on another, and shows each step's outcome. While the run is under way it cannot be
-//! closed, so that no step is cut off halfway.
+//! The Setup window. Checking the device and running the plan each get a thread of their own.
 
 use std::cell::RefCell;
 use std::path::{Path, PathBuf};
@@ -40,11 +38,7 @@ const LANGUAGES: [&str; 2] = ["en", "de"];
 /// What the window knows between its callbacks, on its own thread.
 #[derive(Default)]
 struct State {
-    /// What was found, once it was. Facts found again (Try again) keep the home app switch as it
-    /// stood: a run began with it, and it may have installed the package since, which would
-    /// turn a first installation's default off.
     facts: Option<Facts>,
-    /// The failure shown, for Copy details.
     failure: Option<RunFailure>,
 }
 
@@ -56,9 +50,8 @@ pub fn run(mode: Mode, log: Option<PathBuf>) -> ExitCode {
     let Ok(window) = SetupWindow::new() else {
         return ExitCode::FAILURE;
     };
-    // Decided as in Mujina Settings, without a config.toml to ask: the first of the Windows
-    // display languages Setup has. Slint wants a window to exist first. Only fails without
-    // bundled translations, which the build always has.
+    // No language chosen (Setup has no config.toml): the first Windows display language it has.
+    // Slint wants a window to exist first; this fails only without bundled translations.
     let _ = slint::select_bundled_translation(locale::language("", &LANGUAGES));
     let log = host_windows::log_file(log);
     let version = payload::attached().map_or_else(
@@ -91,7 +84,6 @@ pub fn run(mode: Mode, log: Option<PathBuf>) -> ExitCode {
     }
 }
 
-/// `log`: the log, if Setup writes one (not with administrator rights and no `--log`).
 fn connect(window: &SetupWindow, mode: Mode, log: Option<&Path>) {
     let weak = window.as_weak();
     window.on_toggle_home_app(move || {
@@ -153,9 +145,8 @@ fn connect(window: &SetupWindow, mode: Mode, log: Option<&Path>) {
     });
 }
 
-/// The window before a run: removing depends on nothing Setup has to find out first; installing
-/// does, which is found out on a thread of its own (the package query and the certificate store
-/// take a moment), while the window says it is checking.
+/// The window before a run. Installing first checks the device on a thread of its own: the
+/// package query and the certificate store take a moment.
 fn prepare(window: &SetupWindow, mode: Mode, log: Option<&Path>) {
     if mode == Mode::Uninstall {
         show_plan(window, &plan::uninstall());
@@ -174,7 +165,6 @@ fn prepare(window: &SetupWindow, mode: Mode, log: Option<&Path>) {
     });
 }
 
-/// What was found, shown: the situation, the home app switch as it starts, and the plan.
 fn found(window: &SetupWindow, facts: &Facts) {
     window.set_situation(situation(facts));
     let installed = facts.installed.map(|version| version.to_string());
@@ -191,13 +181,12 @@ fn found(window: &SetupWindow, facts: &Facts) {
     window.set_phase(SetupPhase::Ready);
 }
 
-/// The home app switch as `facts` set it: its default the first time; after that (Try again)
-/// none, the switch stays as the run found it.
+/// The switch's default the first time. `None` on Try again: a failed run may have installed the
+/// package, which would turn a first installation's default off.
 fn starting_switch(before: Option<&Facts>, facts: &Facts) -> Option<bool> {
     before.is_none().then(|| plan::home_app_default(facts))
 }
 
-/// What installing is here.
 fn situation(facts: &Facts) -> Situation {
     match (facts.carried, plan::preflight(facts)) {
         (None, _) => Situation::NoPackage,
@@ -211,8 +200,7 @@ fn situation(facts: &Facts) -> Situation {
     }
 }
 
-/// The steps as the window stands, none where nothing can be installed. Pressing Replace is the
-/// confirmation a downgrade needs.
+/// Empty where nothing can be installed. Pressing Replace is the confirmation a downgrade needs.
 fn planned(facts: &Facts, window: &SetupWindow) -> Vec<Step> {
     let choice = Choice {
         make_home_app: window.get_make_home_app(),
@@ -232,8 +220,6 @@ fn show_plan(window: &SetupWindow, steps: &[Step]) {
     window.set_steps(ModelRc::from(Rc::new(VecModel::from(rows))));
 }
 
-/// What a step does, as the window names it. Preparing names what is still missing, so that the
-/// prompt says what it is for; the package step what it does to the version installed.
 fn kind(step: Step) -> StepKind {
     match step {
         Step::Preflight => StepKind::CheckDevice,
@@ -255,8 +241,7 @@ fn kind(step: Step) -> StepKind {
     }
 }
 
-/// Runs the steps on a thread of its own; the first failure stops. The administrator prompt
-/// belongs to this window, so it comes up in front of it.
+/// The administrator prompt is owned by this window, so it comes up in front of it.
 fn start(window: &SetupWindow, steps: Vec<Step>, log: Option<&Path>) {
     show_plan(window, &steps);
     window.set_phase(SetupPhase::Running);
@@ -270,7 +255,6 @@ fn start(window: &SetupWindow, steps: Vec<Step>, log: Option<&Path>) {
     });
 }
 
-/// The window's rows, as the runner reports each step.
 struct Rows(slint::Weak<SetupWindow>);
 
 impl run::Progress for Rows {
@@ -301,8 +285,6 @@ fn finished(window: &SetupWindow, outcome: Result<(), RunFailure>) {
     }
 }
 
-/// Why a step failed, as the window says it under "Setup stopped": a sentence it words, and the
-/// code and what was said, as they were.
 fn shown_failure(failure: &RunFailure) -> Failure {
     let error = &failure.error;
     Failure {
@@ -369,7 +351,7 @@ fn details(failure: &RunFailure, log: Option<&Path>) -> String {
     )
 }
 
-/// The installed settings app, through its package; the shell starts it, no program here does.
+/// Through the shell, by the package's app ID; Setup starts no program itself.
 fn open_settings() {
     if let Ok(payload) = payload::attached() {
         shell::open(&format!(
@@ -379,8 +361,8 @@ fn open_settings() {
     }
 }
 
-/// Swaps Slint's one large window icon for the executable's own small images, once the window
-/// exists: Slint makes it when the event loop starts. Tries `attempts` times.
+/// Swaps Slint's one large window icon for the executable's own small images, once Slint has
+/// made the window (when the event loop starts). Tries `attempts` times.
 fn use_own_icon(attempts: u8) {
     slint::Timer::single_shot(Duration::from_millis(50), move || {
         if !winutil_window::use_own_icon() && attempts > 1 {
@@ -431,10 +413,8 @@ mod tests {
 
     #[test]
     fn try_again_keeps_the_home_app_switch_as_the_run_found_it() {
-        // A first installation: the switch starts on.
         assert_eq!(starting_switch(None, &facts()), Some(true));
-        // The package went on, then a later step failed. Found again, Mujina is installed and
-        // not the home app, whose default is off: the switch keeps what the user ran with.
+        // The package went on, then a later step failed: found again, the default would be off.
         let installed = Facts {
             installed: Version::parse("0.28.0.0"),
             ..facts()
@@ -473,7 +453,6 @@ mod tests {
             "{copied}"
         );
         assert!(copied.ends_with(r"Log: C:\log\setup.log"), "{copied}");
-        // As administrator without --log there is none, and the details say why.
         let copied = details(&failure, None);
         assert!(
             copied.ends_with("Log: none (Setup ran with administrator rights)"),

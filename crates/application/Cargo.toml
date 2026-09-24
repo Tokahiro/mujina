@@ -14,7 +14,6 @@ publish.workspace = true
 ring = "application"
 
 [features]
-# Fake port implementations for tests in this and in outer crates.
 test-util = []
 
 [dependencies]

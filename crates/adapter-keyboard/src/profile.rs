@@ -1,5 +1,4 @@
-//! Device profiles: the files in `profiles/devices/`, one per device whose buttons arrive as key
-//! chords, each a device descriptor.
+//! Device profiles: one file in `profiles/devices/` per device whose buttons arrive as key chords.
 
 use std::sync::LazyLock;
 
@@ -14,7 +13,6 @@ use crate::MAX_BUTTONS;
 
 include!(concat!(env!("OUT_DIR"), "/profiles.rs"));
 
-/// A profile file, as written.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct ProfileFile {
@@ -49,9 +47,7 @@ struct ButtonFile {
 enum SuppressionFile {
     #[default]
     Swallowed,
-    /// Refused for now: the hook holds every chord back until it knows which button it is, so a
-    /// button whose keys are to reach other programs too would need a matcher that passes them
-    /// while still telling buttons apart. Read, so that the refusal says why.
+    /// Always refused; parsed so that the refusal can say why.
     Observed,
 }
 
@@ -59,7 +55,6 @@ fn yes() -> bool {
     true
 }
 
-/// A device whose buttons are key chords, as its profile says.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ChordProfile {
     id: String,
@@ -70,9 +65,7 @@ pub struct ChordProfile {
 }
 
 impl ChordProfile {
-    /// Reads a profile file; what is wrong with it, otherwise. Besides the shape, it refuses what
-    /// the hook could not serve: more buttons than it catches, and two chords it cannot tell
-    /// apart, so that the folder's test names the file rather than a button never firing.
+    /// Also refuses what the hook cannot serve: over [`MAX_BUTTONS`] buttons, or clashing chords.
     pub fn parse(text: &str) -> Result<Self, String> {
         let file: ProfileFile =
             toml::from_str(text).map_err(|error| error.message().to_string())?;
@@ -122,7 +115,6 @@ impl ChordProfile {
         })
     }
 
-    /// Each button with the chord it arrives as.
     pub fn chords(&self) -> Vec<(ButtonId, TriggerChord)> {
         self.buttons
             .iter()
@@ -154,10 +146,8 @@ impl DeviceDescriptor for ChordProfile {
     }
 }
 
-/// Why the matcher could not tell two buttons' chords apart, if it could not: the same keys
-/// with the same trigger, or one chord made only of keys the other holds. The held keys come in
-/// whatever order the firmware presses them, so the second would fire as the first the moment
-/// its keys were down (the matcher takes the shorter chord).
+/// Why the matcher could not tell two chords apart: held keys come in any order, and it takes the
+/// shorter chord.
 fn clash(ours: &TriggerChord, theirs: &TriggerChord) -> Option<&'static str> {
     let same = ours.trigger() == theirs.trigger()
         && ours.held().len() == theirs.held().len()
@@ -176,10 +166,8 @@ fn clash(ours: &TriggerChord, theirs: &TriggerChord) -> Option<&'static str> {
         .then_some("one chord is the beginning of the other, which would never fire")
 }
 
-/// The profiles shipped with Mujina, sorted by file name. `auto` takes the first that matches, so
-/// a profile for some of the machines another one's patterns cover has to sort before it (a
-/// OneXPlayer model's before `onexplayer.toml`, which takes every ONE-NETBOOK machine); the
-/// folder's test checks that. One that does not parse is left out here and fails the tests.
+/// Sorted by file name; `auto` takes the first match, so a more specific profile must sort first.
+/// One that does not parse is left out here and fails the tests.
 pub fn builtin() -> &'static [ChordProfile] {
     static PROFILES: LazyLock<Vec<ChordProfile>> = LazyLock::new(|| {
         BUILTIN
@@ -293,7 +281,6 @@ mod tests {
             "ONEXPLAYER X1"
         )));
         assert!(!oxp.matches(&machine("ASUSTeK COMPUTER INC.", "ROG Ally RC71L")));
-        // Its button, exactly as before profiles had several: an injected LWIN+D.
         let chords = oxp.chords();
         assert_eq!(chords.len(), 1);
         assert_eq!(chords[0].0, ButtonId(0));
@@ -350,7 +337,6 @@ mod tests {
 
     #[test]
     fn what_the_hook_could_not_serve_is_refused() {
-        // A chord Mujina holds back cannot also reach the companion software.
         let observed = with_buttons(&[("b", "LWIN+D")]) + "suppression = \"observed\"\n";
         assert_eq!(
             ChordProfile::parse(&observed),
@@ -372,14 +358,12 @@ mod tests {
             Err("9 buttons; Mujina catches at most 8 of one device".to_string())
         );
 
-        // The same keys, the held ones in another order.
         let twice = with_buttons(&[("a", "LCTRL+LWIN+D"), ("b", "LWIN+LCTRL+D")]);
         assert_eq!(
             ChordProfile::parse(&twice),
             Err("buttons a and b: they send the same chord".to_string())
         );
-        // LWIN+D fires as soon as LWIN and D are down, whichever order the other's held keys
-        // come in; so does a one-key button that another holds.
+        // LWIN+D fires once LWIN and D are down, whichever order the longer chord holds them in.
         for (short, long) in [("LWIN+D", "D+LWIN+E"), ("F24", "F24+E")] {
             for pair in [[("a", short), ("b", long)], [("a", long), ("b", short)]] {
                 assert_eq!(
@@ -393,21 +377,18 @@ mod tests {
                 );
             }
         }
-        // Sharing keys is fine as long as the next key tells them apart.
         let apart = with_buttons(&[("a", "LWIN+D"), ("b", "LWIN+0xA3+O"), ("c", "D+LWIN")]);
         assert!(ChordProfile::parse(&apart).is_ok());
     }
 
-    /// Whether `a`'s patterns match the machine `b` names in its patterns' literal text: then
-    /// `auto`, taking the first profile that matches, finds `a` on `b`'s own machine.
+    /// Whether `a` matches the machine `b`'s patterns name, wildcards dropped.
     fn covers(a: &ChordProfile, b: &ChordProfile) -> bool {
         let literal = |pattern: &str| pattern.replace('*', "");
         wildcard_match(&a.manufacturer, &literal(&b.manufacturer))
             && wildcard_match(&a.product, &literal(&b.product))
     }
 
-    /// For `profiles` in the order `auto` tries them, each with its file name: every pair of
-    /// which the earlier hides the later.
+    /// Every pair of `profiles`, in `auto`'s order, of which the earlier hides the later.
     fn hidden(profiles: &[(&str, ChordProfile)]) -> Vec<String> {
         let mut found = Vec::new();
         for (index, (later, theirs)) in profiles.iter().enumerate() {
@@ -433,7 +414,7 @@ mod tests {
         let found = hidden(&shipped);
         assert!(found.is_empty(), "{found:#?}");
 
-        // The check itself: a OneXPlayer Mini's file sorting after the family's is found.
+        // The check itself, on a Mini profile sorting after the family's.
         let family = shipped
             .iter()
             .find(|(name, _)| *name == "onexplayer.toml")
@@ -459,7 +440,6 @@ mod tests {
         assert!(hidden(&after)[0].starts_with(
             "profiles/devices/onexplayer.toml matches every machine onexplayer_mini.toml is for"
         ));
-        // Two files for the same machines hide one another, whichever comes first.
         assert_eq!(
             hidden(&[("a.toml", family.clone()), ("b.toml", family)]).len(),
             1

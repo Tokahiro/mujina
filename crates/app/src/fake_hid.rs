@@ -1,8 +1,5 @@
-//! A device made up for the tests whose button reaches Windows as something other than a key
-//! chord, the way a vendor HID report does, and which the device's own software also sees. It
-//! plugs in through the same types a device crate would use (a descriptor, a runtime, a wait
-//! source of its own) and the same code: the choice of device, the agent's event loop and the
-//! agent. Nothing in the rings inside is made for it.
+//! A test device whose button is no key chord but, like a vendor HID report, also reaches the
+//! device's own software. It plugs in exactly as a device crate would.
 
 use std::collections::BTreeMap;
 use std::os::windows::io::{AsHandle, BorrowedHandle};
@@ -28,7 +25,6 @@ use mujina_winutil::wait::{self, EventLoop, WaitSource};
 
 use crate::registry;
 
-/// A pad whose one extra button, 1, arrives as a report its vendor's app reads as well.
 struct FakeHid;
 
 static FAKE_HID: FakeHid = FakeHid;
@@ -62,11 +58,9 @@ impl DeviceDescriptor for FakeHid {
     }
 }
 
-/// The report the pad sent, as the test signals it: a real device would have an overlapped read
-/// complete an event of its own.
+/// Signalled by the test; a real device would have an overlapped read signal its own event.
 static REPORT: Mutex<Option<Arc<Event>>> = Mutex::new(None);
 
-/// How often the agent asked to pass a press of the pad on.
 static PASSED_ON: AtomicU32 = AtomicU32::new(0);
 
 struct FakeHidRuntime;
@@ -74,8 +68,7 @@ struct FakeHidRuntime;
 static FAKE_HID_RUNTIME: FakeHidRuntime = FakeHidRuntime;
 
 impl DeviceRuntime for FakeHidRuntime {
-    /// No id is the button switched off, which may be switched on later: the pad starts all the
-    /// same, as every runtime must.
+    /// Starts with no id too (the button switched off), as every runtime must.
     fn start(&self, device: &DeviceSelection) -> PortResult<DeviceParts> {
         if let Some(id) = device.id.as_deref()
             && id != FAKE_HID_ID
@@ -103,7 +96,6 @@ impl DeviceButtons for FakeHidButtons {
     }
 }
 
-/// Wakes the agent's event loop when a report came, and says which button it was.
 struct ReportSource {
     report: Arc<Event>,
 }
@@ -122,12 +114,10 @@ impl WaitSource<AgentEvent> for ReportSource {
     }
 }
 
-/// A launcher with a menu and an overlay.
 static LAUNCHER: FakeLauncherDescriptor =
     FakeLauncherDescriptor::named("fake", "Fake", LauncherCaps::ALL);
 
-/// The devices Mujina has, with the pad where a line in `registry.rs` would put it: before the
-/// profiles, since `auto` asks the device crates first.
+/// Mujina's devices, with the pad first, where `registry.rs` puts a device crate.
 fn devices() -> Devices {
     let mut all: Vec<&'static dyn DeviceDescriptor> = vec![&FAKE_HID];
     all.extend(registry::devices().all);
@@ -137,8 +127,7 @@ fn devices() -> Devices {
     }
 }
 
-/// Runs the agent's event loop on the pad's sources until the first event, with the pad's
-/// report signalled, and hands that event to an agent with `fse` and `in_front`.
+/// Signals the pad's report and hands the first event to an agent with `fse` and `in_front`.
 fn press(
     device_parts: DeviceParts,
     device: &DeviceSelection,
@@ -211,7 +200,6 @@ fn a_device_with_a_mechanism_of_its_own_plugs_in_without_touching_the_core() {
     };
     device_conformance(plugin.descriptor);
 
-    // Chosen by what the machine is, as any device is.
     let contoso = SystemIdentity {
         manufacturer: "Contoso".to_string(),
         product: "Pad".to_string(),
@@ -228,20 +216,16 @@ fn a_device_with_a_mechanism_of_its_own_plugs_in_without_touching_the_core() {
     assert!(notes.is_empty(), "{notes:?}");
     assert_eq!(device.id.as_deref(), Some("fake-hid"));
 
-    // In the launcher's UI its button opens the menu, as any button does.
     let parts = plugin.runtime.start(&device).unwrap();
     let keys = press(parts, &device, FseState::Active, "fakelauncher.exe");
     assert_eq!(keys.sent(), [FakeLauncher::MENU]);
 
-    // On the desktop Mujina has nothing for it. The pad's own software had the press anyway, so
-    // nothing is passed on, as it would be for a key chord Mujina swallowed.
+    // The pad's own software had the press anyway, so nothing is passed on.
     let parts = plugin.runtime.start(&device).unwrap();
     let keys = press(parts, &device, FseState::Inactive, "explorer.exe");
     assert!(keys.sent().is_empty());
     assert_eq!(PASSED_ON.load(Ordering::Relaxed), 0);
 
-    // With the button switched off it starts too, so that switching it on applies at once, as
-    // every runtime must; another device is not its to start.
     runtime_conformance(plugin.runtime, &device).unwrap();
     let other = DeviceSelection {
         id: Some("onexplayer".to_string()),

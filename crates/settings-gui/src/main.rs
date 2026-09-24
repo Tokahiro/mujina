@@ -1,5 +1,4 @@
-//! Mujina Settings: a window onto what `mujinactl` shows and changes. A process of its own that
-//! exists only while it is open, so the resident agent never pays for it (ADR-0011).
+//! A window onto `mujinactl`, in its own process so the agent never pays for it (ADR-0011).
 
 #![cfg_attr(windows, windows_subsystem = "windows")]
 
@@ -57,7 +56,6 @@ fn main() -> std::process::ExitCode {
 mod tests {
     use std::path::Path;
 
-    /// The Rust files under `dir`, with their text.
     fn sources(dir: &Path) -> Vec<(String, String)> {
         let mut found = Vec::new();
         for entry in std::fs::read_dir(dir).unwrap() {
@@ -72,12 +70,10 @@ mod tests {
         found
     }
 
-    /// Whether `c` may be part of a Rust name.
     fn identifier(c: char) -> bool {
         c.is_alphanumeric() || c == '_'
     }
 
-    /// Where `text` names the crate `name` (not one whose name only starts so), what follows.
     fn after_crate<'a>(text: &'a str, name: &str) -> Vec<&'a str> {
         text.match_indices(name)
             .filter(|(at, _)| !text[..*at].ends_with(identifier))
@@ -86,9 +82,7 @@ mod tests {
             .collect()
     }
 
-    /// arch-check sees crates, not modules: Mujina Settings may depend on mujina-app, and would
-    /// be a second composition root again through its `compose` or `registry`. It takes what it
-    /// needs from the tool module, which hands out the application ring's types and plain data.
+    /// arch-check sees crates, not modules. Keeps the app from being a second composition root.
     #[test]
     fn mujina_app_is_reached_through_its_tool_module_only() {
         // Written in two, so that this file does not name the crate itself.

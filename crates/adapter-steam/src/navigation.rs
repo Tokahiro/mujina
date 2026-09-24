@@ -1,9 +1,5 @@
-//! Showing a page of Big Picture.
-//!
-//! Steam's `steam://` URLs do not do it: tried on a device, `steam://open/games`,
-//! `steam://nav/games` and their relatives leave Big Picture where it is (they belong to the
-//! desktop client), although `steam://open/downloads` does navigate. What works is the router of
-//! Big Picture itself, reached over the same debugging endpoint the Wi-Fi indicator uses.
+//! Showing a page of Big Picture through its own router, over the debugging port: Steam's
+//! `steam://open/games` and its relatives leave Big Picture where it is.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -18,17 +14,14 @@ use crate::indicator::UiLink;
 /// One of Big Picture's UIs whose side menu the device button opens and closes.
 #[derive(Debug, Clone, Copy)]
 pub enum MenuHost {
-    /// Big Picture itself.
     BigPicture,
-    /// The in-game overlay of the game that is running: a separate, hidden copy of Big
-    /// Picture's UI that Steam draws over the game once one of its menus is open.
+    /// The running game's overlay: a separate, hidden copy of Big Picture's UI that Steam draws
+    /// over the game while one of its menus is open.
     GameOverlay,
 }
 
-/// Opens the host's main menu, or closes whatever side menu is open, as Steam's own button does.
-/// `{host}` is an expression for the UI instance. Closing uses nothing but the menu store: taking
-/// the overlay down by hand (its composition state) was seen to leave the desktop in front of
-/// the game.
+/// `{host}` is an expression for the UI instance. Close only through the menu store: taking the
+/// overlay down by hand (its composition state) leaves the desktop in front of the game.
 const TOGGLE_TEMPLATE: &str = "(function(){try{\
      var w={host};\
      if(!w)return 'not there';\
@@ -64,9 +57,8 @@ impl MenuHost {
     }
 }
 
-/// What a host's menu functions have shown in one session of the link. A Steam update may move
-/// them; the device button then sends the keyboard shortcut for the rest of the session. The
-/// next session, which comes with every Steam start and so with every update, tries again.
+/// Whether a host's menu functions exist, per link session. A Steam update may move them; the
+/// button then sends the shortcut until the next session, which every Steam start brings.
 #[derive(Debug, Default)]
 struct HostHealth {
     /// The session in which the functions turned out to be missing; 0 for none.
@@ -79,11 +71,9 @@ struct HostHealth {
 /// What an answer of [`TOGGLE_TEMPLATE`] means for the device button.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Verdict {
-    /// The menu opened or closed.
     Done,
-    /// It did not, and will not in this session: from now on the shortcut.
+    /// Will not work in this session: from now on the shortcut.
     Missing,
-    /// It did not, this time.
     Failed,
 }
 
@@ -92,7 +82,6 @@ impl HostHealth {
         self.missing_in.load(Ordering::Relaxed) != session
     }
 
-    /// Takes in the answer to an attempt in `session`.
     fn record(&self, session: u64, answer: &str) -> Verdict {
         if answer == "opened" || answer == "closed" {
             self.type_error_in.store(0, Ordering::Relaxed);
@@ -125,8 +114,7 @@ impl Health {
     }
 }
 
-/// The device button's direct way to Big Picture's menus, over the link the Wi-Fi indicator
-/// keeps.
+/// The device button's direct way to Big Picture's menus, over the Wi-Fi indicator's link.
 pub struct DirectMenus {
     link: UiLink,
     /// Shared with the presses, which the worker carries out.
@@ -141,22 +129,8 @@ impl DirectMenus {
         }
     }
 
-    /// Opens or closes the host's side menu through its own menu store instead of a shortcut.
-    /// Returns whether it took the request on: not while the link is down, and not for the rest
-    /// of a session in which the host's functions turned out to be missing.
-    ///
-    /// Seen on a device: after Big Picture has been brought to the front programmatically (by
-    /// the device button, by Steam's own `BringToFront`), its outer window is active but the
-    /// keyboard focus is not on its browser, so `Ctrl+1` goes nowhere; the controller still
-    /// works, because Steam reads it directly. The menu store does not care where the focus is.
-    /// The in-game overlay is the same kind of UI and opens and closes the same way (tried on a
-    /// device: the game kept the foreground throughout), without a keystroke into the game.
-    ///
-    /// Answered at once, from the link as it stands: the caller is the agent's event loop,
-    /// which also runs the keyboard hook. The press itself is carried out by the worker that
-    /// keeps the link, after the presses before it, over a session of its own that it keeps
-    /// open (launcher-12). A press that fails for want of a link takes the link down, so the next
-    /// press sends the shortcut, and has the worker look at the link again.
+    /// Unlike `Ctrl+1`, works after a programmatic bring-to-front, which leaves Big Picture's
+    /// browser without the keyboard focus. Returns at once whether the worker took the press on.
     pub fn toggle(&self, host: MenuHost) -> bool {
         let Some(session) = self.link.session() else {
             return false;
@@ -172,8 +146,7 @@ impl DirectMenus {
     }
 }
 
-/// A press of the device button that [`DirectMenus::toggle`] took on, for the worker that keeps
-/// the link to carry out.
+/// A press [`DirectMenus::toggle`] took on, for the link's worker to carry out.
 pub struct MenuPress {
     host: MenuHost,
     /// The link's session in which it was taken on.
@@ -186,9 +159,7 @@ impl MenuPress {
         self.session
     }
 
-    /// Runs the host's script with `evaluate`, in Steam's shared script context, and says in the
-    /// log what came of it. `false` only when the link failed: the next press then sends the
-    /// keyboard shortcut.
+    /// `false` only when the link failed: the next press then sends the keyboard shortcut.
     pub fn carry_out(self, evaluate: impl FnOnce(&str) -> Result<Value, CdpError>) -> bool {
         let host = self.host;
         let answer = match evaluate(&host.script()) {
@@ -219,20 +190,17 @@ impl MenuPress {
     }
 }
 
-/// Big Picture's start page.
 pub const HOME_ROUTE: &str = "/library/home";
-/// Big Picture's route of the user's games.
 pub const LIBRARY_ROUTE: &str = "/library";
 
 /// Right after a start the window is there before the router is.
 pub const START_PATIENCE: Duration = Duration::from_secs(10);
 const PAUSE: Duration = Duration::from_millis(250);
 
-/// The answer of [`expression`] when the router took the route.
 const DONE: &str = "ok";
 
-/// Asks Big Picture's router for `route`. Every step is checked, because these are internals of
-/// Steam's UI and a Steam update may move them: the answer then says what is missing.
+/// Asks Big Picture's router for `route`. Every step is checked, as a Steam update may move
+/// these internals: the answer then says what is missing.
 fn expression(route: &str) -> String {
     format!(
         "(function(){{try{{\
@@ -253,7 +221,6 @@ pub fn shared_session(port: u16) -> Result<Session, CdpError> {
     Session::connect(port, &url)
 }
 
-/// Runs `script` over a session of its own, which is closed again after it.
 fn attempt(port: u16, script: &str) -> Result<String, CdpError> {
     let answer = shared_session(port)?.evaluate(script)?;
     Ok(answer.as_str().unwrap_or("no answer").to_string())
@@ -283,15 +250,8 @@ const RUNNING_ROUTE: &str = "/apprunning";
 /// layout) on top of whatever page it is on; this only settles what lies underneath.
 const RUNNING_DELAY: Duration = Duration::from_secs(2);
 
-/// Keeps Big Picture on its "a game is running" screen while a game loads.
-///
-/// Seen on a device: a game may take 20 s and more to show its first window. After its launch
-/// screen Big Picture sometimes goes to that running screen by itself, and sometimes stays on
-/// the game's page, where "Play" has turned into "Continue", which looks like the launch had
-/// failed. Going to the running screen early makes every launch look like the good ones.
-///
-/// Fire and forget, on its own thread: the caller is the agent's event loop. Nothing happens if
-/// the game is gone again by the time this runs, or if Steam's UI debugging is off.
+/// Left alone, Big Picture may stay on the game's page while it loads, where "Play" has become
+/// "Continue" and the launch looks failed. Returns at once: the caller is the agent's event loop.
 pub fn show_running_game(port: u16) {
     let spawned = thread::Builder::new()
         .name("steam-running-screen".into())
@@ -319,15 +279,12 @@ pub fn show_running_game(port: u16) {
     }
 }
 
-/// When to look at Big Picture after a game has ended.
 const AFTER_GAME_SAMPLES: [Duration; 3] = [
     Duration::from_secs(1),
     Duration::from_secs(2),
     Duration::from_secs(4),
 ];
 
-/// What Big Picture thinks of itself: its page, whether its document has the focus and is
-/// visible, and whether its controller navigation is active.
 const UI_STATE: &str = "(function(){try{\
      var w=SteamUIStore.WindowStore.GamepadUIMainWindowInstance;\
      if(!w)return 'Big Picture is not up';\
@@ -338,9 +295,7 @@ const UI_STATE: &str = "(function(){try{\
      running:SteamUIStore.MainRunningApp?SteamUIStore.MainRunningApp.appid:null});\
      }catch(e){return String(e);}})()";
 
-/// Diagnostics for "back in Big Picture after a game, and the controller does nothing until the
-/// screen is touched": records, a few times after a game has ended, where Windows sends input
-/// and what Big Picture thinks of itself. Costs nothing unless detailed logging is on.
+/// Diagnostics for "after a game the controller does nothing until the screen is touched".
 pub fn log_state_after_game(port: u16) {
     if !log::log_enabled!(log::Level::Debug) {
         return;
@@ -384,7 +339,6 @@ mod tests {
 
         assert_eq!(health.record(1, "missing"), Verdict::Missing);
         assert!(!health.usable(1));
-        // Steam has started again, perhaps updated.
         assert!(health.usable(2));
     }
 
@@ -399,7 +353,6 @@ mod tests {
         assert_eq!(health.record(1, error), Verdict::Missing);
         assert!(!health.usable(1));
 
-        // One from the last session does not count in the next.
         assert_eq!(health.record(2, error), Verdict::Failed);
         assert!(health.usable(2));
     }

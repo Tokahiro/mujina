@@ -1,18 +1,5 @@
-//! Builds the MSIX package, unsigned.
-//!
-//! Signing is not done here: `packaging/sign.ps1` signs the package in a job that runs no cargo,
-//! so the signing key never shares a machine with the build scripts of our dependencies
-//! (docs/signing.md).
-//!
-//! Options:
-//! - `--no-build`: package what target/release already holds.
-//! - `--timings`: cargo also writes target/cargo-timings/cargo-timing.html.
-//!
-//! Inputs from the environment:
-//! - `MSIX_PUBLISHER`: certificate subject for the manifest (default `CN=Mujina Dev`). It must
-//!   equal the subject of the signing certificate and must never change between releases,
-//!   because the package family name is derived from it.
-//! - `MSIX_REVISION`: fourth component of the package version (default `0`).
+//! Builds the unsigned MSIX package (docs/signing.md). `MSIX_PUBLISHER` must be the signing
+//! certificate's subject and never change: the package family derives from it.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -22,7 +9,6 @@ use crate::{TaskResult, workspace};
 
 const BINARIES: [&str; 3] = ["mujina.exe", "mujinactl.exe", "mujina-settings.exe"];
 
-/// What the command line asks for.
 #[derive(Debug, PartialEq, Eq)]
 struct Options {
     build: bool,
@@ -46,7 +32,6 @@ impl Options {
         Ok(options)
     }
 
-    /// The cargo build of the packaged binaries.
     fn cargo_build(&self) -> Vec<&'static str> {
         let mut arguments = vec![
             "build",
@@ -71,7 +56,6 @@ pub fn run(arguments: &[String]) -> TaskResult {
     Ok(())
 }
 
-/// Builds the package; its path. `build`: whether cargo builds the binaries first.
 pub fn unsigned(build_binaries: bool) -> Result<PathBuf, String> {
     build(&Options {
         build: build_binaries,
@@ -126,8 +110,7 @@ fn build(options: &Options) -> Result<PathBuf, String> {
     fs::write(layout.join("AppxManifest.xml"), manifest)
         .map_err(|error| format!("AppxManifest.xml: {error}"))?;
 
-    // The resource index. Only through it does Windows find the logo's sizes and forms next to
-    // the file the manifest names, such as the taskbar's unplated 24 px one.
+    // Only through resources.pri does Windows find the logo's other sizes, such as the taskbar's.
     let makepri = sdk_tool("makepri.exe")?;
     let config = out.join("priconfig.xml");
     run_tool(
@@ -160,8 +143,7 @@ fn build(options: &Options) -> Result<PathBuf, String> {
     Ok(msix)
 }
 
-/// An environment variable, treating "set but empty" (how CI passes an undefined variable) as
-/// unset.
+/// Treats a variable set but empty, as CI passes an undefined one, as unset.
 pub(crate) fn env_or(name: &str, default: &str) -> String {
     std::env::var(name)
         .ok()

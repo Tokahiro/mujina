@@ -3,22 +3,11 @@
     Attaches Mujina's signed package to a built Mujina Setup. Needs no cargo.
 
 .DESCRIPTION
-    Mujina Setup is built without its package; this script adds the package, its certificate
-    and a few lines about them to the executable as data resources (RT_RCDATA), with Windows'
-    own UpdateResource. Run it before the executable is signed: the signature then covers them,
-    since the Authenticode hash leaves out only the checksum, the certificate table's entry and
-    the certificate table itself (Microsoft's PE format reference). The signing jobs of CI and
-    of the release run this, packaging/sign.ps1 and nothing else (docs/signing.md).
-
-    1. Checks that the Setup is not signed yet, and that the certificate is the package's
-       signer and its subject is the manifest's Publisher, exactly: a mismatched pair fails
-       here, not on a user's device.
-    2. Reads Name, Publisher and Version from the package's AppxManifest.xml, and has Windows
-       derive the package family from them (PackageFamilyNameFromId).
-    3. Adds three resources: MUJINA_MSIX (the package), MUJINA_CER (the certificate) and
-       MUJINA_ABOUT (key=value lines: name, publisher, family, version, msix, certificate).
-    4. Reads the three back from the result, as data, without running it: this runs where the
-       signing key is, and nothing built by cargo runs there.
+    Adds the package, its certificate and a few lines about them as RT_RCDATA resources. Run it
+    before signing: the Authenticode hash leaves out only the checksum and the certificate
+    table, so the signature covers them (Microsoft's PE format reference). A certificate that does
+    not match the package fails here, not on a user's device. The result is read back as data,
+    never run: this runs where the signing key is (docs/signing.md).
 
 .PARAMETER Setup
     The built mujina-setup.exe, unsigned. Left as it is when -Output is given.
@@ -33,9 +22,8 @@
     Where the Setup with its package goes. Without it, -Setup itself is changed.
 
 .PARAMETER AllowUnsignedPackage
-    For trying the attachment alone, with a package that is not signed: the signer is then not
-    checked. Such a Setup cannot install its package: never for one anyone installs. CI uses it
-    only to try the script on each push to main (win-package), and uploads nothing it made.
+    For a dry run with an unsigned package: the signer is not checked, and the Setup cannot
+    install its package.
 
 .EXAMPLE
     pwsh packaging/attach-payload.ps1 -Setup target/release/mujina-setup.exe -Msix msix/Mujina_0.28.0.0_x64.msix -Certificate msix/Mujina.cer -Output out/Mujina-Setup-v0.28.0.exe
@@ -155,7 +143,6 @@ if ((Get-AuthenticodeSignature -LiteralPath $Setup).SignerCertificate) {
     throw "$Setup is signed already: attach the package first, then sign (packaging/sign.ps1)"
 }
 
-# What the package says it is.
 $zip = [IO.Compression.ZipFile]::OpenRead($Msix)
 try {
     $entry = $zip.GetEntry('AppxManifest.xml')
@@ -238,9 +225,7 @@ try {
     if (-not $written) { [void][Mujina.Resources]::EndUpdateResourceW($update, $true) }
 }
 
-# Read back as Windows will find them, without running the file: this runs where the signing key
-# is, and nothing built by cargo runs there (docs/signing.md). `mujina-setup.exe --about` shows
-# the same where running it is fine.
+# Read back as Windows will find them, without running the file: the signing key is here.
 foreach ($part in $parts.GetEnumerator()) {
     $back = [Mujina.Resources]::ReadResource($target, $part.Key)
     if (-not $back -or [Convert]::ToBase64String($back) -ne [Convert]::ToBase64String([byte[]] $part.Value)) {

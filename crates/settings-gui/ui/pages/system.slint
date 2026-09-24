@@ -1,5 +1,4 @@
-// System: whether Mujina is the home app, what Windows allows it (as the doctor finds it), and how
-// to open these settings from Steam.
+// System: the home app, what Windows allows, and opening these settings from Steam.
 
 import { Theme } from "@mujina/theme.slint";
 import { Icons } from "@mujina/icons.slint";
@@ -15,7 +14,7 @@ export enum HomeApp {
     mujina
 }
 
-// What the page shows, as found. `known` once found the first time.
+// What the page shows; `known` once first found.
 export struct SystemInfo {
     known: bool,
     home: HomeApp,
@@ -26,7 +25,7 @@ export struct SystemInfo {
     launcher: string,
     // The execution alias Steam starts, in full; empty when Mujina runs unpackaged.
     steam-target: string,
-    // The copy of Mujina Setup that removes Mujina is there (an installation by Mujina Setup).
+    // Mujina Setup kept its copy, which can remove Mujina.
     can-remove: bool,
 }
 
@@ -71,8 +70,6 @@ export component SystemPage inherits Rectangle {
             value: root.info.steam-target
         }
     ];
-    // Starts the kept Mujina Setup, which gives the home app back first and then removes the
-    // package; its key is what a press means.
     property <[RowData]> remove-rows: [
         {
             kind: RowKind.button,
@@ -125,7 +122,6 @@ export component SystemPage inherits Rectangle {
             root.leave();
         }
 
-        // Whether Windows starts Mujina in Xbox mode.
         Rectangle {
             border-radius: Theme.radius-card;
             border-width: 1px;
@@ -188,7 +184,6 @@ export component SystemPage inherits Rectangle {
             }
         }
 
-        // Once the checks behind it are back.
         if root.checks.length > 0: Group {
             label: @tr("What Windows allows");
             Card {
@@ -227,8 +222,6 @@ export component SystemPage inherits Rectangle {
             }
         }
 
-        // Only where Mujina Setup kept its copy: an installation some other way has none, and
-        // Settings → Apps is the way out then.
         if root.info.can-remove: Group {
             label: @tr("Uninstall");
             Card {

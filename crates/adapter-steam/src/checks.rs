@@ -85,7 +85,6 @@ impl Check for OverlayShortcut {
 /// 24H2 count as location data. Only Steam's Wi-Fi fix reads them, so only it asks.
 pub struct LocationPermission;
 
-/// The id of [`LocationPermission`]'s findings.
 pub const LOCATION_PERMISSION: &str = "location permission";
 
 impl Check for LocationPermission {

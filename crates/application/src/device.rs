@@ -1,12 +1,5 @@
-//! Devices as plug-ins: what the configuration, the tools and the agent know about a handheld
-//! and its extra buttons without naming it.
-//!
-//! A device describes itself with a [`DeviceDescriptor`]: its id, which machines it is, its
-//! buttons and its options under `[device.<id>]`. Descriptors are trait objects, not a table of
-//! functions, because most devices are data: a profile file read at start-up is a descriptor as
-//! much as a device crate is. The composition root lists them (ADR-0013); nothing in this ring or
-//! in the configuration adapter changes for a new one. What a device does at run time is behind
-//! the port [`DeviceButtons`](crate::ports::DeviceButtons).
+//! Devices as plug-ins (ADR-0013). Descriptors are trait objects so that a profile file read at
+//! start-up can be one too.
 
 use std::collections::BTreeMap;
 
@@ -25,17 +18,13 @@ pub struct SystemIdentity {
 /// Whether a button still reaches the rest of the system when Mujina maps it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Suppression {
-    /// Mujina takes it before anything else sees it, and sends it on only where it has nothing
-    /// to do with it (a key chord).
+    /// Mujina takes it first and replays it where it has no use for it (a key chord).
     Swallowed,
-    /// Mujina only watches it: the device's own software reacts to the same press whatever
-    /// Mujina does (a vendor HID report, which no program can hold back without a driver).
-    /// Mujina can add to what the button does, never replace it; the device's `doctor` checks
-    /// should say which program also reacts.
+    /// Mujina only watches it; the device's own software reacts too (no program can hold back a
+    /// vendor HID report without a driver). The device's `doctor` checks should name that program.
     Observed,
 }
 
-/// One extra button of a device.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ButtonSpec {
     /// What the device reports it as; unique within the device.
@@ -47,53 +36,41 @@ pub struct ButtonSpec {
     pub suppression: Suppression,
 }
 
-/// What Mujina knows about a device before running it: enough for the configuration to choose
-/// it and read its options, and for the tools and the agent to name its buttons. Free of side
-/// effects, so it is built and tested everywhere.
+/// What Mujina knows about a device before running it. Free of side effects.
 pub trait DeviceDescriptor: Send + Sync {
-    /// What `[device] profile = "..."` names, and `[device.<id>]` holds the options of: lower
-    /// case, digits, `_` and `-`. Users have it in their files, so it never changes.
+    /// `[device.<id>]`: lower case, digits, `_` and `-`. Never changes: users' files name it.
     fn id(&self) -> &str;
 
-    /// What Mujina Settings lists it as, e.g. "OneXPlayer (show desktop button)".
     fn name(&self) -> String;
 
-    /// Whether this is the machine `identity` describes; `profile = "auto"` takes the first
-    /// device that says so.
+    /// `profile = "auto"` takes the first device that matches.
     fn matches(&self, identity: &SystemIdentity) -> bool;
 
     /// Its extra buttons, at least one.
     fn buttons(&self) -> Vec<ButtonSpec>;
 
-    /// Its options, the keys of `[device.<id>]`; most devices have none. Nothing else is read
-    /// there: an unknown key, or a value of the wrong kind, is skipped with a note of its own.
+    /// The keys of `[device.<id>]`.
     fn settings(&self) -> &[SettingSpec];
 
-    /// Rules across options that [`settings`](Self::settings) cannot say. A note means the
-    /// device cannot be used with these options, and no button is mapped. Only looks.
+    /// Rules across options; a note means no button is mapped. No side effects.
     fn validate(&self, _options: &OptionTable, _notes: &mut Vec<String>) {}
 
-    /// The translations of its texts (its name, its buttons' labels, and the title and help of
-    /// each setting), by the language they are in, as a launcher's
-    /// [`catalogs`](crate::launcher::LauncherDescriptor::catalogs). A profile read from a file
-    /// has none: its words stay as written.
+    /// As a launcher's [`catalogs`](crate::launcher::LauncherDescriptor::catalogs), plus its
+    /// buttons' labels.
     fn catalogs(&self) -> &'static [(&'static str, &'static str)] {
         &[]
     }
 }
 
-/// The devices compiled in, as the composition root lists them.
 #[derive(Clone, Copy)]
 pub struct Devices {
     pub all: &'static [&'static dyn DeviceDescriptor],
-    /// A button of the user's own, whose options are `[device.button]`: in use whenever that
-    /// section names one, whatever `[device] profile` says. It is among [`all`](Self::all), but
-    /// neither `auto` nor a profile's id chooses it.
+    /// The user's own button (`[device.button]`); among [`all`](Self::all), but no profile.
     pub own: &'static dyn DeviceDescriptor,
 }
 
 impl Devices {
-    /// The device `id` names, the one of one's own included.
+    /// Includes [`own`](Self::own).
     pub fn find(&self, id: &str) -> Option<&'static dyn DeviceDescriptor> {
         self.all
             .iter()
@@ -101,12 +78,11 @@ impl Devices {
             .find(|descriptor| descriptor.id() == id)
     }
 
-    /// Whether `descriptor` is the button of one's own.
     pub fn is_own(&self, descriptor: &dyn DeviceDescriptor) -> bool {
         descriptor.id() == self.own.id()
     }
 
-    /// The devices `[device] profile` can name, in order: all but the button of one's own.
+    /// What `[device] profile` can name, in order: all but [`own`](Self::own).
     pub fn profiles(&self) -> impl Iterator<Item = &'static dyn DeviceDescriptor> + '_ {
         self.all
             .iter()
@@ -118,14 +94,13 @@ impl Devices {
 /// The device whose buttons Mujina maps, with its options, as the configuration chose it.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct DeviceSelection {
-    /// The descriptor's id; `None` for no button at all.
+    /// `None` for no button at all.
     pub id: Option<String>,
     /// Its options: `[device.<id>]`, or `[device.button]` for a button of one's own.
     pub options: OptionTable,
 }
 
 impl DeviceSelection {
-    /// No button: nothing is caught.
     pub fn none() -> Self {
         Self::default()
     }
@@ -142,7 +117,6 @@ pub enum DeviceChoice {
     Auto,
     /// No button.
     None,
-    /// The device of this id.
     Named(String),
 }
 
@@ -157,10 +131,8 @@ impl DeviceChoice {
     }
 }
 
-/// The device the configuration comes to on the machine `identity` describes: a button of one's
-/// own when `own`, `[device.button]` as read, names one that can be used; else what `choice`
-/// asks for. `sections` holds `[device.<id>]` of each device that has options. Whatever cannot
-/// be used is a note, and then no button is mapped.
+/// The user's own button when `own` (`[device.button]`) is usable, else what `choice` asks for,
+/// with its options from `sections` (`[device.<id>]`). What cannot be used becomes a note.
 pub fn select(
     devices: &Devices,
     identity: &SystemIdentity,
@@ -232,7 +204,7 @@ mod tests {
         needs: Some("mode"),
         ..FakeDevice::named("ally", "ROG Ally")
     };
-    /// Stands in for the keyboard crate's button of one's own: both keys, or neither.
+    /// Stands in for the keyboard crate's button of one's own.
     static OWN: FakeDevice = FakeDevice {
         needs_both: Some(("modifier", "key")),
         ..FakeDevice::named("custom", "Your own button")

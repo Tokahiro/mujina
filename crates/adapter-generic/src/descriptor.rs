@@ -1,5 +1,4 @@
-//! The generic launcher as the configuration and the tools see it: `[launcher.generic]`, and
-//! how its options become a [`GenericLauncherConfig`]. Portable, so it is tested everywhere.
+//! `[launcher.generic]`: its settings, and how they become a [`GenericLauncherConfig`].
 
 use std::path::PathBuf;
 
@@ -70,22 +69,16 @@ const TEMPLATE: &str = r#"# A launcher Mujina does not know, with kind = "generi
 # process = "frontend.exe"        # default: the executable's file name
 "#;
 
-/// A launcher Mujina knows nothing about: everything comes from the configuration. Good enough
-/// to boot into a full-screen frontend; extras (network indicator, menus, navigation) need a
-/// dedicated adapter.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct GenericLauncherConfig {
     pub executable: PathBuf,
     pub arguments: Vec<String>,
-    /// Class name of the launcher's full-screen window. Without it the launcher's process
-    /// standing counts as "UI visible", and its main window is what gets focused.
+    /// Without it a running process counts as "UI visible", and its main window is focused.
     pub window_class: Option<String>,
-    /// File name of the launcher's process, e.g. `playnite.fullscreenapp.exe`.
     pub process_name: String,
 }
 
 impl GenericLauncherConfig {
-    /// `[launcher.generic]` as the launcher uses it, or what makes it unusable.
     pub fn from_options(options: &OptionTable) -> Result<Self, String> {
         let executable = text(options, "executable")
             .filter(|executable| !executable.is_empty())
@@ -110,7 +103,6 @@ impl GenericLauncherConfig {
         })
     }
 
-    /// The program's file name, as the pages and the log call the launcher.
     pub fn program_name(&self) -> String {
         let shown = self.executable.display().to_string();
         match shown.rsplit(['\\', '/']).next() {
@@ -145,8 +137,6 @@ impl LauncherDescriptor for GenericDescriptor {
         TEMPLATE
     }
 
-    /// `ESC`, which most full-screen frontends take as "menu / back", is its menu; games, an
-    /// overlay and pages it cannot know.
     fn capabilities(&self, _options: &OptionTable) -> LauncherCaps {
         LauncherCaps {
             game_detection: false,
@@ -156,8 +146,8 @@ impl LauncherDescriptor for GenericDescriptor {
         }
     }
 
-    /// The process name defaults to the program's file name, so a program without one is no
-    /// launcher. A missing program is the configuration's to say: the setting is required.
+    /// The process name defaults to the program's file name, so a program without one is
+    /// refused. A missing program is left to the configuration, which requires the setting.
     fn validate(&self, options: &OptionTable, notes: &mut Vec<String>) {
         if !options.contains_key("executable") {
             return;
@@ -235,7 +225,6 @@ mod tests {
         );
         assert_eq!(notes, ["launcher.generic.executable has no file name"]);
 
-        // Missing altogether, it is the configuration's to say.
         let mut notes = Vec::new();
         DESCRIPTOR.validate(&options(&[("process", text("x.exe"))]), &mut notes);
         assert!(notes.is_empty(), "{notes:?}");

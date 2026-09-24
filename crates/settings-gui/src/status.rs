@@ -1,8 +1,5 @@
-//! What the Status and System pages show: the doctor's verdict, the device at a glance, every
-//! check, and what Windows allows. Facts and states only; the pages word them. Each check is
-//! named by its title, in the window's language. What the doctor found stays English on the
-//! Status page, as in `mujinactl doctor` and the log; the System page says it in the sentence a
-//! check has for it, in the window's language too.
+//! Data for the Status and System pages. What the doctor found stays English on the Status page,
+//! as in `mujinactl doctor`.
 
 use mujina_app::tool::SystemFacts;
 use mujina_application::device::SystemIdentity;
@@ -15,25 +12,20 @@ use crate::ui::{
     ButtonSource, Health, HomeApp, Icons, RowData, RowKind, SystemInfo, Verdict, WifiFix,
 };
 
-/// What the Status page shows, as found. It is gathered on a thread of its own (the doctor asks
-/// Steam's debugging port and lists processes) and shown on the window's. Facts only: the page
-/// words them in the language in effect.
+/// What the Status page shows, gathered on a worker thread and shown on the window's.
 pub struct Probe {
     pub findings: Vec<Finding>,
     pub settings: LoadedSettings,
     pub system: SystemIdentity,
     /// `device.profile` as `config.toml` says it; "" where it relies on the default.
     pub stored_profile: String,
-    /// The device button in effect, as the device tile shows it.
     pub button: InUse,
     pub launcher: String,
     /// When the doctor was done, as "HH:MM" in local time.
     pub time: String,
 }
 
-/// The System page's row of `finding`, with its button's icons from `icons`: what the check
-/// found in its sentence for it, and what it offers to put it right. A row whose key is the
-/// finding's id, so that its button can be told apart.
+/// The row's key is the finding's id, so its button can be told apart.
 pub fn system_row(finding: &Finding, icons: &Icons<'_>) -> RowData {
     let check = check(finding);
     let (label, icon) = match finding.remedy {
@@ -61,8 +53,7 @@ pub fn system_row(finding: &Finding, icons: &Icons<'_>) -> RowData {
     }
 }
 
-/// What the System page says `finding` found: its check's sentence for it, in the window's
-/// language, or else its detail.
+/// The finding's translated summary, or else its English detail.
 pub fn said(finding: &Finding) -> String {
     finding
         .summary
@@ -70,7 +61,6 @@ pub fn said(finding: &Finding) -> String {
         .map_or_else(|| finding.detail.clone(), texts::t)
 }
 
-/// The System page's home card: whose home app Windows starts, and the launcher.
 /// `steam_target`: the execution alias Steam starts, "" when Mujina runs unpackaged.
 pub fn system_info(facts: &SystemFacts, steam_target: &str) -> SystemInfo {
     let registered = facts.ours.is_some() && facts.ours == facts.home_app;
@@ -86,12 +76,11 @@ pub fn system_info(facts: &SystemFacts, steam_target: &str) -> SystemInfo {
         other_home: facts.home_app.as_deref().unwrap_or_default().into(),
         launcher: facts.launcher.as_str().into(),
         steam_target: steam_target.into(),
-        // Whether Mujina Setup's copy is there is no fact the doctor finds; the caller looks.
+        // Not a doctor fact; the caller sets it.
         can_remove: false,
     }
 }
 
-/// The doctor's counts, as the verdict at the top of the Status page shows them.
 pub fn verdict(findings: &[Finding]) -> Verdict {
     let count = |severity| {
         findings
@@ -108,11 +97,9 @@ pub fn verdict(findings: &[Finding]) -> Verdict {
     }
 }
 
-/// One finding as the page lists it.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Check {
     pub health: Health,
-    /// What its check is called, in the language set.
     pub title: String,
     pub detail: String,
 }
@@ -136,17 +123,13 @@ pub fn check(finding: &Finding) -> Check {
 /// The device button in effect, as the device tile shows it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum InUse {
-    /// No device, so no button.
     Nothing,
-    /// A button of one's own, `[device.button]`, and the keys it arrives as.
     Own { keys: String },
-    /// A device Mujina has, and what its button is called on it.
     Device { label: String },
 }
 
-/// The device button tile: what the button is ("" without one), and how that came to be.
-///
-/// `stored` is what `device.profile` says in the file ("" when it relies on the default).
+/// The device button tile: the button ("" without one) and where it comes from. `stored` is
+/// `device.profile` as in the file, "" for the default.
 pub fn button_tile(remap: bool, in_use: &InUse, stored: &str) -> (String, ButtonSource) {
     if !remap {
         return (String::new(), ButtonSource::Off);
@@ -167,7 +150,6 @@ pub fn button_tile(remap: bool, in_use: &InUse, stored: &str) -> (String, Button
     }
 }
 
-/// The Wi-Fi tile: whether Steam's Wi-Fi fix is on, or `None` with a launcher that has none.
 pub fn wifi(on: Option<bool>) -> WifiFix {
     match on {
         Some(true) => WifiFix::On,
@@ -176,8 +158,8 @@ pub fn wifi(on: Option<bool>) -> WifiFix {
     }
 }
 
-/// A path as the pages show it: under `%LOCALAPPDATA%` by that name rather than by the user's
-/// folder, which is shorter and does not show the user name in a screenshot.
+/// `path` with a leading local app data folder shown as `%LOCALAPPDATA%`: shorter, and keeps the
+/// user name out of screenshots.
 pub fn shown_path(path: &str, local_app_data: Option<&str>) -> String {
     let rest = local_app_data
         .filter(|base| !base.is_empty())
@@ -233,7 +215,6 @@ mod tests {
                 detail: "anyfse.exe running; it does the same job as Mujina".into(),
             }
         );
-        // In the check's own crate's words; what it found stays English.
         texts::set("de");
         let german = check(&finding);
         assert_eq!(
@@ -329,7 +310,7 @@ mod tests {
         let mut ours = facts();
         ours.home_app = ours.ours.clone();
         assert_eq!(home(&ours), HomeApp::Mujina);
-        // Unpackaged, Mujina has no app ID, so it is never the home app.
+        // Unpackaged, Mujina has no app ID.
         let mut unpackaged = facts();
         unpackaged.ours = None;
         assert_eq!(home(&unpackaged), HomeApp::Windows);
@@ -356,9 +337,7 @@ mod tests {
             "Aus. Ohne ihn nimmt Windows Mujina nicht als Home-App an (Einstellungen › System › \
              Erweitert)."
         );
-        // The Status page keeps what the doctor found, as `mujinactl doctor` says it.
         assert_eq!(check(&finding).detail, finding.detail);
-        // A check without a sentence of its own is shown by its detail.
         let plain = Finding {
             summary: None,
             ..finding.clone()

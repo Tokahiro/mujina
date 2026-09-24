@@ -161,7 +161,6 @@ fn config_show() -> ExitCode {
 
 fn config_apply(change: &SettingChange) -> ExitCode {
     let changes = std::slice::from_ref(change);
-    // Whether config.toml held the key at all before this change.
     let was_stored = compose::config().snapshot().stored(&change.key).is_some();
     match tool::change(changes) {
         Ok(applied) => {
@@ -170,8 +169,7 @@ fn config_apply(change: &SettingChange) -> ExitCode {
                 Some(_) => println!("{} set.", change.key),
                 // No setting any more, so it has no default to go back to.
                 None if schema::find(&change.key, launchers.all, devices.all).is_none() => {
-                    // A key that was never in the file is most likely a typo: nothing changed,
-                    // so nothing takes effect either.
+                    // Never in the file, so most likely a typo, and nothing changed.
                     if !was_stored {
                         println!("{} was not set; nothing changed.", change.key);
                         return ExitCode::SUCCESS;
@@ -252,8 +250,7 @@ pub fn describe_configuration(adapters: &Adapters) -> String {
     text
 }
 
-/// The launcher in use and what its options come to, defaults included: `Steam Big Picture:
-/// ui_link = false, wifi_indicator = true (inactive: needs ui_link)`.
+/// E.g. `Steam Big Picture: ui_link = false, wifi_indicator = true (inactive: needs ui_link)`.
 fn describe_launcher(adapters: &Adapters) -> String {
     let options = &adapters.settings.settings.launcher.options;
     let specs = adapters.plugin.descriptor.settings();
@@ -278,7 +275,6 @@ fn describe_launcher(adapters: &Adapters) -> String {
     }
 }
 
-/// A value as `config.toml` would spell it.
 fn as_toml(value: &SettingValue) -> String {
     match value {
         SettingValue::Bool(flag) => flag.to_string(),

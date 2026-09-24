@@ -1,6 +1,4 @@
-# @NAME@.
-#
-# Made by `cargo xtask new-device @ID@ --profile`; see docs/new-device.md, section 3.
+# @NAME@ (docs/new-device.md, section 3).
 #
 # TODO: which companion software sends the buttons' keys, and anything worth knowing about it.
 id = "@ID@"

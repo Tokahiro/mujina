@@ -1,10 +1,4 @@
-//! Asking the shell to open something.
-//!
-//! ShellExecute may hand its work to shell extensions that COM loads, so every call here runs
-//! with COM initialised as Microsoft asks (see [`com::Apartment`]). On a thread already in an
-//! STA that only counts one more use of it; on a thread in the multithreaded apartment the call
-//! goes ahead as it is, and `run_elevated` then launches within that apartment (it has to wait
-//! for the launch, without a message loop of its own).
+//! Asking the shell to open or run something, in a COM STA unless the thread is in the MTA.
 
 use std::path::Path;
 use std::ptr::{null, null_mut};
@@ -24,10 +18,9 @@ use crate::window::WindowHandle;
 /// Why [`run_elevated`] did not run the program.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ElevationError {
-    /// The user declined the prompt (or cancelled entering an administrator's credentials):
-    /// `ShellExecuteExW` reported `ERROR_CANCELLED`.
+    /// The user declined the prompt or the credential entry (`ERROR_CANCELLED`).
     Declined,
-    /// Anything else: a policy that forbids elevation, a missing file, and so on.
+    /// E.g. a policy that forbids elevation, or a missing file.
     Failed(Win32Error),
 }
 
@@ -41,9 +34,8 @@ impl ElevationError {
     }
 }
 
-/// Runs `program` with administrator rights (Windows shows its prompt) and waits for it to end;
-/// its exit code. `owner` is the window the prompt belongs to, so that it comes up in front of
-/// it and not behind. Blocks: call it from a thread that may wait.
+/// Runs `program` as administrator (after Windows' prompt, in front of `owner`) and returns its
+/// exit code. Blocks until it ends: call it from a thread that may wait.
 pub fn run_elevated(
     program: &Path,
     arguments: &str,
@@ -55,8 +47,7 @@ pub fn run_elevated(
     // SAFETY: SHELLEXECUTEINFOW is plain data for which all-zero is a valid value.
     let mut info: SHELLEXECUTEINFOW = unsafe { std::mem::zeroed() };
     info.cbSize = u32::try_from(size_of::<SHELLEXECUTEINFOW>()).unwrap_or(0);
-    // This thread waits below instead of pumping messages, so the shell has to finish the
-    // launch before it returns: Microsoft asks for NOASYNC on a thread without a message loop.
+    // NOASYNC: Microsoft asks for it on a thread without a message loop.
     info.fMask = SEE_MASK_NOCLOSEPROCESS | SEE_MASK_NOASYNC;
     info.hwnd = owner.map_or(null_mut(), WindowHandle::raw);
     info.lpVerb = verb.as_ptr();
@@ -64,8 +55,7 @@ pub fn run_elevated(
     info.lpParameters = parameters.as_ptr();
     info.nShow = SW_HIDE;
     let apartment = com::Apartment::sta();
-    // SAFETY: `info` carries its size and points to NUL-terminated strings that outlive the call;
-    // Win32 validates the owner window.
+    // SAFETY: `info` has its size and live NUL-terminated strings; Win32 validates the owner.
     let started = unsafe { ShellExecuteExW(&raw mut info) } != 0;
     // Read before anything else can change it.
     let failure = (!started).then(|| last_error("ShellExecuteExW"));
@@ -75,8 +65,7 @@ pub fn run_elevated(
         return Err(ElevationError::from_code(error));
     }
     if info.hProcess.is_null() {
-        // Started, but through something that gave no process back (DDE, say): not the case for
-        // an executable, so say so rather than wait for nothing.
+        // Started through something without a process (DDE, say): nothing to wait for.
         return Err(ElevationError::Failed(Win32Error {
             call: "ShellExecuteExW",
             code: 0,
@@ -102,8 +91,7 @@ pub fn open(uri: &str) -> bool {
     let verb = to_wide("open");
     let uri = to_wide(uri);
     let _apartment = com::Apartment::sta();
-    // SAFETY: both strings are NUL-terminated and outlive the call; the other pointers may be
-    // null per the documentation.
+    // SAFETY: both strings are NUL-terminated and outlive the call; the rest may be null.
     let result = unsafe {
         ShellExecuteW(
             null_mut(),

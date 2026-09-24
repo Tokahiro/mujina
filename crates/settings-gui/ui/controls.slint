@@ -1,11 +1,8 @@
-// The building blocks of Mujina Settings' pages besides the shared ones in ui/ (cards, focus
-// frames, buttons): section labels, groups, the toast and the hint bar. Focus is not Slint's own
-// here: a page knows which of its rows is current and tells the row, which only draws it.
+// Mujina Settings' own controls; the shared ones are in ui/.
 
 import { Theme, Health } from "@mujina/theme.slint";
 import { Icons } from "@mujina/icons.slint";
 
-// The small upper-case heading above a group.
 export component SectionLabel inherits Text {
     font-size: Theme.label;
     font-weight: 600;
@@ -13,7 +10,6 @@ export component SectionLabel inherits Text {
     color: Theme.muted;
 }
 
-// Rows under their label.
 export component Group inherits VerticalLayout {
     in property <string> label;
     spacing: 12 * Theme.u;
@@ -26,14 +22,12 @@ export component Group inherits VerticalLayout {
     @children
 }
 
-// A doctor state as a filled icon.
 export component StateIcon inherits Image {
     in property <Health> health;
     source: Icons.of-health(root.health);
     colorize: Theme.state-color(root.health);
 }
 
-// How a toast looks: done now, done the next time Xbox mode is entered, or refused.
 export enum ToastKind {
     now,
     next-time,
@@ -48,7 +42,6 @@ export enum Said {
     refused,
     // `detail`: the text as typed.
     not-a-combination,
-    // A launcher's program, left empty while the launcher requires it.
     program-required,
     // `detail`: what else it requires, by its title.
     value-required,
@@ -72,7 +65,6 @@ export struct Notice {
     detail: string,
 }
 
-// The words of a notice, in the app's language.
 export global Words {
     public pure function notice(notice: Notice) -> string {
         if (notice.said == Said.applied) {
@@ -124,7 +116,6 @@ export global Words {
     }
 }
 
-// What came of a change, above the hint bar for a few seconds.
 export component Toast inherits Rectangle {
     in property <Notice> notice;
     in property <bool> shown;
@@ -166,7 +157,6 @@ export component Toast inherits Rectangle {
     }
 }
 
-// How a hint shows its button: a rounded badge, or A's green and B's red circle.
 enum ChipShape {
     badge,
     accept,
@@ -204,7 +194,6 @@ component HintChip inherits HorizontalLayout {
     }
 }
 
-// The controller's buttons and what they do; full screen only.
 export component HintBar inherits Rectangle {
     height: 62 * Theme.u;
     background: #0d0e16b3;

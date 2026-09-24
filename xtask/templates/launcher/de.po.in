@@ -1,5 +1,4 @@
-# German texts of @CRATE@ that Mujina Settings shows:
-# its name, its options and the titles of its checks. Compiled in (the descriptor's catalogs);
+# German texts of @CRATE@ for Mujina Settings, compiled in by the descriptor's `catalogs`.
 # `cargo xtask i18n-check` lists what is missing.
 msgid ""
 msgstr ""

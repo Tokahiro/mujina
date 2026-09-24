@@ -1,7 +1,4 @@
-//! A failed Win32 call, with the reason Windows gave for it.
-//!
-//! Problems on a device have to be diagnosed from its log, so a failure keeps the name of the
-//! call and its error code, and says in words what the code means.
+//! A failed Win32 call with its name, code and Windows' text, for diagnosis from a log.
 
 use std::fmt;
 
@@ -10,8 +7,7 @@ use windows_sys::Win32::System::Diagnostics::Debug::{
     FORMAT_MESSAGE_FROM_SYSTEM, FORMAT_MESSAGE_IGNORE_INSERTS, FormatMessageW,
 };
 
-/// A Win32 call that failed, and the error code it reported: a `WIN32_ERROR`, an `LSTATUS` or an
-/// `HRESULT` (as its bits).
+/// `code` is a `WIN32_ERROR`, an `LSTATUS` or an `HRESULT` (as its bits).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Win32Error {
     pub call: &'static str,
@@ -41,9 +37,7 @@ pub(crate) fn checked(call: &'static str, status: u32) -> Win32Result<()> {
 }
 
 impl Win32Error {
-    /// What Windows says about the code: in English, as it goes into English log lines and
-    /// details, or in the user's language where Windows has no English text. `None` if it has
-    /// no text for it at all.
+    /// Windows' text for the code, in English or else the user's language; `None` if there is none.
     pub fn message(&self) -> Option<String> {
         let mut buffer = [0u16; 512];
         // A language asked for by its id is the only one looked up; 0 lets Windows choose.
@@ -60,9 +54,7 @@ impl Win32Error {
 
     /// Writes the system's text for the code in `language` to `buffer`; its length, 0 if none.
     fn format(&self, language: u32, buffer: &mut [u16]) -> usize {
-        // SAFETY: `buffer` is writable for the length passed; with IGNORE_INSERTS no arguments
-        // are read (which Microsoft asks for with codes from elsewhere), and the source is unused
-        // with FROM_SYSTEM.
+        // SAFETY: `buffer` is writable for its length; these flags read no source or arguments.
         let length = unsafe {
             FormatMessageW(
                 FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
@@ -103,9 +95,6 @@ mod tests {
     use windows_sys::Win32::Foundation::{
         ERROR_FILE_NOT_FOUND, ERROR_INVALID_HANDLE, SetLastError,
     };
-
-    // A Windows without English texts gives them in the user's language, so only their presence
-    // is checked, never the words, unless the English text is there.
 
     #[test]
     fn the_text_is_english_where_windows_has_it() {

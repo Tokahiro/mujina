@@ -1,5 +1,4 @@
-//! mujina.log as the Help page shows it: newest first, each line split into time, level and
-//! message for colouring. Pure, so it is tested here.
+//! mujina.log for the Help page: newest first, each line split into time, level and message.
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Line {
@@ -12,7 +11,6 @@ pub struct Line {
 
 const LEVELS: [&str; 5] = ["ERROR", "WARN", "INFO", "DEBUG", "TRACE"];
 
-/// The last `limit` lines, newest first.
 pub fn newest_first(text: &str, limit: usize) -> Vec<Line> {
     text.lines().rev().take(limit).map(parse).collect()
 }

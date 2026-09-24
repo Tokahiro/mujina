@@ -1,76 +1,60 @@
-//! What one press of the device button came to, in the terms of the button's rules: for the log,
-//! which the composition root writes, since this ring has none. It names roles only (the
-//! launcher, the game, another app), never a process or a window, so a log with it can be
-//! attached to an issue as it is.
+//! What a button press came to, for the log. Names roles only, so logs can go into an issue.
 
 use std::fmt;
 
 use mujina_domain::button::WindowShape;
 
-/// What was in front at the press, as the agent made it out.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InFront {
-    /// The launcher's own UI.
     LauncherUi,
     /// A game the launcher recognises as the one it runs.
     Game,
-    /// A window the launcher cannot tie to its game, taken for it: a game runs whose window was
-    /// not found, and this one is shaped as a game in full screen is.
+    /// Taken for the game by its full-screen shape: a game runs, but its window was not found.
     TakenForGame,
     /// Anything else, or nothing that could be identified.
     Other,
 }
 
-/// What the agent found out about the launcher's game.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GameSeen {
     /// The launcher runs none, or cannot tell.
     None,
     /// One runs; where its window is was not needed.
     Running,
-    /// Its window is the one in front.
     InFront,
-    /// Its window was found behind something else.
     Behind,
-    /// It runs, but no window of it was found, and the launcher knows its processes: the window
-    /// in front is not the game's.
+    /// No window found, and the launcher knows its processes: the window in front is not the game.
     NoWindow,
-    /// The launcher says one runs, but its window is nowhere and the launcher does not know all
-    /// its processes: the window in front may be the game, one the launcher cannot be tied to.
+    /// No window found, and the launcher does not know its processes: the front one may be it.
     NotFound,
-    /// The launcher still counts one as running, but nothing of it runs any more (a launcher may
-    /// wait for what the game started, a browser opened from a link in it, say).
+    /// The launcher still counts one as running, but nothing of it runs.
     Gone,
 }
 
 impl GameSeen {
-    /// Whether a game is to be reckoned with: one that has ended is not, whatever the launcher
-    /// still says.
+    /// Whether a game counts: one that has ended does not, whatever the launcher says.
     pub const fn running(self) -> bool {
         !matches!(self, Self::None | Self::Gone)
     }
 }
 
-/// What the agent looked at before it decided.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Seen {
     pub in_front: InFront,
     pub game: GameSeen,
-    /// How the window in front is shown. Asked only while the game's window cannot be found;
-    /// `None` then means it could not be read.
+    /// Only asked while the game's window is not found; then `None` means it could not be read.
     pub shape: Option<WindowShape>,
     /// Xbox mode is on.
     pub console: bool,
 }
 
-/// What the press was turned into.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Outcome {
     /// The button is switched off, or no device runs: the press means nothing.
     Off,
-    /// The launcher's menu: opened by the launcher itself, or by its shortcut.
+    /// The launcher's menu; `direct`: opened by the launcher itself, not by its shortcut.
     Menu { direct: bool },
-    /// The launcher's overlay over the game: opened by the launcher itself, or by its shortcut.
+    /// `direct` as for [`Menu`](Self::Menu).
     Overlay { direct: bool },
     /// The menu or the overlay was due, but the launcher did not open it and has no shortcut.
     NothingToSend,
@@ -78,16 +62,14 @@ pub enum Outcome {
     BackToGame,
     /// The home role was asked to bring the launcher to the front; `failed` if asking failed.
     Home { failed: bool },
-    /// Nothing of Mujina's: the button's own meaning, sent on as it was swallowed.
+    /// The button's own meaning, replayed since it was swallowed.
     PassedOn,
-    /// Nothing of Mujina's: the device's own software saw the button already.
+    /// The button's own meaning; the device's own software saw it already.
     LeftToDevice,
-    /// Swallowed: the launcher has nothing for it, and the button's own meaning would lead away
-    /// from the launcher.
+    /// The launcher has nothing for it, and the button's own meaning would lead away from it.
     Swallowed,
 }
 
-/// One press of the device button: what was seen, and what was done.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PressReport {
     /// `None` when the press was not looked into ([`Outcome::Off`]).
@@ -96,9 +78,7 @@ pub struct PressReport {
 }
 
 impl PressReport {
-    /// One line for the log, with `launcher` as the launcher's name for the user (e.g. "Steam
-    /// Big Picture"): "Steam Big Picture (in front: another app, framed, not exactly its
-    /// screen's size, maximised; a game runs but its window cannot be found; Xbox mode)".
+    /// One line for the log; `launcher` is its display name, e.g. "Steam Big Picture".
     pub fn describe(&self, launcher: &str) -> String {
         let outcome = Described {
             outcome: self.outcome,
@@ -161,7 +141,6 @@ impl fmt::Display for Seen {
         }
         f.write_str(match self.game {
             GameSeen::None => "; no game",
-            // Only the launcher's word: where the game is was not needed, so it was not looked at.
             GameSeen::Running => "; the launcher counts a game as running",
             GameSeen::InFront => "; a game runs",
             GameSeen::Behind => "; the game's window is behind it",

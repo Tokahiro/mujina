@@ -1,6 +1,5 @@
 //! The launchers and devices compiled into Mujina: the lists a new one is added to (ADR-0013,
-//! `docs/new-launcher.md`, `docs/new-device.md`). Nothing else in the composition root names a
-//! launcher or a device.
+//! `docs/new-launcher.md`, `docs/new-device.md`).
 
 use std::sync::LazyLock;
 
@@ -15,23 +14,18 @@ pub static LAUNCHERS: &[&LauncherPlugin] = &[
     &mujina_adapter_generic::PLUGIN,
 ];
 
-/// What applies where the configuration names no launcher, or one that cannot be used: Steam,
-/// which Mujina is built around.
+/// For a configuration that names no launcher, or one that cannot be used.
 pub static FALLBACK: &LauncherPlugin = &mujina_adapter_steam::PLUGIN;
 
-/// Devices whose buttons reach Windows some other way than as key chords (a vendor HID report,
-/// a WMI event): one line each, and their crate named once in `[workspace.dependencies]` and once
-/// in this crate's `Cargo.toml`. A device whose buttons are key chords needs no line: every file
-/// in `profiles/devices/` is one.
+/// Devices whose buttons are not key chords (a vendor HID report, a WMI event), one line each;
+/// their crate is also named in `[workspace.dependencies]` and this crate's `Cargo.toml`.
 pub static DEVICE_PLUGINS: &[&DevicePlugin] = &[];
 
 static DESCRIPTORS: LazyLock<Vec<&'static dyn LauncherDescriptor>> =
     LazyLock::new(|| LAUNCHERS.iter().map(|plugin| plugin.descriptor).collect());
 
-/// Every device: those of their own crates, then the key-chord profiles and the button of one's
-/// own. `profile = "auto"` takes the first that says it is the machine, so a crate written for
-/// some machines is not hidden by a profile for their whole family (`onexplayer.toml` takes every
-/// ONE-NETBOOK machine); a crate's `matches` is as narrow as the machines it knows.
+/// Device crates before the key-chord devices: `profile = "auto"` takes the first that matches, so
+/// a profile for a whole family cannot hide a device crate.
 static DEVICES: LazyLock<Vec<DevicePlugin>> = LazyLock::new(|| {
     DEVICE_PLUGINS
         .iter()
@@ -43,7 +37,6 @@ static DEVICES: LazyLock<Vec<DevicePlugin>> = LazyLock::new(|| {
 static DEVICE_DESCRIPTORS: LazyLock<Vec<&'static dyn DeviceDescriptor>> =
     LazyLock::new(|| DEVICES.iter().map(|plugin| plugin.descriptor).collect());
 
-/// The launchers as the configuration and the tools see them.
 pub fn launchers() -> Launchers {
     Launchers {
         all: DESCRIPTORS.as_slice(),
@@ -60,7 +53,6 @@ pub fn plugin(id: &str) -> &'static LauncherPlugin {
         .unwrap_or(FALLBACK)
 }
 
-/// The devices as the configuration and the tools see them.
 pub fn devices() -> Devices {
     Devices {
         all: DEVICE_DESCRIPTORS.as_slice(),
@@ -68,30 +60,25 @@ pub fn devices() -> Devices {
     }
 }
 
-/// Every device with what runs it.
 pub fn device_plugins() -> &'static [DevicePlugin] {
     &DEVICES
 }
 
-/// What runs the device `id` names. With none, the key-chord devices' runtime, so that a button
-/// captured or a profile chosen while the agent runs applies at once.
+/// The key-chord runtime for `None` or an unknown id, so a button captured later applies at once.
 pub fn device_runtime(id: Option<&str>) -> &'static dyn DeviceRuntime {
     id.and_then(|id| DEVICES.iter().find(|plugin| plugin.descriptor.id() == id))
         .map_or(KEYBOARD, |plugin| plugin.runtime)
 }
 
-/// The runtime of every key-chord device.
 static KEYBOARD: &dyn DeviceRuntime = &mujina_adapter_keyboard::RUNTIME;
 
-/// Whether an agent whose device `running` runs has to wait for the next session to take over
-/// the device `next` names: one another runtime runs. No device at all every runtime takes over
-/// at once (`DeviceButtons::reconfigure`).
+/// Whether an agent on `running` must wait for the next session to take over `next`: only when
+/// another runtime runs it. `None` never waits, since every runtime can switch its button off.
 pub fn device_waits(running: &dyn DeviceRuntime, next: Option<&str>) -> bool {
     next.is_some() && !std::ptr::addr_eq(device_runtime(next), running)
 }
 
-/// The keys the buttons of `device` arrive as, for the tools to show, e.g. `LWIN+D`; empty for a
-/// device whose buttons are no key chords, and for none.
+/// E.g. `LWIN+D`; empty for no device, or one whose buttons are no key chords.
 pub fn button_keys(device: &DeviceSelection) -> String {
     let chords = mujina_adapter_keyboard::chords_for(device).unwrap_or_default();
     let keys: Vec<String> = chords
@@ -158,7 +145,6 @@ mod tests {
             assert!(std::ptr::addr_eq(runtime, plugin.runtime));
         }
         assert!(std::ptr::addr_eq(device_runtime(None), keyboard));
-        // An id no device has, whichever devices are listed.
         assert!(std::ptr::addr_eq(
             device_runtime(Some("no such device")),
             keyboard
@@ -184,8 +170,6 @@ mod tests {
             Some(mujina_adapter_keyboard::OWN_ID)
         ));
         assert!(!device_waits(keyboard, None), "no device is taken over");
-        // An agent running a device crate's runtime keeps it for a profile until the next
-        // session, but switches the button off at once.
         assert!(device_waits(&Elsewhere, onexplayer));
         assert!(!device_waits(&Elsewhere, None));
     }
@@ -251,7 +235,6 @@ mod tests {
             config.stored("launcher.steam.ui_link"),
             Some(SettingValue::Bool(false))
         );
-        // Uncommented under the template's own header, not added as a second section.
         let text = std::fs::read_to_string(config.path()).unwrap();
         assert_eq!(text.matches("[launcher.steam]").count(), 1, "{text}");
         assert!(config.load().notes.is_empty());
@@ -270,7 +253,6 @@ mod tests {
         let config = ConfigFile::for_system(&dir, onexplayer(), launchers(), devices());
         config.ensure_template();
         let key = |name: &str| SettingValue::Text(name.to_string());
-        // A key name the keyboard device does not know is refused, whatever the reader thinks.
         let refused = config.apply(&[
             SettingChange::set("device.button.modifier", key("LCTRL")),
             SettingChange::set("device.button.key", key("NOPE")),

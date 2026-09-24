@@ -1,5 +1,4 @@
-//! The generic launcher at work: locate and start an executable, tell whether it is up, and
-//! bring its window to the front.
+//! The generic launcher's Windows side.
 
 use mujina_adapter_kit::launcher;
 use mujina_adapter_kit::plugin::{LauncherRuntime, SessionParts};
@@ -18,8 +17,8 @@ pub struct GenericRuntime;
 pub static RUNTIME: GenericRuntime = GenericRuntime;
 
 impl GenericRuntime {
-    /// The configuration reader lets only usable options through; should others arrive all the
-    /// same, the launcher finds nothing and says so, rather than Mujina not starting.
+    /// Unusable options, which the configuration reader should refuse, give a launcher that finds
+    /// nothing, rather than Mujina not starting.
     fn launcher(options: &OptionTable) -> GenericLauncher {
         GenericLauncher::new(GenericLauncherConfig::from_options(options).unwrap_or_default())
     }
@@ -33,7 +32,7 @@ impl LauncherRuntime for GenericRuntime {
     fn session(&self, options: &OptionTable) -> SessionParts {
         SessionParts {
             launcher: Box::new(Self::launcher(options)),
-            // No sign of its own: the agent sees only the process itself come and go.
+            // It signals nothing; the agent sees only its process come and go.
             sources: Vec::new(),
         }
     }
@@ -58,7 +57,6 @@ impl GenericLauncher {
         })
     }
 
-    /// The launcher's full-screen window by its rule, or the process's main window without one.
     fn find_window(&self) -> Option<WindowHandle> {
         if let Some(rule) = self.window_rule() {
             window::find_top_level(&rule)
@@ -69,15 +67,13 @@ impl GenericLauncher {
     }
 }
 
-/// `ESC`, which most full-screen frontends treat as "menu / back". `[launcher] menu` in
-/// `config.toml` overrides it.
+/// Most full-screen frontends treat `ESC` as "menu / back"; `[launcher] menu` overrides it.
 fn escape_chord() -> KeyChord {
     KeyChord::from_keys(&[VirtualKey::ESCAPE])
         .unwrap_or(KeyChord::pair(VirtualKey::ESCAPE, VirtualKey::ESCAPE))
 }
 
 impl HomeLauncher for GenericLauncher {
-    /// Its program, which is what the user chose.
     fn display_name(&self) -> String {
         self.config.program_name()
     }

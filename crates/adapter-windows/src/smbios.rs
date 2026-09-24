@@ -1,11 +1,9 @@
-//! Which machine this is, for choosing its device: the firmware's SMBIOS strings. Not the
-//! package's identity, which is `identity.rs`.
+//! Which machine this is, for choosing its device. The package's identity is `identity.rs`.
 
 use mujina_application::device::SystemIdentity;
 use mujina_winutil::registry::{Hive, read_string};
 
-/// SMBIOS system manufacturer and product name, as Windows mirrors them into the registry; empty
-/// where it has none.
+/// SMBIOS strings as Windows mirrors them into the registry; empty where it has none.
 pub fn identity() -> SystemIdentity {
     const KEY: &str = r"HARDWARE\DESCRIPTION\System\BIOS";
     let value = |name| {

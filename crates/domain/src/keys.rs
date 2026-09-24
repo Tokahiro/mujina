@@ -2,8 +2,7 @@
 
 use core::fmt;
 
-/// A virtual-key code. The numeric values follow the Windows `VK_*` table so adapters can pass
-/// them through unchanged, but nothing in the domain depends on Windows.
+/// A virtual-key code, numbered as the Windows `VK_*` table so adapters pass it through unchanged.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct VirtualKey(pub u16);
 
@@ -63,8 +62,8 @@ const NAMED: &[(&str, VirtualKey)] = &[
     ("LCONTROL", VirtualKey::LCONTROL),
     ("LALT", VirtualKey::LMENU),
     ("LMENU", VirtualKey::LMENU),
-    // What Windows itself synthesizes from a game controller. Seeing these in `mujinactl probe`
-    // means "controller input", not a device button.
+    // What Windows synthesizes from a game controller; in `mujinactl probe` these mean controller
+    // input, not a device button.
     ("GAMEPAD_A", VirtualKey(0xC3)),
     ("GAMEPAD_B", VirtualKey(0xC4)),
     ("GAMEPAD_X", VirtualKey(0xC5)),
@@ -97,27 +96,22 @@ impl fmt::Display for VirtualKey {
     }
 }
 
-/// Maximum number of keys in a [`KeyChord`].
 pub const MAX_CHORD_KEYS: usize = 4;
 
-/// Keys pressed in order and released in reverse order, e.g. `LCTRL+1`.
-///
-/// Only left-hand modifiers are nameable on purpose: games and Steam's overlay sample keyboard
-/// state per frame and several of them only look at the left-hand variants.
+/// Keys pressed in order and released in reverse order, e.g. `LCTRL+1`. Only left-hand modifiers
+/// are nameable: several games and Steam's overlay only look at those.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct KeyChord {
     keys: [VirtualKey; MAX_CHORD_KEYS],
     len: usize,
 }
 
-/// Why a chord description could not be parsed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ChordParseError {
     Empty,
     TooManyKeys,
     UnknownKey,
-    /// A key named twice; only a device button's chord refuses it, since its keys are held
-    /// together.
+    /// Only a device button's chord refuses a repeated key, since its keys are held together.
     RepeatedKey,
 }
 
@@ -165,7 +159,6 @@ impl KeyChord {
         })
     }
 
-    /// A modifier plus a key, the shape of nearly every shortcut.
     pub const fn pair(modifier: VirtualKey, key: VirtualKey) -> Self {
         Self {
             keys: [modifier, key, VirtualKey(0), VirtualKey(0)],
@@ -195,9 +188,7 @@ impl fmt::Display for KeyChord {
 /// How long synthesized chords are held. Too short and frame-sampled input misses them.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct HoldTiming {
-    /// Pause after each modifier press, in milliseconds.
     pub modifier_gap_ms: u16,
-    /// How long the final key stays down, in milliseconds.
     pub key_hold_ms: u16,
 }
 

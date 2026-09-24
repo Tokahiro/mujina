@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 
 use mujina_application::ports::{LauncherInstall, PortError, PortResult};
 
-/// The install `executable` belongs to: the launcher runs in the directory it lies in.
+/// The launcher runs in the executable's directory.
 pub fn install_from_executable(executable: PathBuf) -> PortResult<LauncherInstall> {
     if !executable.is_file() {
         return Err(PortError::NotFound(format!(
@@ -28,7 +28,6 @@ mod tests {
 
     #[test]
     fn the_launcher_runs_where_its_executable_lies() {
-        // The test binary is a file that certainly exists.
         let executable = std::env::current_exe().unwrap();
         let install = install_from_executable(executable.clone()).unwrap();
         assert_eq!(install.directory, executable.parent().unwrap());

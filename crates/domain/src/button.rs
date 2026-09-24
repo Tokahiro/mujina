@@ -1,60 +1,44 @@
 //! What a device button means in the current situation.
 
-/// Which of a device's buttons was pressed, as its device numbers them. Every button behaves the
-/// same for now ([`decide`]); the number travels so that a binding per button can follow once a
-/// device with a second button needs one.
+/// A device button, as its device numbers them; [`decide`] treats every button alike.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct ButtonId(pub u8);
 
-/// Who owns the foreground window.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ForegroundRole {
-    /// The launcher's own UI (e.g. Steam Big Picture).
     LauncherUi,
-    /// A game the launcher started; or, while a game runs whose window cannot be found and whose
-    /// processes the launcher cannot tell, a window shaped as a game in full screen is
-    /// ([`WindowShape::looks_like_full_screen_game`]).
+    /// A game the launcher started; or, while a game runs whose window and processes the launcher
+    /// cannot find, a window for which [`WindowShape::looks_like_full_screen_game`] holds.
     Game,
     /// Anything else: the desktop, another app, a game the launcher cannot be tied to.
     Other,
 }
 
-/// The launcher function a button press is translated to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ButtonAction {
-    /// Leave the button's default behaviour alone.
     Pass,
-    /// Swallow the press: the launcher has nothing for it, and the button's own meaning (on a
-    /// OneXPlayer, Show Desktop) would throw the user out of the launcher.
+    /// Swallow the press: the button's own meaning (Show Desktop on a OneXPlayer) would leave the
+    /// launcher.
     Ignore,
-    /// Open the launcher's main menu.
     Menu,
-    /// Open the launcher's in-game overlay.
     Overlay,
-    /// Bring the launcher to the front, as the home button does.
     Home,
-    /// Bring the running game back to the front.
     ReturnToGame,
 }
 
-/// What a launcher offers, as far as Mujina can use it. A launcher's descriptor says it for the
-/// options it runs with.
 // Independent abilities of a launcher, not states of one machine.
 #[allow(clippy::struct_excessive_bools)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct LauncherCaps {
     /// It tells when a game runs, and which window is the game's.
     pub game_detection: bool,
-    /// It has a main menu the button can open, by a shortcut or directly.
     pub menu: bool,
-    /// It has an overlay over games the button can open, by a shortcut or directly.
     pub overlay: bool,
     /// It can show the page Windows asks for (home, library).
     pub navigation: bool,
 }
 
 impl LauncherCaps {
-    /// Everything: what Steam Big Picture offers.
     pub const ALL: Self = Self {
         game_detection: true,
         menu: true,
@@ -63,13 +47,11 @@ impl LauncherCaps {
     };
 }
 
-/// How the window in front is shown: what tells a game in full screen from the other windows,
-/// for a window the launcher cannot tie to the game it runs.
 // Independent facts about one window, not states of one machine.
 #[allow(clippy::struct_excessive_bools)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct WindowShape {
-    /// It has a title bar or a sizing border, as windows of desktop apps have, maximised or not.
+    /// It has a title bar or a sizing border.
     pub framed: bool,
     /// Its rectangle is exactly its monitor's. A maximised window with a frame is larger: its
     /// borders lie off the screen.
@@ -86,18 +68,8 @@ pub struct WindowShape {
 }
 
 impl WindowShape {
-    /// Whether a window of this shape may be taken for a game in full screen: without a frame,
-    /// exactly as large as its monitor, not maximised, shown, and neither the shell's nor a
-    /// packaged app's. Games in full screen are drawn so, borderless or exclusive alike; a
-    /// desktop app, a browser included, keeps its frame unless it goes full screen itself (a
-    /// video, F11), which is the one case this cannot tell from a game.
-    ///
-    /// For a window that is not the launcher's and not a game the launcher recognises, where the
-    /// launcher cannot tell which processes are the game's. Doubts about how it is shown count
-    /// against it: taken for a game wrongly, the window gets a shortcut that does nothing
-    /// visible; not taken, the button leads to the launcher, which shows the game. One doubt
-    /// cannot be had: a process that cannot be opened is not known to be packaged, and so may be
-    /// taken for a game (a game's protected process may refuse to be opened).
+    /// A desktop app in full screen (a video, F11) matches too. Doubts count against a game, except
+    /// that a process that cannot be opened (a protected game) counts as not packaged.
     pub const fn looks_like_full_screen_game(self) -> bool {
         !self.framed
             && self.fills_monitor
@@ -108,21 +80,8 @@ impl WindowShape {
     }
 }
 
-/// The decision table of the "home" style button.
-///
-/// The foreground deliberately wins over a running game: with the launcher UI in front (say the
-/// game is paused in the background) the menu is what the user is looking at, and the overlay
-/// hotkey would go nowhere.
-///
-/// With something else in front (the Xbox app, a settings page) the button leads back while the
-/// console experience is on: to the running game, or else to the launcher. On the desktop it
-/// keeps its own meaning there, a game running or not: nothing is sent into a window that is
-/// not known to be the game.
-///
-/// What the launcher does not offer is never replaced by the button's own meaning: that is a
-/// keyboard shortcut of the device (Show Desktop on a OneXPlayer), and it would take the user out
-/// of the launcher. Without a menu the press is swallowed; without an overlay the button leads
-/// home in the console experience and is swallowed in a game on the desktop.
+/// The foreground wins over a running game, and nothing is sent into a window not known to be the
+/// game. A missing menu or overlay never falls back to [`ButtonAction::Pass`].
 pub const fn decide(
     foreground: ForegroundRole,
     game_running: bool,
@@ -167,8 +126,6 @@ mod tests {
             }
         }
         assert_eq!(decide(Other, true, true, all), ReturnToGame);
-        // On the desktop only the game gets the overlay; anywhere else the button keeps its own
-        // meaning, a game running or not.
         assert_eq!(decide(Other, true, false, all), Pass);
         assert_eq!(decide(Other, false, true, all), Home);
         assert_eq!(decide(Other, false, false, all), Pass);
@@ -185,7 +142,6 @@ mod tests {
                 assert_eq!(decide(Game, game_running, console, NO_MENU), Overlay);
             }
         }
-        // Everything away from the launcher's UI is as before.
         assert_eq!(decide(Other, true, true, NO_MENU), ReturnToGame);
         assert_eq!(decide(Other, true, false, NO_MENU), Pass);
         assert_eq!(decide(Other, false, true, NO_MENU), Home);
@@ -203,13 +159,11 @@ mod tests {
             assert_eq!(decide(LauncherUi, game_running, true, NO_OVERLAY), Menu);
         }
         assert_eq!(decide(Other, true, false, NO_OVERLAY), Pass);
-        // Back to the game, or home, needs no overlay.
         assert_eq!(decide(Other, true, true, NO_OVERLAY), ReturnToGame);
         assert_eq!(decide(Other, false, true, NO_OVERLAY), Home);
         assert_eq!(decide(Other, false, false, NO_OVERLAY), Pass);
     }
 
-    /// A game drawn borderless over its whole screen.
     const FULL_SCREEN: WindowShape = WindowShape {
         framed: false,
         fills_monitor: true,
@@ -230,7 +184,6 @@ mod tests {
             ..FULL_SCREEN
         };
         assert!(!browser.looks_like_full_screen_game());
-        // Each doubt on its own is enough.
         for doubt in [
             WindowShape {
                 framed: true,
@@ -248,7 +201,6 @@ mod tests {
                 cloaked: true,
                 ..FULL_SCREEN
             },
-            // The desktop covers the screen without a frame too.
             WindowShape {
                 shell: true,
                 ..FULL_SCREEN

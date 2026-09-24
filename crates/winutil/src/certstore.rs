@@ -1,5 +1,4 @@
-//! The machine's `TrustedPeople` certificate store: whether it holds a certificate, and adding
-//! one. Windows installs an MSIX package signed with a certificate from there.
+//! The machine's `TrustedPeople` certificate store, whose certificates Windows trusts for MSIX.
 
 use std::ptr::{null, null_mut};
 
@@ -13,11 +12,10 @@ use windows_sys::Win32::Security::Cryptography::{
 
 use crate::wide::to_wide;
 
-/// Trusted for this machine's packages, not as a root for everything else, as Microsoft's
-/// sideloading guide advises for a self-signed package.
+/// Not `Root`: trusted for packages only, as Microsoft's sideloading guide advises.
 const STORE: &str = "TrustedPeople";
 
-/// What the certificate functions expect to be told, always both.
+/// The certificate functions expect both encoding types.
 const ENCODING: CERT_QUERY_ENCODING_TYPE = X509_ASN_ENCODING | PKCS_7_ASN_ENCODING;
 
 /// Whether exactly this certificate (its DER bytes) is in `LocalMachine\TrustedPeople`: the
@@ -29,17 +27,14 @@ pub fn contains(der: &[u8]) -> bool {
     Store::open(STORE, Access::Read).is_ok_and(|store| store.holds(&certificate))
 }
 
-/// Adds this certificate (its DER bytes) to `LocalMachine\TrustedPeople`, in place of an
-/// identical one already there. Needs administrator rights.
+/// Adds this DER certificate, replacing an identical one. Needs administrator rights.
 pub fn add(der: &[u8]) -> Result<(), String> {
-    // Bytes that are no certificate never get as far as opening the store for writing.
     if Certificate::parse(der).is_none() {
         return Err("not a certificate".to_string());
     }
     let length = u32::try_from(der.len()).map_err(|_| "certificate too large".to_string())?;
     let store = Store::open(STORE, Access::Write)?;
-    // SAFETY: the store is open for writing; `der` is readable for `length` bytes and the call
-    // copies them; a null out pointer asks for no context back.
+    // SAFETY: open store; `der` is readable for `length` bytes; a null out pointer asks for none.
     let added = unsafe {
         CertAddEncodedCertificateToStore(
             store.0,
@@ -65,7 +60,6 @@ enum Access {
     Write,
 }
 
-/// A system store of the local machine, closed when dropped.
 struct Store(HCERTSTORE);
 
 impl Store {
@@ -77,8 +71,7 @@ impl Store {
                 Access::Read => CERT_STORE_READONLY_FLAG | CERT_STORE_OPEN_EXISTING_FLAG,
                 Access::Write => 0,
             };
-        // SAFETY: the system store provider takes the store name as a NUL-terminated UTF-16
-        // string, which outlives the call; it uses neither the encoding type nor a provider.
+        // SAFETY: this provider takes a NUL-terminated UTF-16 name, which outlives the call.
         let store =
             unsafe { CertOpenStore(CERT_STORE_PROV_SYSTEM_W, 0, 0, flags, wide.as_ptr().cast()) };
         if store.is_null() {
@@ -90,10 +83,8 @@ impl Store {
         Ok(Self(store))
     }
 
-    /// Whether the store holds a certificate identical to `certificate`.
     fn holds(&self, certificate: &Certificate) -> bool {
-        // SAFETY: the store is open; for CERT_FIND_EXISTING the search parameter is a valid
-        // certificate context; a null previous context starts at the beginning.
+        // SAFETY: open store; CERT_FIND_EXISTING takes a valid context; null starts at the first.
         let found = unsafe {
             CertFindCertificateInStore(
                 self.0,
@@ -104,7 +95,7 @@ impl Store {
                 null(),
             )
         };
-        // Taken over, so that it is freed.
+        // Wrapped so that it is freed.
         Certificate::from_raw(found).is_some()
     }
 }
@@ -116,11 +107,9 @@ impl Drop for Store {
     }
 }
 
-/// A certificate context, freed when dropped.
 struct Certificate(*const CERT_CONTEXT);
 
 impl Certificate {
-    /// Decodes DER bytes; `None` if they are no certificate.
     fn parse(der: &[u8]) -> Option<Self> {
         if der.is_empty() {
             return None;
@@ -139,8 +128,7 @@ impl Certificate {
 
 impl Drop for Certificate {
     fn drop(&mut self) {
-        // SAFETY: the context came from a function whose result the caller frees, and is freed
-        // exactly once.
+        // SAFETY: a context the caller must free (see `from_raw`), freed exactly once.
         unsafe { CertFreeCertificateContext(self.0) };
     }
 }
@@ -159,16 +147,13 @@ mod tests {
         assert!(add(b"not a certificate").is_err());
     }
 
-    /// Read-only: a certificate from the machine's root store is found there by its bytes, and
-    /// the same certificate with one byte of its signature changed is not.
     #[test]
     fn a_certificate_is_found_only_as_it_is() {
         let store = Store::open("Root", Access::Read).unwrap();
         // SAFETY: the store is open; a null previous context asks for the first certificate.
         let first = unsafe { CertEnumCertificatesInStore(store.0, null()) };
         let first = Certificate::from_raw(first).expect("the root store is never empty");
-        // SAFETY: a context points to its encoded bytes for as long as it lives, and `first`
-        // lives until the copy is made.
+        // SAFETY: the context's encoded bytes live as long as `first`, which outlives the copy.
         let mut der = unsafe {
             std::slice::from_raw_parts((*first.0).pbCertEncoded, (*first.0).cbCertEncoded as usize)
         }

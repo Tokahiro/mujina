@@ -12,12 +12,9 @@ use crate::launcher::LauncherSelection;
 #[allow(clippy::struct_excessive_bools)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Settings {
-    /// Which launcher the home role brings up and the agent supervises, with its own options.
     pub launcher: LauncherSelection,
-    /// Translate the device button into launcher functions.
     pub button_remap: bool,
-    /// The device whose buttons Mujina maps, as `[device]` chose it; none when the device is
-    /// unknown.
+    /// As `[device]` chose it; none when the device is unknown.
     pub device: DeviceSelection,
     /// Overrides the launcher's own menu shortcut.
     pub menu: Option<KeyChord>,
@@ -25,11 +22,9 @@ pub struct Settings {
     pub overlay: Option<KeyChord>,
     pub exit_policy: ExitPolicy,
     pub timing: HoldTiming,
-    /// Keep the launcher on its "game is starting" screen until the game shows itself. Any
-    /// launcher that notices games is told; what it makes of it is its own affair.
+    /// Keep the launcher on its "game is starting" screen until the game shows itself.
     pub game_start_screen: bool,
-    /// Cover the screen with a black window while the launcher starts, instead of leaving the
-    /// console experience's own backdrop up.
+    /// A black window while the launcher starts, instead of Xbox mode's own backdrop.
     pub launch_screen: bool,
     /// Log every event, not only what a user would want to read.
     pub detailed_log: bool,
@@ -63,7 +58,6 @@ impl Settings {
     }
 }
 
-/// Settings plus what the user should know about how they came to be.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct LoadedSettings {
     pub settings: Settings,
@@ -76,7 +70,6 @@ pub trait SettingsSource {
     fn load(&self) -> LoadedSettings;
 }
 
-/// A value as the configuration spells it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SettingValue {
     Bool(bool),
@@ -85,7 +78,6 @@ pub enum SettingValue {
     TextList(Vec<String>),
 }
 
-/// One edit of the configuration.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SettingChange {
     /// Dotted path as in `config.toml`, e.g. `features.launch_screen`.
@@ -111,11 +103,10 @@ impl SettingChange {
 }
 
 pub trait SettingsStore {
-    /// Applies all changes or none. Changes the configuration would ignore or report are refused
-    /// with the reason, so what is stored is always what takes effect.
+    /// All or none; refuses what the configuration would ignore or report, giving the reason.
     fn apply(&self, changes: &[SettingChange]) -> crate::ports::PortResult<()>;
 
-    /// What the configuration says for `key` itself; `None` where it relies on the default.
+    /// `None` where `key` relies on the default.
     fn stored(&self, key: &str) -> Option<SettingValue>;
 }
 

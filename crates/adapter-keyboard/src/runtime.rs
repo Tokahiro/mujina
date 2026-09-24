@@ -13,15 +13,12 @@ use crate::hook::KeyboardHook;
 use crate::sender::{self, Job};
 use crate::{chords_for, descriptors};
 
-/// Runs every key-chord device: one hook thread, told which chords to catch.
 #[derive(Debug)]
 pub struct KeyboardRuntime;
 
 /// The one runtime of every device of this crate, so that a switch between them applies at once.
 pub static RUNTIME: KeyboardRuntime = KeyboardRuntime;
 
-/// Every device of this crate, as `crates/app/src/registry.rs` lists them: the built-in profiles
-/// by file name, then the button of one's own.
 pub fn plugins() -> &'static [DevicePlugin] {
     static PLUGINS: LazyLock<Vec<DevicePlugin>> = LazyLock::new(|| {
         descriptors()
@@ -41,8 +38,7 @@ impl DeviceRuntime for KeyboardRuntime {
             let id = device.id.as_deref().unwrap_or_default();
             return Err(PortError::Failed(format!("{id} is no key-chord device")));
         };
-        // Passing a button on and sending on what the hook held back need it; without it the
-        // button still works where Mujina has something for it.
+        // Only passing on and sending on held-back keys need the sender, so this is not fatal.
         if !sender::start() {
             log::error!("no sender thread; held-back keys cannot be sent on");
         }
@@ -68,8 +64,7 @@ struct KeyboardButtons {
 }
 
 impl DeviceButtons for KeyboardButtons {
-    /// Any device of this crate, another profile or the button of one's own, is taken over at
-    /// once: only the chords the hook catches change.
+    /// Takes over any device of this crate at once: only the chords the hook catches change.
     fn reconfigure(&self, device: &DeviceSelection) -> bool {
         let Some(chords) = chords_for(device) else {
             return false;
@@ -98,7 +93,6 @@ impl DeviceButtons for KeyboardButtons {
     }
 }
 
-/// Says in the log which chords are caught.
 fn describe(chords: &[(ButtonId, TriggerChord)]) {
     if chords.is_empty() {
         log::info!("device button: not mapped");
@@ -111,8 +105,7 @@ fn describe(chords: &[(ButtonId, TriggerChord)]) {
     log::info!("device button: {}", named.join(", "));
 }
 
-/// Sends the launcher's shortcuts, whatever the device: on the thread that also passes a key-chord
-/// button on, so that the hook's proof of life follows every chord sent.
+/// Sends the launcher's shortcuts on the sender thread, so that each proves the hook alive.
 #[derive(Debug)]
 pub struct KeyboardSender(());
 
@@ -138,14 +131,12 @@ mod tests {
 
     #[test]
     fn the_runtime_keeps_the_rules_of_every_device_runtime() {
-        // A button of one's own without keys catches nothing, so no hook is installed and the
-        // test needs no desktop.
+        // Without keys no hook is installed, so the test needs no desktop.
         let own = DeviceSelection {
             id: Some(OWN_ID.to_string()),
             ..DeviceSelection::none()
         };
         runtime_conformance(&RUNTIME, &own).unwrap();
-        // A device of another runtime is not its to take over.
         let buttons = RUNTIME.start(&DeviceSelection::none()).unwrap().buttons;
         let other = DeviceSelection {
             id: Some("no such device".to_string()),

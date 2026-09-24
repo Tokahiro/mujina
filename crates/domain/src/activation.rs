@@ -1,29 +1,22 @@
 //! What Windows asks of the console home when it activates it.
 
-/// The scheme Windows itself activates the console home with. It is not a registered protocol, so
-/// no web page can open it (tried on the device, ADR-0001). A program on the machine could still
-/// activate the package with it, but it gains nothing it could not do by starting the launcher.
+/// The scheme Windows activates the console home with. Not a registered protocol, so no web page
+/// can open it (ADR-0001); a local program could, but gains nothing over starting the launcher.
 const WINDOWS_SCHEME: &str = "windows.gaming:";
-/// The package's own scheme, through which the agent activates the home role.
 const OWN_SCHEME: &str = "mujina:";
 
-/// What an activation of the console home is to put in front of the user.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum HomeDestination {
-    /// The launcher's start page: booting into the console experience, the home button.
     #[default]
     Home,
-    /// The user's games: the library entry of the Game Bar.
     Library,
-    /// The running game. Asked for by Mujina's own agent only (`mujina://game`): in the console
-    /// experience the shell takes the foreground back from a window that a background process
-    /// brought forward, but not from one brought forward by the home app it just activated.
+    /// Only the agent asks for it (`mujina://game`): in the console experience the shell takes the
+    /// foreground back from a window a background process raised, not from the home app's.
     Game,
 }
 
 impl HomeDestination {
-    /// Reads an activation argument such as `windows.gaming:///library`. Anything unknown means
-    /// home: the launcher has to come up whatever Windows comes to ask for in the future.
+    /// Reads an activation argument such as `windows.gaming:///library`; anything unknown is home.
     pub fn from_activation(argument: &str) -> Self {
         let (own, rest) = if let Some(rest) = strip_scheme(argument, WINDOWS_SCHEME) {
             (false, rest)
@@ -47,20 +40,17 @@ impl HomeDestination {
     }
 }
 
-/// Who can have asked for an activation, as far as its argument tells.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ActivationSource {
-    /// Windows itself: `windows.gaming:///home` when it wants the console home (seen on the
-    /// device), `windows.gaming:///library` from the Game Bar, or no argument at all.
+    /// `windows.gaming:` (the console home, the Game Bar's library), or no argument at all.
     Windows,
-    /// Anything else, above all `mujina:`. Only the agent has a reason to use that scheme, but
-    /// any program or web page can open a registered one, and nothing tells who did.
+    /// Anything else, above all `mujina:`: any program or web page can open a registered scheme,
+    /// and nothing tells who did.
     Anyone,
 }
 
 impl ActivationSource {
-    /// Reads the first activation argument. Only what Windows is known to pass counts as
-    /// Windows; an argument nobody has seen yet has to pass the same test as `mujina:`.
+    /// Takes the first activation argument; only what Windows is known to pass counts as Windows.
     pub fn of(argument: Option<&str>) -> Self {
         match argument {
             None => Self::Windows,
@@ -69,10 +59,8 @@ impl ActivationSource {
         }
     }
 
-    /// Whether the activation may bring the launcher up. What anyone can ask for only counts
-    /// while the agent runs, since it is the one caller that means it, or while the console
-    /// experience is on, where bringing the launcher up is what the home app is for anyway. On
-    /// the desktop it would start the launcher where nobody asked for it.
+    /// `Anyone` may bring the launcher up only while the agent (its one real caller) runs, or in
+    /// the console experience, where that is the home app's job anyway.
     pub const fn accepts(self, agent_running: bool, console_experience: bool) -> bool {
         match self {
             Self::Windows => true,
@@ -81,8 +69,7 @@ impl ActivationSource {
     }
 }
 
-/// What follows `scheme` in `argument`. Schemes are case-insensitive (RFC 3986, section 3.1), so
-/// `MUJINA:` is the same scheme as `mujina:`.
+/// Schemes are case-insensitive (RFC 3986, section 3.1).
 fn strip_scheme<'a>(argument: &'a str, scheme: &str) -> Option<&'a str> {
     let head = argument.get(..scheme.len())?;
     let rest = argument.get(scheme.len()..)?;
@@ -185,11 +172,9 @@ mod tests {
                 assert!(Windows.accepts(agent_running, console));
             }
         }
-        // The agent's own `mujina://home` and `mujina://game`: it holds its mutex meanwhile.
         assert!(Anyone.accepts(true, true));
         assert!(Anyone.accepts(true, false));
         assert!(Anyone.accepts(false, true));
-        // A web page on the desktop.
         assert!(!Anyone.accepts(false, false));
     }
 }

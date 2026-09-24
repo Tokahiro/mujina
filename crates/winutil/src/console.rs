@@ -4,10 +4,8 @@ use windows_sys::Win32::System::Console::{
     ATTACH_PARENT_PROCESS, AttachConsole, GetStdHandle, STD_OUTPUT_HANDLE,
 };
 
-/// For a program built for the Windows subsystem, which starts without a console: if its output
-/// goes nowhere, it goes to the console of the program that started it, where there is one (a
-/// Command Prompt, say). Output that was redirected (to a file or a pipe) is left alone. Whether
-/// it now goes anywhere.
+/// For a Windows-subsystem program: sends output that goes nowhere to the parent's console, if
+/// any; redirected output is left alone. Whether output now goes anywhere.
 pub fn attach_parent() -> bool {
     // SAFETY: plain call; a null or invalid handle means there is no output yet.
     let output = unsafe { GetStdHandle(STD_OUTPUT_HANDLE) };

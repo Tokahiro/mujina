@@ -1,5 +1,4 @@
-//! Wiring of adapters. The only place that names concrete adapter types; the launchers and
-//! devices are listed in [`registry`](crate::registry).
+//! Wiring of adapters: the only place naming concrete adapter types, besides [`registry`].
 
 use mujina_adapter_config::ConfigFile;
 use mujina_adapter_kit::plugin::{DeviceParts, DeviceRuntime, LauncherPlugin, SessionParts};
@@ -15,11 +14,9 @@ use mujina_application::settings::{LoadedSettings, SettingsSource};
 
 use crate::registry;
 
-// Defined in the application ring; also named here, where the entry points and Mujina Settings
-// ask for their adapters.
+// Re-exported for the entry points and Mujina Settings, which ask for their adapters here.
 pub use mujina_application::Role;
 
-/// The adapters every entry point needs.
 pub struct Adapters {
     pub fse: WindowsFse,
     pub identity: WindowsPackageIdentity,
@@ -29,13 +26,10 @@ pub struct Adapters {
     pub plugin: &'static LauncherPlugin,
     /// What the home role and the tools need of it.
     pub launcher: Box<dyn HomeLauncher>,
-    /// What the agent needs of it. Built for the agent role only: it starts whatever the
-    /// launcher keeps running in the background.
+    /// Agent role only, since building it starts what the launcher keeps running in the background.
     pub session: Option<SessionParts>,
-    /// What runs the device the configuration names.
     pub device_runtime: &'static dyn DeviceRuntime,
-    /// The device's buttons as the agent runs them. Built for the agent role only, and only if
-    /// the device could be started: without, the agent runs without the button.
+    /// Agent role only, and `None` if the device could not be started.
     pub device: Option<DeviceParts>,
     pub settings: LoadedSettings,
     /// What the firmware says this machine is; decides the device.
@@ -68,8 +62,7 @@ impl Adapters {
         }
     }
 
-    /// What `doctor` looks at beyond the ports: Windows' side, then the launcher's own, then the
-    /// device's.
+    /// What `doctor` checks beyond the ports: Windows', then the launcher's, then the device's.
     pub fn checks(&self) -> Vec<Box<dyn Check>> {
         let descriptor = self.plugin.descriptor;
         let mut checks = mujina_adapter_windows::checks::all(
@@ -86,8 +79,7 @@ impl Adapters {
     }
 }
 
-/// Starts the device's buttons for the agent, as switched on or off: off, its runtime runs
-/// without one, so that switching it on applies at once.
+/// Started even with the button switched off, so that switching it on applies at once.
 fn start_device(runtime: &dyn DeviceRuntime, settings: &LoadedSettings) -> Option<DeviceParts> {
     if let Err(error) = runtime.prepare() {
         log::warn!("the device could not be readied: {error}");
@@ -97,8 +89,7 @@ fn start_device(runtime: &dyn DeviceRuntime, settings: &LoadedSettings) -> Optio
         .start(&device)
         .inspect_err(|error| {
             if device.is_none() {
-                // Every runtime must start so (DeviceRuntime::start); one that does not leaves a
-                // button switched on later unmapped until the next session.
+                // Every runtime must start so (DeviceRuntime::start).
                 log::warn!(
                     "the device's runtime did not start with the button switched off ({error}); \
                      switching it on applies the next time Xbox mode is entered"
@@ -110,9 +101,8 @@ fn start_device(runtime: &dyn DeviceRuntime, settings: &LoadedSettings) -> Optio
         .ok()
 }
 
-/// `config.toml` in Mujina's data folder, read with the launchers and devices compiled in, for
-/// this machine. Every reader and writer of the configuration comes from here, so that each
-/// knows the same launchers and devices.
+/// `config.toml` for this machine, with the compiled-in launchers and devices. Every reader and
+/// writer of the configuration comes from here, so that each knows the same ones.
 pub fn config() -> ConfigFile {
     config_for(smbios::identity())
 }

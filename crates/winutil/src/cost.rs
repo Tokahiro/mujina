@@ -6,7 +6,6 @@ use windows_sys::Win32::Foundation::FILETIME;
 use windows_sys::Win32::System::ProcessStatus::{K32GetProcessMemoryInfo, PROCESS_MEMORY_COUNTERS};
 use windows_sys::Win32::System::Threading::{GetCurrentProcess, GetProcessTimes};
 
-/// CPU time and memory of the current process.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ProcessCost {
     /// Kernel plus user time of all threads, living and dead.
@@ -20,15 +19,14 @@ fn duration(time: FILETIME) -> Duration {
     Duration::from_nanos(ticks.saturating_mul(100))
 }
 
-/// `None` only if Windows refuses the queries, which it has no reason to for the own process.
+/// `None` only if Windows refuses the queries, which it has no reason to for this process.
 pub fn of_this_process() -> Option<ProcessCost> {
     let zero = FILETIME {
         dwLowDateTime: 0,
         dwHighDateTime: 0,
     };
     let (mut created, mut exited, mut kernel, mut user) = (zero, zero, zero, zero);
-    // SAFETY: the pseudo-handle of the current process is always valid; all four out parameters
-    // are writable.
+    // SAFETY: the current process's pseudo-handle is always valid; the out parameters are writable.
     let ok = unsafe {
         GetProcessTimes(
             GetCurrentProcess(),

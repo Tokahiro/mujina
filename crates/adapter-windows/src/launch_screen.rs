@@ -1,10 +1,5 @@
-//! The home app's own window while the launcher starts: see-through by default, a plain black
-//! backdrop on request.
-//!
-//! It is an ordinary (not topmost) full-screen window: it hides the desktop, but whatever the
-//! launcher shows, including its update progress, appears in front of it. Waiting for the
-//! console UI is event-driven: two WinEvent hooks report windows being shown or coming to the
-//! front, and only then is the (comparatively expensive) readiness check run.
+//! The home app's full-screen window while the launcher starts. Not topmost, so the launcher's
+//! windows come in front; the costly readiness check runs only when WinEvent hooks see a window.
 
 use std::cell::Cell;
 use std::ptr::{null, null_mut};
@@ -69,8 +64,7 @@ fn hook(event: u32) -> HWINEVENTHOOK {
     }
 }
 
-/// One press or release of the left Alt key, tagged as ours so that the agent's keyboard hook
-/// lets it be.
+/// Tagged with `OWN_INPUT_TAG` so that the agent's keyboard hook lets it be.
 fn alt(up: bool) -> INPUT {
     // SAFETY: plain call; it only looks the scan code up.
     let scan = unsafe { MapVirtualKeyW(u32::from(VK_LMENU), MAPVK_VK_TO_VSC) };
@@ -89,20 +83,14 @@ fn alt(up: bool) -> INPUT {
     }
 }
 
-/// Takes the foreground although Windows did not grant it.
-///
-/// When Windows activates the home role (home button, boot into Xbox mode) the process normally
-/// owns the foreground right and this is not needed. It is needed when the *agent* asks for the home
-/// role after the launcher crashed: no sanctioned API lets a background process bring anything
-/// to the front, so the launcher would come up behind whatever took over when it died. Windows
-/// lifts the restriction for the process that produced the last input, hence one synthetic tap
-/// of the Alt key, tagged as ours so the agent's hook ignores it.
+/// For when the agent, not Windows, asked for the home role. Windows lets the process that
+/// produced the last input take the foreground, hence one synthetic tap of the Alt key.
 fn claim_foreground(window: HWND) {
     let tap = [alt(false), alt(true)];
     let size = i32::try_from(size_of::<INPUT>()).unwrap_or(0);
     // SAFETY: two valid INPUT structures of the stated size.
     unsafe { SendInput(2, tap.as_ptr(), size) };
-    // The tap is processed asynchronously; give it a few moments to register as our input.
+    // The tap is processed asynchronously; give it a few moments to count as this process's.
     let in_front = (0..10).any(|_| {
         std::thread::sleep(Duration::from_millis(10));
         // Being in front already counts: behind the lock screen the request keeps being refused
@@ -113,8 +101,6 @@ fn claim_foreground(window: HWND) {
     if in_front {
         log::info!("the launch screen is in front (after a synthetic key tap)");
     } else {
-        // Normal while the lock screen is up (booting into Xbox mode): nothing may take the
-        // foreground then, and the launcher comes forward by itself after the unlock.
         log::info!("Windows did not grant the foreground (expected behind the lock screen)");
     }
 }
@@ -132,21 +118,16 @@ fn pump_messages() {
 #[derive(Debug, Default)]
 pub struct WindowsLaunchScreen {
     window: Cell<isize>,
-    /// A window for Windows to see, not for the user: see [`WindowsLaunchScreen::invisible`].
     invisible: bool,
 }
 
 impl WindowsLaunchScreen {
-    /// The black backdrop.
     pub fn black() -> Self {
         Self::default()
     }
 
-    /// The same window, but see-through. Windows takes the home app to have come up once it has
-    /// a window; without one it keeps its welcome screen up on a boot and activates the home
-    /// app again and again. The console experience has a backdrop of its own, though, and a
-    /// black window in front of it only adds a hand-over to get wrong (seen on a device as a
-    /// flash). So the window is there, and what the user sees is what Windows put behind it.
+    /// Windows needs the home app to have a window, or it keeps its welcome screen up and activates
+    /// the home app again and again. See-through, as a black one adds a flash.
     pub fn invisible() -> Self {
         Self {
             window: Cell::new(0),
@@ -168,9 +149,8 @@ impl LaunchScreen for WindowsLaunchScreen {
         }
         let class_name = to_wide("MujinaLaunchScreen");
         let title = to_wide("Mujina");
-        // SAFETY: plain calls; the class structure and both strings outlive the calls that use
-        // them; DefWindowProcW is a valid window procedure; a failed registration makes
-        // CreateWindowExW fail, which is handled below.
+        // SAFETY: the class and both strings outlive the calls that use them; a failed
+        // registration makes CreateWindowExW fail, which is handled below.
         let window = unsafe {
             let instance = GetModuleHandleW(null());
             let class = WNDCLASSW {
@@ -187,8 +167,7 @@ impl LaunchScreen for WindowsLaunchScreen {
             };
             RegisterClassW(&raw const class);
             CreateWindowExW(
-                // A real application window: Windows keeps its welcome screen up until the home
-                // app has one, and activates the home app again and again while it has none.
+                // A real application window, which Windows waits for (see `invisible`).
                 if self.invisible {
                     WS_EX_APPWINDOW | WS_EX_LAYERED
                 } else {
@@ -212,8 +191,7 @@ impl LaunchScreen for WindowsLaunchScreen {
             return;
         }
         if self.invisible {
-            // Not zero: a window nobody could see at all may not count as one. One step of 255
-            // over a backdrop is nothing an eye can make out.
+            // Alpha 1 of 255, not 0: a fully transparent window may not count as one.
             // SAFETY: valid window handle owned by this thread; the colour key is not used.
             unsafe { SetLayeredWindowAttributes(window, 0, 1, LWA_ALPHA) };
         }
@@ -276,8 +254,7 @@ impl LaunchScreen for WindowsLaunchScreen {
         if window == 0 {
             return;
         }
-        // SAFETY: the window was created by this thread; position and size are left alone, and
-        // the window keeps whatever activation it has.
+        // SAFETY: the window was created by this thread.
         unsafe {
             SetWindowPos(
                 window as HWND,

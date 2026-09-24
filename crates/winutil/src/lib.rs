@@ -1,9 +1,4 @@
-//! Infrastructure shared by the Windows-facing adapters.
-//!
-//! This is not an adapter: it implements no port and knows nothing about Mujina's domain. It
-//! exists so that adapters never depend on each other just to read a registry value. All
-//! `unsafe` in here is a direct Win32 call, or the use of a callback or buffer such a call hands
-//! over, with its contract stated next to it.
+//! Safe Win32 wrappers shared by the Windows adapters; no ports, nothing of Mujina's domain.
 
 #![cfg(windows)]
 

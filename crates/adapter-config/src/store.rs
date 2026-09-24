@@ -1,6 +1,5 @@
-//! Writing `config.toml`: edits that keep the user's comments and layout, checked by the same
-//! parser that reads the file, so nothing is stored that would be ignored when read. One writer
-//! at a time, and the file is replaced whole.
+//! Writing `config.toml`: edits keep the user's comments and layout, and what the reader would
+//! ignore is refused. One writer at a time; the file is replaced whole.
 
 use std::fs::{File, OpenOptions, TryLockError};
 use std::io::{self, Write as _};
@@ -16,14 +15,13 @@ use toml_edit::{Array, DocumentMut, Item, Table, Value};
 
 use crate::{ConfigFile, file, template};
 
-/// How long a change waits for another one to be stored. Mujina Settings stores on its window's
-/// thread, which a stuck writer must not hold up for good.
+/// Mujina Settings stores on its window's thread, which a stuck writer must not hold up for good.
 const LOCK_WAIT: Duration = Duration::from_secs(2);
 
 impl SettingsStore for ConfigFile {
     fn apply(&self, changes: &[SettingChange]) -> PortResult<()> {
-        // Held from the read to the rename, so Mujina Settings and mujinactl never work on the
-        // file at once and neither loses the other's change. Dropping the handle releases it.
+        // Held from read to rename, so neither Mujina Settings nor mujinactl loses a change.
+        // Dropping the handle releases it.
         let _lock = lock(&self.path, LOCK_WAIT)?;
         let before = match std::fs::read_to_string(&self.path) {
             Ok(text) => text,
@@ -48,8 +46,7 @@ impl SettingsStore for ConfigFile {
 /// `config.toml` as stored at one moment, read and parsed once however many keys are asked.
 #[derive(Debug)]
 pub struct StoredSnapshot {
-    /// `None` without a file, or with one that is no TOML: then every key relies on its
-    /// default.
+    /// `None` without a file or with one that is no TOML: every key then has its default.
     document: Option<DocumentMut>,
 }
 
@@ -91,7 +88,6 @@ pub fn parse_value(text: &str) -> Result<SettingValue, String> {
     })
 }
 
-/// The kinds of values settings use; `None` for any other.
 fn from_value(value: &Value) -> Option<SettingValue> {
     match value {
         Value::Boolean(flag) => Some(SettingValue::Bool(*flag.value())),
@@ -106,7 +102,6 @@ fn from_value(value: &Value) -> Option<SettingValue> {
     }
 }
 
-/// Applies `changes` to the text of a configuration file.
 fn edit(text: &str, changes: &[SettingChange]) -> Result<String, String> {
     let mut text = text.to_string();
     for change in changes {
@@ -119,9 +114,8 @@ fn edit(text: &str, changes: &[SettingChange]) -> Result<String, String> {
     button_rest(text, changes)
 }
 
-/// Unsetting the last of `[device.button]`'s keys unsets `injected_only` with it: left alone it
-/// describes no button, and the reader would note it. Mujina Settings clears a button by
-/// unsetting its two keys.
+/// Unsetting the last of `[device.button]`'s keys unsets `injected_only` too: alone it describes
+/// no button, and the reader would note it.
 fn button_rest(text: String, changes: &[SettingChange]) -> Result<String, String> {
     const BUTTON: [&str; 2] = ["device", "button"];
     let unsets_a_key = changes.iter().any(|change| {
@@ -186,8 +180,7 @@ fn set_in(text: &str, tables: &[&str], leaf: &str, value: Value) -> Result<Strin
 }
 
 /// Why a key under `tables` cannot be set when the file holds one of those tables as something
-/// else, such as `features = 5`: a section of that name cannot be added beside it, so only a
-/// hand edit can sort it out.
+/// else, such as `features = 5`; only a hand edit can fix that.
 fn not_a_section(document: &DocumentMut, tables: &[&str]) -> Option<String> {
     let mut table = document.as_table();
     for (depth, name) in tables.iter().enumerate() {
@@ -214,8 +207,8 @@ fn not_a_section(document: &DocumentMut, tables: &[&str]) -> Option<String> {
     None
 }
 
-/// Comments the entry out again rather than deleting it: deleting would take the comment lines
-/// in front of it along, and a commented line can be set again later.
+/// Comments the entry out rather than deleting it, which would take the comment lines in front of
+/// it along; a commented line can be set again later.
 fn unset_in(text: &str, tables: &[&str], leaf: &str) -> Result<String, String> {
     let document = parse(text)?;
     if !present(&document, tables, leaf) {
@@ -247,8 +240,8 @@ fn check(
     let (system, launchers, devices) = (&config.system, &config.launchers, &config.devices);
     let parsed = file::parse(after, launchers, devices)
         .map_err(|error| format!("not saved: {}", error.message()))?;
-    // A value set where the reader skips it is refused even when the file held one there
-    // before: stored, it would still change nothing.
+    // A value set where the reader skips it changes nothing, so it is refused even if the file
+    // already held one there.
     let still_ignored: Vec<String> = parsed
         .skipped
         .iter()
@@ -286,13 +279,12 @@ fn notes_of(
     notes
 }
 
-/// `config.toml.lock` beside the file. Not the file itself: every write replaces that.
+/// Beside the file, not on it: every write replaces the file.
 fn lock_path(path: &Path) -> PathBuf {
     path.with_extension("toml.lock")
 }
 
-/// Opens the lock file, which is only ever locked and stays empty. With write access, because
-/// std leaves it open whether a handle without one can be locked.
+/// With write access: std leaves open whether a handle without it can be locked.
 pub(crate) fn lock_file(path: &Path) -> io::Result<File> {
     OpenOptions::new()
         .read(true)
@@ -328,7 +320,7 @@ fn lock(path: &Path, wait: Duration) -> PortResult<File> {
 
 /// Replaces the file in one step, so a reader never sees half of it. The caller holds the lock.
 fn write(path: &Path, text: &str) -> PortResult<()> {
-    // This process's own name, so no other writer can use it at the same time.
+    // With the process id, a temporary name no other writer uses at the same time.
     static WRITES: AtomicU32 = AtomicU32::new(0);
     remove_stale(path);
     let temporary = path.with_extension(format!(
@@ -338,16 +330,14 @@ fn write(path: &Path, text: &str) -> PortResult<()> {
     ));
     let written = write_through(&temporary, text).and_then(|()| std::fs::rename(&temporary, path));
     if written.is_err() {
-        // Nobody else would ever clean it up. Should this fail too, the first error is the one
-        // to report.
+        // Should this fail too, the first error is the one to report.
         let _ = std::fs::remove_file(&temporary);
     }
     written.map_err(|error| PortError::Failed(format!("{}: {error}", path.display())))
 }
 
-/// Removes the temporary files of writes that never reached the rename, as when the power went
-/// in between. With the lock held no write is under way, so every one found is left over. Best
-/// effort: one that cannot go now is tried again on the next write.
+/// Removes temporary files of writes that never reached the rename (a power cut). With the lock
+/// held no write is under way, so every one found is left over. Best effort.
 fn remove_stale(path: &Path) {
     let name = path.file_name().and_then(|file| file.to_str());
     let (Some(folder), Some(name)) = (path.parent(), name) else {
@@ -363,7 +353,7 @@ fn remove_stale(path: &Path) {
                 .and_then(|rest| rest.strip_prefix('.'))
                 .and_then(|rest| rest.strip_suffix(".new"))
                 .is_some_and(|middle| !middle.is_empty())
-                // The single fixed name that 0.27 and earlier wrote.
+                // The fixed temporary name older releases used.
                 || other.strip_prefix(name) == Some(".new")
         });
         if stale {
@@ -372,9 +362,8 @@ fn remove_stale(path: &Path) {
     }
 }
 
-/// Writes `text` to a new file at `path` and waits until it is on the disk, so that a power cut
-/// after the rename cannot leave an empty configuration. The file is closed on return, before
-/// it is renamed.
+/// Waits until `text` is on the disk, so a power cut after the rename cannot leave an empty
+/// configuration. The file is closed on return, before it is renamed.
 fn write_through(path: &Path, text: &str) -> io::Result<()> {
     let mut file = File::create(path)?;
     file.write_all(text.as_bytes())?;
@@ -466,12 +455,8 @@ fn assignment<'a>(line: &'a str, leaf: &str) -> Option<&'a str> {
         .and_then(|rest| rest.strip_prefix('='))
 }
 
-/// Replaces the first line of the section named by `tables` for which `replace` has an answer.
-/// `replace` sees the line without its indentation and line ending, which are kept.
-///
-/// A commented-out header, as the template has for a launcher that is not the default, ends the
-/// section above it: the lines below it belong to a section that does not exist yet, which a
-/// change adds at the end of the file instead.
+/// Replaces the first line in section `tables` that `replace` answers; it sees the line trimmed.
+/// A commented-out header, as the template's other launchers have, ends the section above it.
 fn replace_line(
     text: &str,
     tables: &[&str],
@@ -524,7 +509,6 @@ mod tests {
     use mujina_application::launcher::OptionTable;
     use mujina_application::settings::{Settings, SettingsSource};
 
-    /// The template with the test's launchers.
     static TEMPLATE: LazyLock<String> = LazyLock::new(|| template(&LAUNCHERS));
 
     fn onexplayer() -> SystemIdentity {
@@ -556,7 +540,6 @@ mod tests {
         )
     }
 
-    /// Names in `dir` besides `config.toml` and its lock file.
     fn leftovers(dir: &Path) -> Vec<String> {
         std::fs::read_dir(dir)
             .unwrap()
@@ -579,7 +562,6 @@ mod tests {
         assert!(line.starts_with("launch_screen = true"), "{line}");
         assert!(line.contains("# black screen"), "{line}");
         assert!(!text.contains("# launch_screen"), "{text}");
-        // Everything else is untouched.
         assert!(text.contains("# button_remap = true"));
         assert_eq!(text.lines().count(), TEMPLATE.lines().count());
     }
@@ -631,12 +613,10 @@ mod tests {
         assert!(line_of(&unset, "game_start_screen").is_none(), "{unset}");
         let line = line_of(&unset, "# game_start_screen").unwrap();
         assert!(line.contains("# keep the launcher on its"), "{line}");
-        // The neighbours and their comments are still there.
         assert!(unset.contains("# button_remap = true"), "{unset}");
         assert_eq!(unset.lines().count(), TEMPLATE.lines().count());
         assert!(settings_of(&unset).game_start_screen);
 
-        // Set again after unset: uncommented once more, not added twice.
         let again = edit(
             &unset,
             &[SettingChange::set(
@@ -828,15 +808,14 @@ mod tests {
         let generic =
             "[launcher]\nkind = \"generic\"\n[launcher.generic]\nexecutable = 'C:\\F\\f.exe'\n";
         let to = |id: &str| SettingChange::set("launcher.kind", SettingValue::Text(id.into()));
-        // As Mujina Settings chooses Steam, and as `mujinactl config set` does; ADR-0009's check
-        // refuses neither.
+        // Unset (as Mujina Settings does) and set (as `mujinactl config set` does); the check
+        // (ADR-0009) refuses neither.
         for back in [SettingChange::unset("launcher.kind"), to("steam")] {
             std::fs::write(config.path(), generic).unwrap();
             config.apply(std::slice::from_ref(&back)).unwrap();
             let loaded = config.load();
             assert_eq!(loaded.settings.launcher.id, "steam", "{back:?}");
             assert!(loaded.notes.is_empty(), "{back:?}: {:?}", loaded.notes);
-            // And away again, and back once more.
             config.apply(&[to("generic")]).unwrap();
             assert_eq!(config.load().settings.launcher.id, "generic");
             config.apply(&[to("steam")]).unwrap();
@@ -864,7 +843,6 @@ mod tests {
             stored.stored("launcher.menu"),
             Some(SettingValue::Text("F1".into()))
         );
-        // Commented out in the template: the default applies, nothing is stored.
         assert_eq!(stored.stored("features.button_remap"), None);
         assert_eq!(stored.stored("device.button.key"), None);
         assert_eq!(
@@ -876,7 +854,6 @@ mod tests {
     #[test]
     fn a_snapshot_answers_as_stored_does_with_one_read() {
         let (config, dir) = temp_config("snapshot");
-        // Without a file, every key relies on its default.
         assert_eq!(config.snapshot().stored("timing.key_hold_ms"), None);
         config
             .apply(&[
@@ -906,7 +883,6 @@ mod tests {
             Some(SettingValue::TextList(vec!["--a".into(), "b c".into()]))
         );
 
-        // It keeps what it read; a later change is for the next one.
         config
             .apply(&[SettingChange::set(
                 "timing.key_hold_ms",
@@ -1019,10 +995,8 @@ mod tests {
         let loaded = config.load();
         assert!(loaded.notes.is_empty(), "{:?}", loaded.notes);
         assert_eq!(config.stored("device.button.injected_only"), None);
-        // The profile's button again.
         assert_eq!(loaded.settings.device.id.as_deref(), Some("onexplayer"));
 
-        // Written by hand, it blocks no other change and is not set again.
         std::fs::write(config.path(), "[device.button]\ninjected_only = false\n").unwrap();
         config
             .apply(&[SettingChange::set(
@@ -1077,7 +1051,6 @@ mod tests {
                 SettingValue::Integer(70),
             )])
             .unwrap();
-        // Only the writer's own leftovers go.
         assert_eq!(leftovers(&dir), ["notes.new"]);
         std::fs::remove_dir_all(dir).unwrap();
     }

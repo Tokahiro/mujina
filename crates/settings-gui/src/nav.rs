@@ -1,13 +1,11 @@
-//! Moving between a page's rows with the controller. Pure, so the rules are tested here rather
-//! than on a device.
+//! Moving between a page's rows with the controller.
 
 use slint::Model;
 
 use crate::ui::{RowData, RowKind, RowSection};
 
-/// The row `delta` steps from `current` among the rows that are `enabled`. Rows that are
-/// switched off are skipped, and the ends are ends: there is nothing past the first or the last
-/// row. Without an enabled row in that direction the answer is `current`.
+/// The enabled row `delta` steps from `current`, stopping at the ends; `current` if there is no
+/// enabled row that way.
 pub fn step(enabled: &[bool], current: i32, delta: i32) -> i32 {
     let len = i32::try_from(enabled.len()).unwrap_or(i32::MAX);
     let usable = |row: i32| {
@@ -37,9 +35,7 @@ pub fn step(enabled: &[bool], current: i32, delta: i32) -> i32 {
     found
 }
 
-/// Each row of `sections`, in order, and whether the controller can land on it: not in a hidden
-/// section, not switched off, and with something to do. A row only to read has nothing, and nor
-/// has a button without a label (the agent's while it runs).
+/// For each row of `sections`, whether the controller can land on it.
 pub fn enabled(sections: impl Iterator<Item = RowSection>) -> Vec<bool> {
     sections
         .flat_map(|section| {
@@ -84,7 +80,6 @@ mod tests {
         let rows = [true, false, false, true, false];
         assert_eq!(step(&rows, 0, 1), 3);
         assert_eq!(step(&rows, 3, -1), 0);
-        // Nothing enabled below the last usable row: stay.
         assert_eq!(step(&rows, 3, 1), 3);
     }
 

@@ -33,7 +33,6 @@ impl Hive {
     }
 }
 
-/// The error of a registry call: the call and the code it returned.
 pub type RegistryError = Win32Error;
 
 /// Reads a `REG_SZ` value. A missing key or value is `Ok(None)`.
@@ -41,8 +40,7 @@ pub fn read_string(hive: Hive, key: &str, value: &str) -> Result<Option<String>,
     let key = to_wide(key);
     let value = to_wide(value);
     let mut bytes: u32 = 0;
-    // SAFETY: both strings are NUL-terminated and outlive the call; a null data pointer with a
-    // valid size pointer asks only for the required size.
+    // SAFETY: NUL-terminated strings outlive the call; a null data pointer asks only for the size.
     let status = unsafe {
         RegGetValueW(
             hive.handle(),
@@ -85,8 +83,7 @@ pub fn read_u32(hive: Hive, key: &str, value: &str) -> Result<Option<u32>, Regis
     let value = to_wide(value);
     let mut data: u32 = 0;
     let mut bytes: u32 = 4;
-    // SAFETY: both strings are NUL-terminated and outlive the call; `data` is writable for the
-    // four bytes announced in `bytes`.
+    // SAFETY: NUL-terminated strings outlive the call; `data` is writable for the 4 `bytes`.
     let status = unsafe {
         RegGetValueW(
             hive.handle(),
@@ -113,8 +110,7 @@ pub fn write_string(hive: Hive, key: &str, value: &str, data: &str) -> Result<()
         call: "RegSetKeyValueW",
         code: ERROR_INVALID_PARAMETER,
     })?;
-    // SAFETY: all strings are NUL-terminated and outlive the call; `data` is readable for
-    // `bytes` bytes, terminator included as REG_SZ requires.
+    // SAFETY: NUL-terminated strings outlive the call; `bytes` covers `data` with its terminator.
     let status = unsafe {
         RegSetKeyValueW(
             hive.handle(),
@@ -132,8 +128,7 @@ pub fn write_string(hive: Hive, key: &str, value: &str, data: &str) -> Result<()
 pub fn write_u32(hive: Hive, key: &str, value: &str, data: u32) -> Result<(), RegistryError> {
     let key = to_wide(key);
     let value = to_wide(value);
-    // SAFETY: both strings are NUL-terminated and outlive the call; `data` is readable for the
-    // four bytes announced.
+    // SAFETY: NUL-terminated strings outlive the call; `data` is readable for the 4 bytes given.
     let status = unsafe {
         RegSetKeyValueW(
             hive.handle(),
@@ -147,8 +142,7 @@ pub fn write_u32(hive: Hive, key: &str, value: &str, data: u32) -> Result<(), Re
     checked("RegSetKeyValueW", status)
 }
 
-/// Deletes a key that has no subkeys, with its values. Deleting what does not exist is not an
-/// error.
+/// Deletes a key without subkeys, with its values. A missing key is not an error.
 pub fn delete_key(hive: Hive, key: &str) -> Result<(), RegistryError> {
     let key = to_wide(key);
     // SAFETY: the string is NUL-terminated and outlives the call.
@@ -159,7 +153,7 @@ pub fn delete_key(hive: Hive, key: &str) -> Result<(), RegistryError> {
     }
 }
 
-/// Deletes a value. Deleting what does not exist is not an error.
+/// A missing value is not an error.
 pub fn delete_value(hive: Hive, key: &str, value: &str) -> Result<(), RegistryError> {
     let key = to_wide(key);
     let value = to_wide(value);
@@ -171,8 +165,7 @@ pub fn delete_value(hive: Hive, key: &str, value: &str) -> Result<(), RegistryEr
     }
 }
 
-/// Every `REG_SZ` value of a key, as name and data; values of other types are left out. A
-/// missing key has none.
+/// `(name, data)` of every `REG_SZ` value; other types are left out. A missing key has none.
 pub fn string_values(hive: Hive, key: &str) -> Result<Vec<(String, String)>, RegistryError> {
     let key = match OpenKey::open(hive, key, KEY_QUERY_VALUE) {
         Ok(key) => key,
@@ -189,8 +182,7 @@ pub fn string_values(hive: Hive, key: &str) -> Result<Vec<(String, String)>, Reg
         let mut name_length = u32::try_from(name.len()).unwrap_or(u32::MAX);
         let mut bytes = u32::try_from(data.len() * 2).unwrap_or(u32::MAX);
         let mut kind: u32 = 0;
-        // SAFETY: the key is open with KEY_QUERY_VALUE; `name` is writable for `name_length`
-        // characters and `data` for `bytes` bytes; the reserved pointer is null as required.
+        // SAFETY: open key; the buffers are writable for the lengths passed; reserved is null.
         let status = unsafe {
             RegEnumValueW(
                 key.0,
@@ -226,8 +218,7 @@ pub fn string_values(hive: Hive, key: &str) -> Result<Vec<(String, String)>, Reg
     }
 }
 
-/// An open registry key, closed when dropped. Not a kernel handle: it is closed with
-/// RegCloseKey, so `OwnedHandle` does not fit.
+/// Not a kernel handle, so not an `OwnedHandle`: it is closed with RegCloseKey.
 #[derive(Debug)]
 struct OpenKey(HKEY);
 
@@ -254,14 +245,13 @@ impl Drop for OpenKey {
 /// [`RegistryWatch::rearm`] after every signal.
 #[derive(Debug)]
 pub struct RegistryWatch {
-    // Closed before the event, which it may still signal as it goes.
+    // Declared first, so that it is closed before the event it may still signal.
     key: OpenKey,
     event: Event,
 }
 
 impl RegistryWatch {
-    /// Opens `key` for notification and arms the watch. A missing key is an error with the code
-    /// ERROR_FILE_NOT_FOUND.
+    /// Arms the watch. A missing key is an error with the code ERROR_FILE_NOT_FOUND.
     pub fn open(hive: Hive, key: &str) -> Win32Result<Self> {
         let event = Event::new()?;
         let key = OpenKey::open(hive, key, KEY_NOTIFY)?;
@@ -275,13 +265,11 @@ impl RegistryWatch {
         Self::open(hive, key).ok()
     }
 
-    /// Arms the notification again. Thread-agnostic, so it survives the arming thread. A watch
-    /// that could not be armed never signals again.
+    /// Thread-agnostic: survives the arming thread. A watch that could not be armed never signals.
     pub fn rearm(&self) -> Win32Result<()> {
         let filter =
             REG_NOTIFY_CHANGE_NAME | REG_NOTIFY_CHANGE_LAST_SET | REG_NOTIFY_THREAD_AGNOSTIC;
-        // SAFETY: the key is open with KEY_NOTIFY and the event handle is valid; both live as
-        // long as `self`.
+        // SAFETY: the key is open with KEY_NOTIFY; both it and the event live as long as `self`.
         let status =
             unsafe { RegNotifyChangeKeyValue(self.key.0, 1, filter, self.event.as_raw(), 1) };
         checked("RegNotifyChangeKeyValue", status)
@@ -300,8 +288,7 @@ mod tests {
 
     const KEY: &str = r"Software\MujinaTests\registry";
 
-    /// A key of this test's own. Test runs of several checkouts may run at once, and on a shared
-    /// key one run's writes and deletes would reach the other's reads and watches.
+    /// A key of this test's own: test runs of several checkouts may run at once.
     fn unique_key(purpose: &str) -> String {
         static COUNT: AtomicU32 = AtomicU32::new(0);
         format!(
@@ -336,8 +323,7 @@ mod tests {
         let watch = RegistryWatch::open(Hive::CurrentUser, key).unwrap();
         for count in 2..4 {
             write_u32(Hive::CurrentUser, key, "count", count).unwrap();
-            // SAFETY: valid event handle owned by `watch`; bounded, so a broken watch fails the
-            // test instead of hanging it.
+            // SAFETY: valid event handle; bounded, so a broken watch fails instead of hanging.
             let woken = unsafe { WaitForSingleObject(watch.event().as_raw(), 10_000) };
             assert_eq!(woken, WAIT_OBJECT_0);
             watch.rearm().unwrap();

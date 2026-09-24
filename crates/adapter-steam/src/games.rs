@@ -1,15 +1,5 @@
-//! Telling the running game from everything else on screen.
-//!
-//! A Steam game is installed in a folder of its own, `<library>\steamapps\common\<installdir>`
-//! ([`library`]). Its processes are the running programs that lie in that folder, whoever
-//! started them: a game started through a launcher of its own (the EA app, Ubisoft Connect) or
-//! whose own launcher has exited is found too, and what the game started from elsewhere (a
-//! browser for a link in it) is not the game.
-//!
-//! Without a manifest for the running app (a shortcut to a program Steam did not install), or
-//! while nothing runs from the game's folder, the game is what it used to be: the descendants of
-//! the Steam client that are not Steam's own. A chain broken by a launcher in between that has
-//! exited is not found then; callers treat that as "cannot tell", never as "there is no game".
+//! Telling the running game's processes from everything else on screen. An empty result from
+//! the process tree means "cannot tell", never "there is no game".
 
 use std::path::{Path, PathBuf};
 
@@ -57,8 +47,7 @@ impl Found {
     }
 }
 
-/// What [`find`] makes of what runs from the game's folder (`None` where the folder is not
-/// known) and of the process tree.
+/// `installed` is `None` where the game's folder is not known.
 fn found(installed: Option<Vec<u32>>, tree: Vec<u32>) -> Found {
     match installed {
         Some(installed) if !installed.is_empty() => Found::InFolder(installed),
@@ -67,10 +56,8 @@ fn found(installed: Option<Vec<u32>>, tree: Vec<u32>) -> Found {
     }
 }
 
-/// Whether the program at `image` is Steam's own: one of its known processes, or any program in
-/// Steam's folder `steam` outside its game library there (`steamapps`). Steam starts more of its
-/// own than the known ones: the 64-bit overlay, the shader cache's `fossilize-replay64.exe`,
-/// `steam_monitor.exe`, `streaming_client.exe`.
+/// Any program in Steam's folder `steam` outside `steamapps` counts: Steam starts more than
+/// [`STEAM_PROCESSES`], e.g. the shader cache's `fossilize-replay64.exe`.
 fn is_steams_own(image: &str, steam: Option<&Path>) -> bool {
     let name = image.rsplit(['\\', '/']).next().unwrap_or(image);
     is_steam_process(name)
@@ -79,7 +66,6 @@ fn is_steams_own(image: &str, steam: Option<&Path>) -> bool {
         })
 }
 
-/// The descendants of the Steam client that are not Steam's own.
 fn tree_processes() -> Vec<u32> {
     let Some(client) = registry_keys::client_pid() else {
         return Vec::new();
@@ -93,32 +79,28 @@ fn tree_processes() -> Vec<u32> {
         .collect()
 }
 
-/// The folder the running app is installed in; `None` without a running app or a manifest of it.
 fn game_folder() -> Option<PathBuf> {
     let app = registry_keys::running_app_id()?;
     let steam = registry_keys::executable()?;
     library::game_folder(steam.parent()?, app)
 }
 
-/// Finds the running game's processes. Reads Steam's library files and the path of every running
-/// process: for a button press, not a loop.
+/// Reads Steam's library files and every running process's path: for a button press, not a loop.
 fn find() -> Found {
     let installed =
         game_folder().map(|folder| process::running_from(|image| library::lies_in(image, &folder)));
     found(installed, tree_processes())
 }
 
-/// Whether the window in front belongs to the game Steam runs.
 pub fn in_front() -> bool {
     window::foreground_process_id().is_some_and(|pid| find().processes().contains(&pid))
 }
 
-/// The running game's main window.
 pub fn window() -> Option<WindowHandle> {
     window::main_window_of(find().processes())
 }
 
-/// Where the game Steam runs is: one look for all the agent needs to know on a button press.
+/// One look for all the agent needs to know on a button press.
 pub fn whereabouts() -> GameWhereabouts {
     let found = find();
     if matches!(found, Found::Gone) {
@@ -149,7 +131,6 @@ mod tests {
 
     #[test]
     fn every_program_in_steam_s_folder_but_its_games_is_steam_s_own() {
-        // As on a machine that was looked at: the programs Steam's folder holds.
         let steam = Path::new(r"C:\Program Files (x86)\Steam");
         for own in [
             r"C:\Program Files (x86)\Steam\gameoverlayui64.exe",
@@ -167,22 +148,18 @@ mod tests {
             Some(steam)
         ));
         assert!(!is_steams_own(r"C:\Emulators\emulator.exe", Some(steam)));
-        // Without Steam's folder, by the known names only.
         assert!(is_steams_own(r"X:\Steam\steamwebhelper.exe", None));
         assert!(!is_steams_own(r"X:\Steam\fossilize-replay64.exe", None));
     }
 
     #[test]
     fn the_game_s_folder_decides_where_it_is_known() {
-        // Running from its folder: those processes only, not a browser it started.
+        // 9: a browser the game started.
         assert_eq!(found(Some(vec![7]), vec![7, 9]), Found::InFolder(vec![7]));
-        // Found in its folder though Steam started it through a launcher that has exited.
+        // Started through a launcher that has exited.
         assert_eq!(found(Some(vec![7]), Vec::new()), Found::InFolder(vec![7]));
-        // A game that runs from elsewhere is still found below Steam.
         assert_eq!(found(Some(Vec::new()), vec![9]), Found::InTree(vec![9]));
-        // Nothing of it runs any more: Steam's "running" is stale.
         assert_eq!(found(Some(Vec::new()), Vec::new()), Found::Gone);
-        // No manifest: the process tree, as ever; an empty one is "cannot tell".
         assert_eq!(found(None, vec![9]), Found::InTree(vec![9]));
         assert_eq!(found(None, Vec::new()), Found::InTree(Vec::new()));
     }

@@ -1,10 +1,4 @@
 //! Watching the keyboard to find out what a device button sends.
-//!
-//! Events are either passed on untouched ([`Keys::PassOn`], for `mujinactl probe`) or held back
-//! from every other program for the short time of a capture ([`Keys::Hold`]), so that the button
-//! does not also show the desktop or bring the launcher forward while it is being identified. The
-//! hook callback stores events in a buffer allocated up front, so it never allocates or does I/O;
-//! reporting happens afterwards on the same thread.
 
 use std::cell::RefCell;
 use std::ptr::{null, null_mut};
@@ -22,11 +16,9 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{
 
 use crate::hook::key_event;
 
-/// More than any button test produces; further events are dropped rather than reallocating
-/// inside the hook.
+/// Allocated up front; the hook drops further events rather than reallocate.
 const CAPACITY: usize = 4096;
 
-/// One observed key transition.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Observation {
     pub event: KeyEvent,
@@ -36,9 +28,9 @@ pub struct Observation {
 /// What happens to the keys seen while watching.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Keys {
-    /// They reach their programs as usual.
     PassOn,
-    /// Nothing else sees them until watching ends (Mujina's own keystrokes excepted).
+    /// Nothing else sees them until watching ends, except Mujina's own keys and those an elevated
+    /// program sends, which Windows delivers anyway.
     Hold,
 }
 
@@ -73,9 +65,8 @@ unsafe extern "system" fn observe_proc(code: i32, wparam: WPARAM, lparam: LPARAM
     unsafe { CallNextHookEx(null_mut(), code, wparam, lparam) }
 }
 
-/// Watches the keyboard for up to `duration`, calling `report` for every event soon after it
-/// happened; watching ends early when `report` returns `false`. Returns everything seen, or
-/// `None` if the hook could not be installed.
+/// Calls `report` for every key event until `duration` passes or it returns `false`. Returns
+/// everything seen, or `None` if the hook could not be installed.
 pub fn observe(
     duration: Duration,
     keys: Keys,
@@ -120,7 +111,7 @@ pub fn observe(
             // SAFETY: `message` was filled in by PeekMessageW.
             unsafe { DispatchMessageW(&raw const message) };
         }
-        // Outside the hook: copy what is new, then report without holding the buffer.
+        // Copied first, so the buffer is not borrowed while `report` runs.
         let fresh: Vec<Observation> = SEEN.with(|seen| seen.borrow()[reported..].to_vec());
         reported += fresh.len();
         for observation in &fresh {

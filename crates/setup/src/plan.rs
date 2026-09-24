@@ -1,16 +1,9 @@
-//! Which steps an installation or removal takes, and in which order, from what Setup found out
-//! about the device. Pure, so that every order and every branch is a test, not a comment; it
-//! builds and is tested on any system.
-//!
-//! The order follows one rule: a safety net comes before the change it guards. The check at
-//! sign-in, which gives the home app setting back should Mujina be removed through Settings →
-//! Apps, is arranged before Mujina becomes the home app; the home app is given back before the
-//! package goes.
+//! Which steps an installation or removal takes, and in which order. The rule: a safety net
+//! comes before the change it guards.
 
 use std::fmt;
 
-/// The Windows build Mujina's package requires (`MinVersion` 10.0.26100.0 in
-/// `packaging/AppxManifest.xml.in`): Windows 11 24H2.
+/// `MinVersion` 10.0.26100.0 in `packaging/AppxManifest.xml.in`: Windows 11 24H2.
 pub const REQUIRED_BUILD: u32 = 26100;
 
 /// A package version, as Windows orders them: four numbers, compared from the left.
@@ -35,8 +28,7 @@ impl Version {
         parts.next().is_none().then_some(version)
     }
 
-    /// The version in a package full name, `Name_1.2.3.4_x64__publisherid`: the second of its
-    /// fields. A package name holds no underscore, so the fields are unambiguous.
+    /// From a full name, `Name_1.2.3.4_x64__publisherid`; a package name holds no underscore.
     pub fn from_full_name(full_name: &str) -> Option<Self> {
         Self::parse(full_name.split('_').nth(1)?)
     }
@@ -53,29 +45,22 @@ impl fmt::Display for Version {
     }
 }
 
-/// What Setup found out about the device, before it changes anything. Read-only to gather.
-// Independent yes-or-no facts, each read on its own; no two of them make a state together.
+// Independent facts, each read on its own; no two of them make a state together.
 #[allow(clippy::struct_excessive_bools)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Facts {
-    /// Windows' build number; `None` if it could not be read, which blocks nothing.
+    /// `None` if it could not be read, which blocks nothing.
     pub os_build: Option<u32>,
     pub dev_mode: bool,
-    /// Exactly the certificate this installer carries is trusted, not merely one with the same
-    /// name, such as the one before a renewal.
+    /// Exactly this installer's certificate, not one with the same name from before a renewal.
     pub cert_trusted: bool,
-    /// The version of this Mujina (this package family) installed for the user, if any.
     pub installed: Option<Version>,
-    /// The version of the package this installer carries; `None` for a build that carries none.
     pub carried: Option<Version>,
-    /// Mujina, exactly this family, is the home app of Xbox mode now.
     pub home_app_is_this: bool,
-    /// Mujina's background agent runs in this session (it does in Xbox mode).
     pub agent_running: bool,
 }
 
 impl Facts {
-    /// What an earlier installation already did to this machine.
     pub fn preparation(&self) -> Preparation {
         Preparation {
             developer_mode: self.dev_mode,
@@ -84,16 +69,13 @@ impl Facts {
     }
 }
 
-/// What the user chose in the window, or on the command line.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Choice {
     pub make_home_app: bool,
-    /// Replacing a newer installed version with the one carried was confirmed.
     pub replace_newer: bool,
 }
 
-/// What an earlier installation already did to this machine. Two facts, so that the prompt says
-/// what it is for.
+/// What an earlier installation already did; two facts so that the prompt names what it is for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Preparation {
     pub developer_mode: bool,
@@ -106,24 +88,23 @@ impl Preparation {
     }
 }
 
-/// How the carried package goes onto the device.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Package {
-    /// Not installed yet.
     Install,
-    /// An older version is installed.
-    Update { from: Version },
-    /// The same version is installed: Windows installs it again only if it is exactly the same
-    /// file (Microsoft's troubleshooting table, 0x80073CFB).
+    Update {
+        from: Version,
+    },
+    /// Windows installs the same version again only if it is exactly the same file (Microsoft's
+    /// troubleshooting table, 0x80073CFB).
     Reinstall,
-    /// A newer version is installed, and replacing it was confirmed: `Add-AppxPackage
-    /// -ForceUpdateFromAnyVersion`, which "force[s] a specific version of a package to be staged
-    /// or registered, regardless of whether a higher version is already staged or registered".
-    Downgrade { from: Version },
+    /// A newer version is installed and replacing it was confirmed: `Add-AppxPackage
+    /// -ForceUpdateFromAnyVersion`.
+    Downgrade {
+        from: Version,
+    },
 }
 
 impl Package {
-    /// What installing `carried` over `installed` is.
     pub fn over(installed: Option<Version>, carried: Version) -> Self {
         match installed {
             None => Self::Install,
@@ -136,49 +117,41 @@ impl Package {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Step {
-    /// The device can run Mujina (see [`preflight`]): checked again right before anything
-    /// changes, since the window may have been open for a while.
+    /// [`preflight`] again, right before anything changes: the window may have been open a while.
     Preflight,
-    /// Developer Mode on and the certificate trusted, whichever of the two is missing: once per
-    /// machine, with one prompt. Carries what an earlier installation already did.
+    /// Developer Mode on and the certificate trusted, whichever is missing, with one prompt.
     Prepare(Preparation),
     Package(Package),
-    /// A check at sign-in that gives the home app setting back once Mujina has been removed
-    /// through Settings → Apps, where Windows runs nothing of Mujina's (ADR-0012). It does
-    /// nothing while the package is installed, so arranging it before the home app is safe.
+    /// A check at sign-in that gives the home app back once Mujina is removed through Settings →
+    /// Apps, where Windows runs nothing of Mujina's (ADR-0012). Idle while Mujina is installed.
     ArrangeCleanup,
     MakeHomeApp,
     GiveHomeAppBack,
     RemovePackage,
-    /// The files Mujina made outside its own folders (a launcher's marker file, say), as
-    /// recorded when it made them; then the record.
     ForgetCreatedFiles,
     RemoveCleanup,
 }
 
-/// Why nothing may be installed here.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Blocker {
-    /// Windows is older than [`REQUIRED_BUILD`]: Windows would refuse the package, after the
-    /// administrator prompt and the changes to the machine.
+    /// Older than [`REQUIRED_BUILD`]: Windows would refuse the package only after the prompt and
+    /// the changes to the machine.
     WindowsTooOld { build: u32 },
 }
 
-/// Why [`install`] gives no steps.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Refusal {
     /// This build of Setup carries no package (a CI check, a local build without one).
     NoPackage,
     Blocked(Blocker),
-    /// A newer version is installed and replacing it was not confirmed.
+    /// Replacing the newer installed version was not confirmed.
     NewerInstalled {
         installed: Version,
     },
 }
 
-/// The read-only pre-flight: only a Windows build known to be too old blocks. Anything else
-/// (Xbox mode not found, another home app) cannot be told for sure before installing, so it
-/// blocks nothing.
+/// Only a Windows build known to be too old blocks. Anything else (Xbox mode not found, another
+/// home app) cannot be told for sure before installing.
 pub fn preflight(facts: &Facts) -> Option<Blocker> {
     facts
         .os_build
@@ -186,15 +159,14 @@ pub fn preflight(facts: &Facts) -> Option<Blocker> {
         .map(|build| Blocker::WindowsTooOld { build })
 }
 
-/// Whether the home app switch starts on. On a first installation it does. On an update it says
-/// what is the case now, so that an update never takes the home app from an app the user chose
-/// after installing Mujina.
+/// Whether the home app switch starts on. An update keeps it as it is now, so that it never takes
+/// the home app from an app the user chose.
 pub fn home_app_default(facts: &Facts) -> bool {
     facts.installed.is_none() || facts.home_app_is_this
 }
 
-/// Whether installing stops Mujina's running agent: `Add-AppxPackage -ForceApplicationShutdown`
-/// ends the package's processes. It starts again the next time Xbox mode starts Mujina.
+/// `Add-AppxPackage -ForceApplicationShutdown` ends a running agent; it starts again the next
+/// time Xbox mode starts Mujina.
 pub fn stops_agent(facts: &Facts) -> bool {
     facts.installed.is_some() && facts.agent_running
 }
@@ -231,8 +203,8 @@ pub fn uninstall() -> Vec<Step> {
         // home app is removed while still selected.
         Step::GiveHomeAppBack,
         Step::RemovePackage,
-        // After the package, which can then make none of them again; before the check at
-        // sign-in goes, so that it tries again if a file cannot be deleted now.
+        // After the package, so none is made again; before the check at sign-in goes, which
+        // retries a file that cannot be deleted now.
         Step::ForgetCreatedFiles,
         Step::RemoveCleanup,
     ]
@@ -246,7 +218,6 @@ mod tests {
         Version::parse(text).unwrap()
     }
 
-    /// A first installation on a device never prepared, Windows new enough.
     fn fresh() -> Facts {
         Facts {
             os_build: Some(26200),
@@ -410,7 +381,6 @@ mod tests {
         let blocked = Blocker::WindowsTooOld { build: 22631 };
         assert_eq!(preflight(&old), Some(blocked));
         assert_eq!(install(&old, HOME), Err(Refusal::Blocked(blocked)));
-        // Before anything else, the downgrade question too.
         let old_and_newer = Facts {
             os_build: Some(22631),
             ..prepared("0.29.0.0")

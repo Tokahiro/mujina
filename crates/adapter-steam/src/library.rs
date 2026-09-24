@@ -1,23 +1,16 @@
-//! Where Steam installed a game. Steam's libraries are listed in `libraryfolders.vdf` (their
-//! `path` values); each keeps a manifest `steamapps\appmanifest_<app id>.acf` per game it holds,
-//! whose `installdir` names the game's folder in `<library>\steamapps\common`.
-//!
-//! These are Steam's own files, in Valve's KeyValues text format, and no public API: as with the
-//! registry layout, this module is the one place that reads them. Plain file reading, so the
-//! rules are tested on Linux too.
+//! Where Steam installed a game, from `libraryfolders.vdf` and the game's manifest: Valve's
+//! KeyValues text files, no public API.
 
 use std::fs;
 use std::path::{Path, PathBuf};
 
-/// A quoted string, or a brace, of a KeyValues text.
 #[derive(Debug, PartialEq, Eq)]
 enum Token {
     Text(String),
     Open,
 }
 
-/// The strings and opening braces of a KeyValues text, in order: a closing brace only ends a
-/// block, which the pairs do not need. `//` comments are skipped; `\\` and `\"` are unescaped.
+/// No token for a closing brace: it only ends a block, which the pairs do not need.
 fn tokens(text: &str) -> Vec<Token> {
     let mut found = Vec::new();
     let mut chars = text.chars().peekable();
@@ -53,8 +46,7 @@ fn tokens(text: &str) -> Vec<Token> {
     found
 }
 
-/// The values of `key` at any depth of a KeyValues text, the key compared without case. A key
-/// followed by a block has no value.
+/// The values of `key` at any depth, compared without case. A key followed by a block has none.
 fn values(text: &str, key: &str) -> Vec<String> {
     let mut found = Vec::new();
     let mut tokens = tokens(text).into_iter();
@@ -69,7 +61,6 @@ fn values(text: &str, key: &str) -> Vec<String> {
     found
 }
 
-/// The library folders a `libraryfolders.vdf` lists.
 pub fn library_paths(vdf: &str) -> Vec<PathBuf> {
     values(vdf, "path")
         .into_iter()
@@ -78,8 +69,7 @@ pub fn library_paths(vdf: &str) -> Vec<PathBuf> {
         .collect()
 }
 
-/// The name of the game's folder in `steamapps\common`, as a manifest gives it; `None` for a
-/// manifest without one, or with one that is not a plain folder name.
+/// The game's folder in `steamapps\common`; `None` unless it is a plain folder name.
 pub fn install_dir(manifest: &str) -> Option<String> {
     values(manifest, "installdir")
         .into_iter()
@@ -87,9 +77,8 @@ pub fn install_dir(manifest: &str) -> Option<String> {
         .filter(|name| !name.is_empty() && name != ".." && !name.contains(['\\', '/']))
 }
 
-/// The folder the game `app_id` is installed in, `<library>\steamapps\common\<installdir>`, in
-/// the libraries of the Steam installed in `steam_directory`; `None` where no library has a
-/// manifest of it (a shortcut to a program Steam did not install, say).
+/// `<library>\steamapps\common\<installdir>`; `None` where no library has a manifest of the
+/// game (a shortcut to a program Steam did not install, say).
 pub fn game_folder(steam_directory: &Path, app_id: u32) -> Option<PathBuf> {
     // Steam keeps the list in `steamapps`, and a copy in `config`.
     let listed = ["steamapps", "config"]
@@ -128,7 +117,6 @@ pub fn lies_in(image: &str, folder: &Path) -> bool {
 mod tests {
     use super::*;
 
-    /// As Steam writes the list (shortened), with its escaped backslashes.
     const LIBRARIES: &str = r#""libraryfolders"
 {
 	"0"
@@ -149,7 +137,6 @@ mod tests {
 }
 "#;
 
-    /// As Steam writes a manifest (shortened).
     const MANIFEST: &str = r#""AppState"
 {
 	"appid"		"3751260"
@@ -191,7 +178,6 @@ mod tests {
             let manifest = format!("\"AppState\" {{ \"installdir\" \"{odd}\" }}");
             assert_eq!(install_dir(&manifest), None, "{odd}");
         }
-        // Comments are no keys.
         let commented = "// \"installdir\" \"no\"\n\"AppState\" { \"installdir\" \"yes\" }";
         assert_eq!(install_dir(commented).as_deref(), Some("yes"));
     }
@@ -208,7 +194,6 @@ mod tests {
             game,
             Path::new(r"c:\program files (x86)\steam\steamapps\common\the blood of dawnwalker\")
         ));
-        // Another game whose folder's name begins alike, and the browser a game opened.
         assert!(!lies_in(
             r"C:\Program Files (x86)\Steam\steamapps\common\The Blood of Dawnwalker 2\game.exe",
             folder

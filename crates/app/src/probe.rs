@@ -1,5 +1,4 @@
-//! `mujinactl probe`: shows what the keyboard sees, so that the chord behind a device button can
-//! be read off and turned into a `[device.button]` entry.
+//! `mujinactl probe`: shows what the keyboard sees, to find the chord behind a device button.
 
 use std::fmt::Write as _;
 use std::process::ExitCode;

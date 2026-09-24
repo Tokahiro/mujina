@@ -1,12 +1,10 @@
-//! Launchers and devices for the tests, shaped like the real ones: those live in adapter crates,
-//! which this one cannot use.
+//! Launchers and devices for the tests, like the real ones in adapters this crate cannot use.
 
 use mujina_application::device::Devices;
 use mujina_application::launcher::{LauncherCaps, Launchers};
 use mujina_application::settings::schema::{Applies, SettingKind, SettingSpec, TextFormat};
 use mujina_application::testing::{FakeDevice, FakeLauncherDescriptor};
 
-/// Like Steam Big Picture: a UI link, and a Wi-Fi fix that needs it.
 pub static STEAM: FakeLauncherDescriptor = FakeLauncherDescriptor {
     settings: &[
         SettingSpec {
@@ -35,7 +33,6 @@ pub static STEAM: FakeLauncherDescriptor = FakeLauncherDescriptor {
     ..FakeLauncherDescriptor::named("steam", "Steam Big Picture", LauncherCaps::ALL)
 };
 
-/// Like the generic launcher: a required program, and a rule its value must keep.
 pub static GENERIC: FakeLauncherDescriptor = FakeLauncherDescriptor {
     settings: &[
         SettingSpec {
@@ -100,19 +97,16 @@ pub static GENERIC: FakeLauncherDescriptor = FakeLauncherDescriptor {
     )
 };
 
-/// Steam first, as the default.
 pub static LAUNCHERS: Launchers = Launchers {
     all: &[&STEAM, &GENERIC],
     fallback: &STEAM,
 };
 
-/// Like the OneXPlayer's profile: every machine of its maker.
 pub static ONEXPLAYER: FakeDevice = FakeDevice {
     manufacturer: "ONE-NETBOOK",
     ..FakeDevice::named("onexplayer", "OneXPlayer (show desktop button)")
 };
 
-/// Like a device with an option of its own under `[device.<id>]`.
 pub static PAD: FakeDevice = FakeDevice {
     settings: &[SettingSpec {
         key: "mode",
@@ -126,7 +120,6 @@ pub static PAD: FakeDevice = FakeDevice {
     ..FakeDevice::named("pad", "A pad")
 };
 
-/// Like the keyboard crate's button of one's own: both keys or neither.
 pub static OWN: FakeDevice = FakeDevice {
     needs_both: Some(("modifier", "key")),
     ..FakeDevice::named("custom", "Your own button")

@@ -1,11 +1,11 @@
 //! UTF-16 string conversion.
 
-/// Encodes `text` as a NUL-terminated UTF-16 string.
+/// NUL-terminated.
 pub fn to_wide(text: &str) -> Vec<u16> {
     text.encode_utf16().chain(std::iter::once(0)).collect()
 }
 
-/// Decodes UTF-16 up to the first NUL (or the end of the buffer).
+/// Up to the first NUL, or the whole buffer without one.
 pub fn from_wide(buffer: &[u16]) -> String {
     let end = buffer
         .iter()

@@ -1,8 +1,5 @@
-//! The resident agent: reacts to what happens while the console experience is on.
-//!
-//! The agent is an event handler. An adapter-side event loop turns kernel events into
-//! [`AgentEvent`]s and feeds them in one at a time; everything the agent does in response goes
-//! out through ports. It never waits, sleeps or polls, so an idle system means an idle agent.
+//! The resident agent: handles [`AgentEvent`]s from an adapter's event loop one at a time while
+//! Xbox mode is on, and acts through ports. It never waits, sleeps or polls.
 
 mod press;
 
@@ -19,50 +16,41 @@ use crate::ports::{
 };
 use crate::settings::{Settings, SettingsSource};
 
-/// Something happened that the agent may care about.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AgentEvent {
-    /// The full screen experience was switched on or off.
     FseChanged(FseState),
-    /// Another window came to the front. `None` when its process could not be identified.
-    ForegroundChanged { process_name: Option<String> },
+    /// `None` when its process could not be identified.
+    ForegroundChanged {
+        process_name: Option<String>,
+    },
     /// The launcher's own state changed (game started or ended, launcher restarted, …).
     LauncherStateChanged,
     /// The home role just started the launcher, or switched it to its console UI.
     LauncherStarted,
     /// The session ends: sign-out, shutdown, or the Restart Manager closing the agent.
     SessionEnding,
-    /// The launcher process ended.
     LauncherExited(LauncherExit),
-    /// This button of the device was pressed.
     ButtonPressed(ButtonId),
-    /// The configuration was changed and should be read again.
     SettingsChanged,
 }
 
-/// Whether the agent wants to keep running.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Flow {
     Continue,
     Exit,
 }
 
-/// Everything the agent reaches the outside world through.
 #[derive(Clone, Copy)]
 pub struct AgentPorts<'a> {
     pub fse: &'a dyn FullScreenExperience,
     pub foreground: &'a dyn ForegroundProbe,
     pub launcher: &'a dyn SessionLauncher,
-    /// What the running launcher is: what it offers, and which of its options apply at once.
     pub descriptor: &'a dyn LauncherDescriptor,
-    /// The device's buttons as they run; they report presses through the event loop.
     pub buttons: &'a dyn DeviceButtons,
-    /// The devices Mujina has, for what the running one's buttons are.
+    /// For looking up the running device's buttons.
     pub devices: Devices,
-    /// Sends the launcher's shortcuts, whichever device the button comes from.
     pub keys: &'a dyn KeySender,
     pub home: &'a dyn HomeActivator,
-    /// Read again when the configuration changes.
     pub settings: &'a dyn SettingsSource,
 }
 
@@ -81,7 +69,6 @@ pub struct AgentSettings {
     pub overlay: Option<KeyChord>,
     /// Tell the launcher when a game starts, so it can keep its "starting" screen up.
     pub game_start_screen: bool,
-    /// The launcher's own options, as the configuration names them.
     pub launcher: LauncherSelection,
 }
 
@@ -103,19 +90,15 @@ impl AgentSettings {
 pub struct AgentService<'a> {
     ports: AgentPorts<'a>,
     settings: AgentSettings,
-    /// The launcher's options as the session started with them. Those that wait for the next
-    /// session stay so however the configuration changes.
+    /// The launcher's options at session start; those that wait for the next session stay so.
     started: OptionTable,
     /// The launcher's options that apply at once, as it was last given them.
     applied_live: OptionTable,
-    /// What the launcher offers with the options it runs with: as started, and again after each
-    /// change to those that apply at once.
+    /// What the launcher offers with its running options; recomputed on each live change.
     caps: LauncherCaps,
-    /// The device whose buttons run: as the session started with it, or as the device's adapter
-    /// took a change over.
+    /// The device whose buttons run; changes only when the adapter takes a change over.
     device: DeviceSelection,
     game_running: bool,
-    /// What the last button press came to, until it is taken for the log.
     last_press: Option<PressReport>,
 }
 
@@ -138,19 +121,14 @@ impl<'a> AgentService<'a> {
         }
     }
 
-    /// Brings the agent's picture of the world up to date. Call once before the first event.
-    ///
-    /// What the button means is decided when it is pressed, from what is in front at that
-    /// moment. Deciding ahead of time from foreground events proved fragile; behind the Windows
-    /// welcome screen, for one, those events never arrive.
+    /// Call once before the first event. The button's meaning is decided at each press, not from
+    /// foreground events: behind the Windows welcome screen those never arrive.
     pub fn start(&mut self) {
         self.game_running = self.ports.launcher.game_running();
     }
 
     pub fn handle(&mut self, event: &AgentEvent) -> Flow {
         let flow = self.react(event);
-        // What a launcher does beside the ports (Steam keeps its link to Big Picture up) hears
-        // of every event, once the agent has acted on it.
         self.ports.launcher.observe(event);
         flow
     }
@@ -158,8 +136,7 @@ impl<'a> AgentService<'a> {
     fn react(&mut self, event: &AgentEvent) -> Flow {
         match event {
             AgentEvent::SessionEnding => return Flow::Exit,
-            // What is in front is looked at when the button is pressed, and the event loop
-            // looks for the launcher's process itself: nothing to do here.
+            // Looked at on a button press; the event loop tracks the launcher's process itself.
             AgentEvent::FseChanged(FseState::Active)
             | AgentEvent::ForegroundChanged { .. }
             | AgentEvent::LauncherStarted => {}
@@ -185,28 +162,26 @@ impl<'a> AgentService<'a> {
         Flow::Continue
     }
 
-    /// Takes over what can change under a running session; what cannot (the launcher, those of
-    /// its options that wait for the next session, and a device whose adapter is not the one
-    /// running) stays as it was started.
+    /// Applies what can change in a running session; the launcher, its next-session options and a
+    /// device of another adapter stay as started.
     fn reconfigure(&mut self) {
         let loaded = self.ports.settings.load();
         let settings = AgentSettings::from_settings(&loaded.settings, self.settings.standalone);
-        // Compared with what was asked last, so that a device that has to wait is not asked for
-        // again on every change; going back to the one running is asked for, and taken.
+        // Compared with the last request, not the running device: a device that has to wait is
+        // asked for once, and going back to the running one is still asked for.
         if settings.device != self.settings.device
             && self.ports.buttons.reconfigure(&settings.device)
         {
             self.device = settings.device.clone();
         }
-        // Another launcher's options mean nothing to the one running. Compared with what it was
-        // last given, not with the file before: that may have named another launcher meanwhile.
+        // Compared with what the launcher was last given: the previous file may have named another.
         let descriptor = self.ports.descriptor;
         if settings.launcher.id == descriptor.id() {
             let specs = descriptor.settings();
             let live = launcher::live_options(specs, &settings.launcher.options);
             if live != self.applied_live {
                 self.ports.launcher.reconfigure(&live);
-                // What it offers may follow such an option too, and the button goes by that.
+                // What it offers may depend on a live option.
                 let running = launcher::with_live(specs, &self.started, &live);
                 self.caps = descriptor.capabilities(&running);
                 self.applied_live = live;
@@ -223,8 +198,7 @@ impl<'a> AgentService<'a> {
         }
     }
 
-    /// What the launcher offers the button: its own menu and overlay, or a shortcut the user
-    /// configured for one.
+    /// What the launcher offers, counting a menu or overlay shortcut the user configured.
     fn offers(&self) -> LauncherCaps {
         LauncherCaps {
             menu: self.caps.menu || self.settings.menu.is_some(),
@@ -233,9 +207,7 @@ impl<'a> AgentService<'a> {
         }
     }
 
-    /// What is in front, and what of the launcher's game can be found. Looks, does not
-    /// remember: a button press is rare, and a stale picture of the foreground makes the button
-    /// do nothing at all.
+    /// Looks afresh on every press: a stale picture of the foreground makes the button do nothing.
     fn look(&mut self) -> Seen {
         let console = self.ports.fse.state() == FseState::Active;
         let in_front = self.ports.foreground.foreground_process();
@@ -263,21 +235,14 @@ impl<'a> AgentService<'a> {
         match self.ports.launcher.game_whereabouts() {
             GameWhereabouts::InFront => return seen(InFront::Game, GameSeen::InFront),
             GameWhereabouts::Behind => return seen(InFront::Other, GameSeen::Behind),
-            // The launcher knows the game's processes, and the window in front is none of them.
             GameWhereabouts::NoWindow { known: true } => {
                 return seen(InFront::Other, GameSeen::NoWindow);
             }
-            // Nothing of the game runs any more, whatever the launcher still counts: a launcher
-            // may keep counting a game as running while something it started is still open.
             GameWhereabouts::Gone => return seen(InFront::Other, GameSeen::Gone),
             GameWhereabouts::NoWindow { known: false } => {}
         }
-        // A game runs, the launcher says, but it cannot tell which processes are the game's and
-        // finds no window of it. It may have ended while something it started still counts as
-        // it, or it is a game the launcher cannot be tied to (one started through a launcher of
-        // its own), which may well be the window in front. Only a window shaped as a game in
-        // full screen is taken for it: anything else may be any app, and the overlay's shortcut
-        // would do nothing visible there.
+        // Unknown processes: the game may run through a launcher of its own and be in front. Only
+        // a full-screen game shape is taken for it; elsewhere the overlay's shortcut does nothing.
         let shape = self.ports.foreground.foreground_shape();
         let in_front = if shape.is_some_and(WindowShape::looks_like_full_screen_game) {
             InFront::TakenForGame
@@ -290,8 +255,7 @@ impl<'a> AgentService<'a> {
         }
     }
 
-    /// Whether `button` of the running device is swallowed, and so has to be passed on where
-    /// Mujina has nothing for it. One the device only observes did its own thing already.
+    /// Whether `button` is swallowed, so must be replayed; an unknown button counts as swallowed.
     fn swallowed(&self, button: ButtonId) -> bool {
         let running = self.device.id.as_deref();
         let spec = running
@@ -300,14 +264,12 @@ impl<'a> AgentService<'a> {
         spec.is_none_or(|spec| spec.suppression == Suppression::Swallowed)
     }
 
-    /// What the last button press came to, once: for the composition root to log.
     pub fn take_press_report(&mut self) -> Option<PressReport> {
         self.last_press.take()
     }
 
     fn press_button(&mut self, button: ButtonId) {
-        // Switched off, or no device: a press that still arrives (from a device that only
-        // observes its buttons) means nothing.
+        // Switched off: a press may still arrive from a device that only observes its buttons.
         let report = if self.device.is_none() {
             PressReport {
                 seen: None,
@@ -329,12 +291,10 @@ impl<'a> AgentService<'a> {
             InFront::Game | InFront::TakenForGame => ForegroundRole::Game,
             InFront::Other => ForegroundRole::Other,
         };
-        // A game that has ended counts as none, whatever the launcher still says.
         let action = button::decide(foreground, seen.game.running(), seen.console, self.offers());
         match action {
-            // The launcher's own way first: its shortcut only works while the right part of it
-            // has the keyboard focus, which it may not have after being brought to the front. A
-            // menu shortcut the user configured is theirs, though.
+            // The launcher's own way first (its shortcut needs the right part of it focused),
+            // unless the user configured a menu shortcut.
             ButtonAction::Menu
                 if self.settings.menu.is_none()
                     && self.ports.launcher.open_menu() == Direct::Taken =>
@@ -348,9 +308,7 @@ impl<'a> AgentService<'a> {
                     .or_else(|| self.ports.launcher.menu_shortcut());
                 self.send(chord, Outcome::Menu { direct: false })
             }
-            // The launcher's own way, as for the menu, and without a keystroke into the game;
-            // only where the launcher itself knows the game to be the window in front, since
-            // that is where it draws its overlay.
+            // Only over a game the launcher recognises: that is where it draws its overlay.
             ButtonAction::Overlay
                 if seen.in_front == InFront::Game
                     && self.settings.overlay.is_none()
@@ -358,17 +316,14 @@ impl<'a> AgentService<'a> {
             {
                 Outcome::Overlay { direct: true }
             }
-            // Into the window in front: the game the launcher recognises, or one taken for the
-            // game by its shape.
             ButtonAction::Overlay => {
                 let chord = self
                     .settings
                     .overlay
                     .or_else(|| self.ports.launcher.overlay_shortcut());
                 match chord {
-                    // A window only taken for the game has no way into the overlay but the
-                    // shortcut. Without one the press would do nothing: the button leads where it
-                    // does away from a game instead.
+                    // Only a shortcut reaches a window taken for the game; without one, act as
+                    // away from a game.
                     None if seen.in_front == InFront::TakenForGame => {
                         if seen.console {
                             self.home()
@@ -379,9 +334,7 @@ impl<'a> AgentService<'a> {
                     chord => self.send(chord, Outcome::Overlay { direct: false }),
                 }
             }
-            // Never a shortcut into the window in front, which is not the game: back to the
-            // game where its window was found, else to the launcher, which shows the game if
-            // there still is one. The home role does the same when the window is gone by then.
+            // Never a shortcut into the window in front, which is not the game.
             ButtonAction::ReturnToGame
                 if seen.game == GameSeen::Behind && self.ports.home.activate_game().is_ok() =>
             {
@@ -389,14 +342,11 @@ impl<'a> AgentService<'a> {
             }
             ButtonAction::ReturnToGame | ButtonAction::Home => self.home(),
             ButtonAction::Pass => self.pass(button),
-            // The launcher has nothing for it, and what the button does by itself would lead
-            // away from the launcher.
             ButtonAction::Ignore => Outcome::Swallowed,
         }
     }
 
-    /// Sends `chord` as `sent` says; a launcher that opens a menu only directly has no shortcut
-    /// to fall back on.
+    /// `chord` is `None` for a launcher that opens its menu only directly.
     fn send(&self, chord: Option<KeyChord>, sent: Outcome) -> Outcome {
         match chord {
             Some(chord) => {
@@ -414,7 +364,6 @@ impl<'a> AgentService<'a> {
         }
     }
 
-    /// Not ours to interpret here: the button does what it always did.
     fn pass(&self, button: ButtonId) -> Outcome {
         if self.swallowed(button) {
             self.ports.buttons.pass_on(button);
@@ -439,7 +388,6 @@ mod tests {
     };
     use mujina_domain::keys::VirtualKey;
 
-    /// A launcher with everything, one option that applies at once and one that waits.
     static FAKE: FakeLauncherDescriptor = FakeLauncherDescriptor {
         settings: &[
             SettingSpec {
@@ -465,7 +413,6 @@ mod tests {
         ..FakeLauncherDescriptor::named("fake", "Fake", LauncherCaps::ALL)
     };
 
-    /// A launcher with neither a menu nor an overlay, which cannot tell games either.
     static BARE: FakeLauncherDescriptor = FakeLauncherDescriptor::named(
         "bare",
         "Bare",
@@ -500,7 +447,6 @@ mod tests {
             }
         }
 
-        /// A launcher as [`BARE`] says: no shortcuts, nothing it opens itself.
         fn bare() -> Self {
             let rig = Self {
                 descriptor: &BARE,
@@ -547,13 +493,10 @@ mod tests {
         }
     }
 
-    /// A press of the first button.
     const PRESS: AgentEvent = AgentEvent::ButtonPressed(ButtonId(0));
 
-    /// A device whose button is swallowed and sent on where Mujina has nothing for it, as the
-    /// OneXPlayer's chord is.
+    /// A swallowed button, as the OneXPlayer's chord.
     static KEYS: FakeDevice = FakeDevice::named("keys", "Keys");
-    /// A device whose own software sees its button too, as a vendor HID report is seen.
     static HID: FakeDevice = FakeDevice {
         buttons: &[(1, "armoury", Suppression::Observed)],
         ..FakeDevice::named("hid", "Hid")
@@ -570,8 +513,6 @@ mod tests {
         }
     }
 
-    /// The configuration as the tests change it: with the device the rig runs, unless the test
-    /// says otherwise.
     fn configured() -> Settings {
         Settings {
             device: device("keys"),
@@ -579,7 +520,6 @@ mod tests {
         }
     }
 
-    /// How the rig's agent is started: with the device of [`configured`].
     fn running() -> AgentSettings {
         AgentSettings::from_settings(&configured(), false)
     }
@@ -632,8 +572,7 @@ mod tests {
 
     #[test]
     fn button_works_without_ever_having_seen_a_foreground_event() {
-        // Booting into the console experience: the launcher comes to the front behind the
-        // welcome screen and no foreground event is delivered.
+        // At boot the launcher comes up behind the welcome screen, and no foreground event arrives.
         let rig = Rig::new();
         let mut agent = rig.service(false);
         agent.start();
@@ -644,7 +583,6 @@ mod tests {
         assert_eq!(rig.input.sent(), [FakeLauncher::MENU]);
     }
 
-    /// A game drawn borderless over its whole screen.
     const FULL_SCREEN: WindowShape = WindowShape {
         framed: false,
         fills_monitor: true,
@@ -654,10 +592,7 @@ mod tests {
         packaged: false,
     };
 
-    /// A desktop app maximised, as a maximised browser was read on the desktop: framed, its
-    /// borders off the screen. That Xbox mode shows desktop apps so too is an assumption (not
-    /// verified; see the on-device checklist); it matters only where the launcher does not know
-    /// the game's processes.
+    /// A maximised desktop app, as read on the desktop; assumed, not verified, for Xbox mode.
     const MAXIMISED_APP: WindowShape = WindowShape {
         framed: true,
         fills_monitor: false,
@@ -667,9 +602,7 @@ mod tests {
 
     #[test]
     fn a_game_that_has_ended_leads_to_the_launcher_not_a_keystroke_into_the_app_in_front() {
-        // The game has ended, but a browser it opened keeps it running for the launcher, and the
-        // browser is in front. The overlay's shortcut used to go into the browser, where it did
-        // nothing visible. However the browser is shown: frameless over its screen even.
+        // A browser the ended game opened keeps it running for the launcher and is in front.
         let rig = Rig::new();
         let mut agent = rig.service(false);
         agent.start();
@@ -686,7 +619,6 @@ mod tests {
         let report = agent.take_press_report().unwrap();
         assert_eq!(report.seen.unwrap().game, GameSeen::Gone);
 
-        // The ended game does not end the launcher's picture of it: no "game ended" on a press.
         assert!(!rig.launcher.calls().contains(&"game_ended"));
     }
 
@@ -710,8 +642,6 @@ mod tests {
 
     #[test]
     fn a_window_of_none_of_the_game_s_known_processes_is_not_taken_for_it() {
-        // The game runs without a window yet (or with none to be found), and the launcher knows
-        // its processes: whatever is in front is not the game, however it is shown.
         let rig = Rig::new();
         let mut agent = rig.service(false);
         agent.start();
@@ -728,8 +658,6 @@ mod tests {
 
     #[test]
     fn a_game_whose_window_is_not_found_leads_to_the_launcher_unless_it_may_be_in_front() {
-        // The launcher cannot tell the game's processes and finds no window of it; a maximised
-        // app in front is not the game.
         let rig = Rig::new();
         let mut agent = rig.service(false);
         agent.start();
@@ -742,7 +670,6 @@ mod tests {
         assert_eq!(rig.home.activations.get(), 1);
         assert_eq!(rig.home.game_activations.get(), 0);
 
-        // A window whose shape could not be read is no game either.
         rig.foreground.shape.set(None);
         agent.handle(&PRESS);
         assert!(rig.input.sent().is_empty());
@@ -751,8 +678,7 @@ mod tests {
 
     #[test]
     fn a_window_taken_for_the_game_without_an_overlay_shortcut_leads_to_the_launcher() {
-        // A launcher whose overlay opens only its own way, which is not taken for a window that
-        // is only taken for the game: nothing would happen.
+        // The overlay opens only directly, which is not tried for a window taken for the game.
         let rig = Rig::new();
         rig.launcher.overlay_shortcut.set(None);
         rig.launcher.direct_overlay.set(true);
@@ -774,8 +700,7 @@ mod tests {
 
     #[test]
     fn a_full_screen_window_is_taken_for_a_game_the_launcher_cannot_tie_to_itself() {
-        // A game started through a launcher of its own (EA, Ubisoft): the launcher runs it, but
-        // finds no window of it. A borderless window over the whole screen is taken for it.
+        // A game started through its own launcher (EA, Ubisoft): no window of it is found.
         let rig = Rig::new();
         rig.launcher.direct_overlay.set(true);
         let mut agent = rig.service(false);
@@ -799,16 +724,13 @@ mod tests {
         let mut agent = rig.service(false);
         agent.start();
         rig.foreground.shape.set(Some(FULL_SCREEN));
-        // No game: home, however the window looks.
         rig.foreground.set(Some("player.exe"));
         agent.handle(&PRESS);
         assert_eq!(rig.home.activations.get(), 1);
-        // A game behind a full-screen window: back to the game, not the overlay over the other.
         rig.launcher.set_game_running(true);
         rig.launcher.game_in_front.set(Some(false));
         agent.handle(&PRESS);
         assert_eq!(rig.home.game_activations.get(), 1);
-        // In the launcher's UI, and in a game it recognises.
         rig.foreground.set(Some("fakelauncher.exe"));
         agent.handle(&PRESS);
         rig.launcher.game_in_front.set(Some(true));
@@ -818,7 +740,6 @@ mod tests {
             rig.input.sent(),
             [FakeLauncher::MENU, FakeLauncher::OVERLAY]
         );
-        // Where the launcher knows the game's processes, or knows that none runs.
         rig.foreground.set(Some("player.exe"));
         rig.launcher.game_in_front.set(None);
         rig.launcher.game_known.set(true);
@@ -867,11 +788,9 @@ mod tests {
         );
         assert_eq!(agent.take_press_report(), None, "once");
 
-        // Other events say nothing.
         agent.handle(&AgentEvent::LauncherStateChanged);
         assert_eq!(agent.take_press_report(), None);
 
-        // Switched off, the press is still reported.
         rig.settings.set(Settings {
             button_remap: false,
             ..configured()
@@ -918,8 +837,6 @@ mod tests {
 
     #[test]
     fn on_the_desktop_a_window_that_is_not_the_game_gets_no_overlay_while_a_game_runs() {
-        // It used to get the overlay's shortcut, where it did nothing visible; the button keeps
-        // its own meaning there now, as without a game. The game itself still gets the overlay.
         let rig = Rig {
             fse: FakeFse(FseState::Inactive),
             ..Rig::new()
@@ -945,7 +862,6 @@ mod tests {
         rig.foreground.set(Some("game.exe"));
         agent.handle(&PRESS);
         assert!(rig.launcher.calls().contains(&"open_overlay"));
-        // A window taken for the game by its shape gets the overlay's shortcut.
         rig.launcher.game_in_front.set(None);
         rig.foreground.shape.set(Some(FULL_SCREEN));
         agent.handle(&PRESS);
@@ -1070,7 +986,6 @@ mod tests {
             events,
             "in order, also the one that ends the agent"
         );
-        // Passed on as well as acted on.
         assert_eq!(rig.launcher.calls(), ["game_started"]);
         assert_eq!(
             rig.launcher.observed().last(),
@@ -1124,7 +1039,6 @@ mod tests {
         });
         agent.handle(&AgentEvent::SettingsChanged);
         assert_eq!(rig.input.reconfigured(), [DeviceSelection::none()]);
-        // Switched off, a press that still comes means nothing.
         rig.foreground.set(Some("fakelauncher.exe"));
         agent.handle(&PRESS);
         assert!(rig.input.sent().is_empty());
@@ -1164,12 +1078,10 @@ mod tests {
         agent.handle(&AgentEvent::SettingsChanged);
         agent.handle(&AgentEvent::SettingsChanged);
         assert_eq!(rig.input.reconfigured(), [device("hid")], "asked once");
-        // The device that runs is still the one started: its button is passed on.
         rig.foreground.set(Some("explorer.exe"));
         agent.handle(&PRESS);
         assert_eq!(rig.input.passed_on(), [ButtonId(0)]);
 
-        // Back to the one running: asked for, and taken.
         rig.settings.set(configured());
         agent.handle(&AgentEvent::SettingsChanged);
         assert_eq!(rig.input.reconfigured(), [device("hid"), device("keys")]);
@@ -1177,8 +1089,6 @@ mod tests {
 
     #[test]
     fn a_button_the_device_only_observes_is_never_passed_on() {
-        // On the desktop Mujina has nothing for the button: a swallowed one is sent on, one the
-        // device's own software saw anyway is left at that.
         for (id, button, passed) in [("keys", 0, 1), ("hid", 1, 0)] {
             let rig = Rig {
                 fse: FakeFse(FseState::Inactive),
@@ -1261,8 +1171,6 @@ mod tests {
 
         rig.foreground.set(Some("fakelauncher.exe"));
         agent.handle(&PRESS);
-        // The launcher is asked first; the shortcut after it goes to the stand-in, which drops
-        // it, and the agent carries on.
         assert!(rig.launcher.calls().contains(&"open_menu"));
 
         let crash = LauncherExit {
@@ -1340,14 +1248,12 @@ mod tests {
         assert!(rig.input.sent().is_empty());
         assert!(!rig.launcher.calls().contains(&"open_overlay"));
 
-        // Behind something else, with no game window to go back to: home as well.
         rig.launcher.game_in_front.set(None);
         rig.foreground.set(Some("xboxpcapp.exe"));
         agent.handle(&PRESS);
         assert_eq!(rig.home.activations.get(), 2);
         assert!(rig.input.sent().is_empty());
 
-        // On the desktop a game in front keeps the button to itself.
         let desktop = Rig {
             fse: FakeFse(FseState::Inactive),
             descriptor: &NO_OVERLAY,
@@ -1377,13 +1283,12 @@ mod tests {
         let live: OptionTable = selection("fake", &[("start_screen", false)]).options;
         assert_eq!(rig.launcher.reconfigured(), std::slice::from_ref(&live));
 
-        // Only what waits for the next session changed: nothing to tell.
+        // Only `link` changes, and it waits for the next session.
         rig.settings.set(Settings {
             launcher: selection("fake", &[("start_screen", false), ("link", true)]),
             ..configured()
         });
         agent.handle(&AgentEvent::SettingsChanged);
-        // Another launcher's options are not this one's.
         rig.settings.set(Settings {
             launcher: selection("other", &[("start_screen", true)]),
             ..configured()
@@ -1401,8 +1306,7 @@ mod tests {
         };
         let mut agent = AgentService::new(rig.ports(), settings);
         agent.start();
-        // Another launcher named, the option unset meanwhile, then this one again: the file
-        // before says nothing, but the launcher still runs with `false`.
+        // The file before names another launcher, but this one still runs with `false`.
         for launcher in [selection("other", &[]), selection("fake", &[])] {
             rig.settings.set(Settings {
                 launcher,
@@ -1413,7 +1317,6 @@ mod tests {
         assert_eq!(rig.launcher.reconfigured(), [OptionTable::new()]);
     }
 
-    /// A launcher whose menu is an option that applies at once, and needs one that waits.
     struct Switchable;
 
     const SWITCHABLE: &[SettingSpec] = &[
@@ -1485,19 +1388,16 @@ mod tests {
                 ..configured()
             });
         };
-        // No menu as started: the press is swallowed.
         assert!(!press(&mut agent));
 
         options(&[("menu", true)]);
         agent.handle(&AgentEvent::SettingsChanged);
         assert!(press(&mut agent));
 
-        // What waits for the next session stays as the session started.
         options(&[("menu", true), ("link", false)]);
         agent.handle(&AgentEvent::SettingsChanged);
         assert!(press(&mut agent));
 
-        // Unset, it is back to its default.
         options(&[]);
         agent.handle(&AgentEvent::SettingsChanged);
         assert!(!press(&mut agent));

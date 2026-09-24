@@ -1,9 +1,5 @@
-//! The marker file that makes Steam open its embedded browser's debugging port.
-//!
-//! Steam checks for `.cef-enable-remote-debugging` in its install directory at start-up. The
-//! network indicator fix talks to Steam's UI through that port, so the marker has to exist
-//! before Steam is launched, by Mujina or by anything else. It is made sure of on every home
-//! activation; a Steam that was already running without it has to be restarted once.
+//! The marker file in Steam's folder that makes Steam open its debugging port. Steam checks for
+//! it only at start-up, so a Steam already running without it has to be restarted once.
 
 use std::fs::OpenOptions;
 use std::io;
@@ -13,14 +9,12 @@ use mujina_winutil::registry::{self, Hive};
 
 const MARKER: &str = ".cef-enable-remote-debugging";
 
-/// Where Mujina lists the files it created outside its own folders: one `REG_SZ` value per file,
-/// named by a stable id, holding the absolute path. Setup reads the same key and deletes what is
-/// listed when Mujina is uninstalled, without having to know anything about Steam.
+/// Files Mujina created outside its own folders: one `REG_SZ` per file, named by a stable id,
+/// holding the absolute path. Setup deletes what is listed here when Mujina is uninstalled.
 const CREATED_KEY: &str = r"Software\Mujina\Created";
-/// The marker's entry in that list.
 const CREATED_ID: &str = "steam-ui-marker";
 
-/// Creates the marker if it is missing. Returns whether it was created just now.
+/// `true` if the marker was created just now.
 pub fn ensure(steam_directory: &Path) -> io::Result<bool> {
     match OpenOptions::new()
         .write(true)
@@ -52,7 +46,6 @@ fn listed_path(steam_directory: &Path) -> Result<String, String> {
         .map_err(|marker| format!("{} is not valid Unicode", marker.display()))
 }
 
-/// Whether the marker is in place.
 pub fn exists(steam_directory: &Path) -> bool {
     steam_directory.join(MARKER).is_file()
 }

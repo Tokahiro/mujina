@@ -1,19 +1,16 @@
-//! The languages Windows shows its user interface in, and the one an app of a few languages
-//! shows of them.
+//! Windows' display languages, and which of its own languages an app shows.
 
 use std::ptr::null_mut;
 
 use windows_sys::Win32::Globalization::{GetUserPreferredUILanguages, MUI_LANGUAGE_NAME};
 
-/// The language an app shows, of those it has (`available`, the one its texts are written in
-/// first): `chosen` where the app has it, else the first of the Windows display languages it
-/// has, else the first. Both of Mujina's windows decide the same way.
+/// `chosen` if `available` has it, else the first Windows display language it has, else
+/// `available[0]`, the language the texts are written in.
 pub fn language(chosen: &str, available: &[&'static str]) -> &'static str {
     pick(chosen, &ui_languages(), available)
 }
 
-/// The user's display languages as names, most preferred first, e.g. `["de-DE", "en-US"]`.
-/// Empty if Windows does not say.
+/// Most preferred first, e.g. `["de-DE", "en-US"]`; empty if Windows does not say.
 pub fn ui_languages() -> Vec<String> {
     let mut count: u32 = 0;
     let mut length: u32 = 0;
@@ -42,7 +39,7 @@ pub fn ui_languages() -> Vec<String> {
     if filled == 0 {
         return Vec::new();
     }
-    // One name after the other, each ended by a NUL, the list by a second one.
+    // Each name ends in a NUL, the list in a second one.
     buffer
         .split(|&unit| unit == 0)
         .take_while(|name| !name.is_empty())
@@ -91,7 +88,6 @@ mod tests {
         assert_eq!(pick("auto", &tags(&["de-AT", "en-US"]), &AVAILABLE), "de");
         assert_eq!(pick("", &tags(&["fr-FR", "de-CH"]), &AVAILABLE), "de");
         assert_eq!(pick("", &tags(&["en-GB", "de-DE"]), &AVAILABLE), "en");
-        // A language Mujina does not have is no choice.
         assert_eq!(pick("fr", &tags(&["de-DE"]), &AVAILABLE), "de");
     }
 

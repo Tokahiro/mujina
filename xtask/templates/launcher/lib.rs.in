@@ -1,12 +1,5 @@
 //! @NAME@ as Mujina's launcher: started in Xbox mode, brought to the front, watched by
-//! the agent.
-//!
-//! Made by `cargo xtask new-launcher @ID@`. Every `TODO` marks what only
-//! knowledge of the launcher can fill in; docs/new-launcher.md says what each part is asked and
-//! when.
-//!
-//! [`DESCRIPTOR`] and its options are built everywhere, so they are tested on Linux too; the
-//! launcher at work needs Windows.
+//! the agent. Each `TODO` needs knowledge of the launcher (docs/new-launcher.md).
 
 mod descriptor;
 #[cfg(windows)]

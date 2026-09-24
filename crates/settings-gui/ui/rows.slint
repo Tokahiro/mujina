@@ -1,9 +1,5 @@
-// Rows of the settings pages. A page describes its rows as data (`RowData`) and draws them with
-// one component, `RowItem`, so Slint compiles a row once rather than once per row.
-//
-// A row does not hold the keyboard: its page does, and tells it through `page` whether it is
-// current and which key was pressed. Left, right and A are the row's own; up, down and B belong
-// to the page.
+// Rows are data (`RowData`) drawn by one component, `RowItem`, so Slint compiles a row once. The
+// page holds the keyboard and tells the current row, through `page`, which key was pressed.
 
 import { Theme, Health } from "@mujina/theme.slint";
 import { Icons } from "@mujina/icons.slint";
@@ -15,22 +11,18 @@ import { StateIcon } from "controls.slint";
 export enum RowKind {
     // One of `options`, stepped with left and right.
     choice,
-    // `on`, flipped with A.
     toggle,
-    // A button: `label` and `icon`; A presses it.
+    // `label` and `icon`; A presses it.
     button,
-    // A text setting, edited after A.
     text,
     // `number` between `minimum` and `maximum`, in `step`s.
     number,
-    // Something to read, not to change.
     info,
     // The header that opens `Advanced`.
     header,
     // A value to copy with A, e.g. into Steam.
     copy,
-    // Something the page draws itself, such as a button of its own: only its place among the
-    // rows, for moving between them.
+    // Drawn by the page itself; only holds its place for navigation.
     own
 }
 
@@ -56,26 +48,22 @@ export struct RowData {
     icon: image,
     // A neutral button instead of an accent one.
     plain: bool,
-    // What a number counts, e.g. "ms"; nothing for a plain number.
     unit: string,
-    // A state icon before the title, where it has one.
+    // A state icon before the title.
     has-status: bool,
     health: Health,
-    // Whether the header's section is open.
     open: bool,
     disabled: bool,
     // The smaller title of the Advanced and Windows rows.
     small: bool,
 }
 
-// A launcher's or a device's own rows, as Rust builds them from its settings, by where the
-// Setup page shows them.
+// A launcher's or device's own rows, built in Rust.
 export struct PluginRows {
     // With the launcher choice, or the device's button.
     main: [RowData],
-    // Under What Mujina fixes: what a launcher brings.
+    // Under What Mujina fixes.
     features: [RowData],
-    // Under Advanced.
     advanced: [RowData],
 }
 
@@ -85,14 +73,12 @@ export struct RowSection {
     hidden: bool,
 }
 
-// Which rows the controller can land on is decided in Rust (`nav::enabled`), from the rows
-// themselves: one switched off, or with nothing to press, is passed over.
 export global Rows {
-    // Each row of `sections`, in order, and whether the controller can land on it.
+    // For each row of `sections`, whether the controller can land on it; see `nav::enabled`.
     pure callback enabled([RowSection]) -> [bool];
 }
 
-// A caret that steps a choice; 46 px wide for a thumb.
+// A caret that steps a choice, sized for a thumb.
 component Caret inherits Rectangle {
     in property <bool> right;
     in property <bool> lit;
@@ -115,7 +101,6 @@ component Caret inherits Rectangle {
 component Choice inherits HorizontalLayout {
     in property <string> text;
     in property <bool> lit;
-    // The row's title, for a screen reader.
     in property <string> label;
     callback left();
     callback right();
@@ -164,7 +149,6 @@ component Choice inherits HorizontalLayout {
 component Toggle inherits VerticalLayout {
     in property <bool> on;
     in property <bool> pressed;
-    // The row's title, for a screen reader.
     in property <string> label;
     callback toggled();
     alignment: center;
@@ -184,7 +168,6 @@ component Toggle inherits VerticalLayout {
     }
 }
 
-// A step box of a number.
 component StepBox inherits Rectangle {
     in property <image> icon;
     in property <bool> lit;
@@ -217,7 +200,6 @@ component Number inherits HorizontalLayout {
     in property <int> minimum;
     in property <int> maximum;
     in property <bool> lit;
-    // The row's title, for a screen reader.
     in property <string> label;
     callback less();
     callback more();
@@ -266,12 +248,11 @@ component Number inherits HorizontalLayout {
     }
 }
 
-// A text setting. Editing starts each time `edits` goes up; Enter (A) stores the text, Escape
-// (B) leaves it as it was. An empty field stands for the default, named by `placeholder`.
+// Editing starts each time `edits` goes up; Enter stores the text, Escape leaves it as it was.
+// An empty field stands for the default, named by `placeholder`.
 component TextField inherits Rectangle {
     in property <string> value;
     in property <string> placeholder;
-    // The row's title, for a screen reader.
     in property <string> label;
     in property <int> edits;
     callback apply(string);

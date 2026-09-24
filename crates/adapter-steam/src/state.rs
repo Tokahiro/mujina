@@ -1,6 +1,5 @@
-//! Steam's own sign that its state changed, as a wait source of the agent's event loop: Steam
-//! writes a game's start and end, and its own process id, under `HKCU\Software\Valve\Steam`, and
-//! a change notification on that key wakes the agent.
+//! Steam writes a game's start and end, and its own process id, under its registry key; a change
+//! notification on that key wakes the agent's event loop.
 
 use std::os::windows::io::{AsHandle, BorrowedHandle};
 
@@ -10,15 +9,13 @@ use mujina_winutil::wait::WaitSource;
 
 use crate::registry_keys;
 
-/// Reports [`AgentEvent::LauncherStateChanged`] whenever anything below Steam's key changes.
 pub struct SteamState {
     /// Withdrawn once it cannot be armed again: such a watch never signals again.
     watch: Option<RegistryWatch>,
 }
 
 impl SteamState {
-    /// Watches Steam's key; `None`, said in the log, where it cannot be watched (Steam never
-    /// ran for this user, say). The button then does not notice games.
+    /// `None`, logged, where Steam's key cannot be watched (Steam never ran for this user, say).
     pub fn watch() -> Option<Self> {
         Self::watching(Hive::CurrentUser, registry_keys::STEAM)
             .inspect_err(|error| {
@@ -69,8 +66,7 @@ mod tests {
 
     use super::*;
 
-    /// A key of this test's own, so that runs of several checkouts do not see each other's
-    /// writes.
+    /// Per process, so that runs of several checkouts do not see each other's writes.
     fn unique_key() -> String {
         format!(r"Software\MujinaTests\steam-state.{}", std::process::id())
     }
@@ -98,7 +94,6 @@ mod tests {
                 if changes.get() == 3 {
                     return Flow::Exit;
                 }
-                // Only a watch armed again after the first change sees the next one.
                 write_u32(Hive::CurrentUser, &key, "RunningAppID", changes.get() + 1).unwrap();
                 Flow::Continue
             })

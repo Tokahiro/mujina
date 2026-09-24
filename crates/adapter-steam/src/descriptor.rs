@@ -1,5 +1,4 @@
-//! Steam Big Picture as the configuration and the tools see it: its options under
-//! `[launcher.steam]` and what it offers. Portable, so its rules are tested on every system.
+//! Steam's options under `[launcher.steam]` and what it offers. Portable, so tested everywhere.
 
 use mujina_application::Msg;
 use mujina_application::launcher::{LauncherCaps, LauncherDescriptor, OptionTable};
@@ -64,7 +63,6 @@ impl SteamOptions {
         }
     }
 
-    /// Whether the Wi-Fi icon is fixed: it goes through the UI link.
     pub fn wifi_fix(self) -> bool {
         self.ui_link && self.wifi_indicator
     }
@@ -96,13 +94,11 @@ impl LauncherDescriptor for SteamDescriptor {
         }
     }
 
-    /// By its name, a tool that feeds Big Picture's Wi-Fi icon as Mujina does: in the way only
-    /// while Steam is the launcher.
+    /// A tool that feeds Big Picture's Wi-Fi icon as Mujina does.
     fn conflicting_processes(&self) -> &'static [&'static str] {
         &["steamwififeeder.exe"]
     }
 
-    /// Its options' texts and its checks' titles.
     fn catalogs(&self) -> &'static [(&'static str, &'static str)] {
         &[("de", include_str!("../lang/de.po"))]
     }

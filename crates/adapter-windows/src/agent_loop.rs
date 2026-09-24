@@ -1,20 +1,5 @@
-//! The agent's event loop: one thread, blocked in the kernel until something happens. It runs on
-//! [`mujina_winutil::wait::EventLoop`], which waits for its sources' handles and the thread's
-//! message queue in one `MsgWaitForMultipleObjectsEx`.
-//!
-//! What wakes it, all of it pushed, none of it polled, in the order of the wait set:
-//! - Xbox mode switched on or off ([`FseSource`]);
-//! - whatever the caller adds: the named events through which other Mujina processes speak to
-//!   the agent (the configuration changed, the home role started the launcher), the device's
-//!   sources (the keyboard hook's thread signals a press) and the launcher's own (Steam's
-//!   registry key);
-//! - the launcher's process ending ([`ProcessExitSource`]), looked up again only when there is a
-//!   reason to;
-//! - window messages, which it pumps: the foreground WinEvent hook and the end of the session are
-//!   delivered while this thread pumps messages. The keyboard hook has a thread of its own.
-//!
-//! There is one deadline, used once: the grace period at start-up during which Xbox mode may not
-//! be reported active yet.
+//! The agent's event loop: one thread, blocked in the kernel, nothing polled. It wakes for Xbox
+//! mode, the caller's sources, the launcher's process ending and window messages, in that order.
 
 use std::cell::RefCell;
 use std::ptr::null_mut;
@@ -40,7 +25,7 @@ thread_local! {
     static FOREGROUND: RefCell<Option<ForegroundNote>> = const { RefCell::new(None) };
 }
 
-/// A foreground change; the process name is `None` when it could not be determined.
+/// The process name is `None` when it could not be determined.
 struct ForegroundNote(Option<String>);
 
 unsafe extern "system" fn on_foreground(
@@ -77,19 +62,16 @@ fn observe_foreground() {
 
 pub struct AgentLoop<'a> {
     pub fse: &'a WindowsFse,
-    /// The running launcher: where its process is, so that its end can be waited for.
     pub launcher: &'a dyn SessionLauncher,
-    /// Waited for beside Xbox mode and the launcher's process: the named events of the session,
-    /// the device's sources and the launcher's own.
+    /// The session's named events, the device's sources and the launcher's own.
     pub sources: Vec<Box<dyn WaitSource<AgentEvent> + 'a>>,
     /// How long to wait for the full screen experience to become active after start-up.
     pub grace: Duration,
 }
 
 impl AgentLoop<'_> {
-    /// Runs until `handle` returns [`Flow::Exit`], or until waiting fails. When the session
-    /// ends, `last_words` runs first, from inside the message that says so (see
-    /// [`session_end::watch`]); whatever the process does after that is best effort.
+    /// Runs until `handle` returns [`Flow::Exit`] or waiting fails. At the session's end
+    /// `last_words` runs first ([`session_end::watch`]); anything after it is best effort.
     pub fn run(self, handle: &mut dyn FnMut(AgentEvent) -> Flow, last_words: Box<dyn FnOnce()>) {
         let fse = self.fse;
         let mut events = EventLoop::new();
@@ -112,9 +94,8 @@ impl AgentLoop<'_> {
             sources.push(Box::new(FseSource::new(fse, watch)));
         }
         sources.extend(self.sources);
-        // Last, as before stage 5: of the handles signalled together, the wait reports the first
-        // in the array (MsgWaitForMultipleObjectsEx, Remarks), so what the launcher says about
-        // its process is heard before that process's end.
+        // Last: MsgWaitForMultipleObjectsEx reports the first of handles signalled together, so
+        // what the launcher says about its process is heard before that process's end.
         sources.push(Box::new(ProcessExitSource::new(
             move || launcher.process_id(),
             move |name| launcher.owns_process(name),
@@ -137,15 +118,15 @@ impl AgentLoop<'_> {
         if !session_end::watch(last_words) {
             log::warn!("the end of the session (sign-out, shutdown) will not be noticed");
         }
-        // Where we are right now; the hooks only report changes.
+        // The hooks only report changes, so start from what is in front now.
         let process_name = window::foreground_process_name();
         if handle(AgentEvent::ForegroundChanged { process_name }) == Flow::Exit {
             return;
         }
 
         let result = events.run(&mut pump, &mut |event| {
-            // Xbox mode's state as it is when the event is handled: the grace period's event
-            // was made at start-up, and a switch may follow the one that was signalled.
+            // Read the state now: the grace period's event was made at start-up, and another
+            // switch may have followed the signalled one.
             let event = match event {
                 AgentEvent::FseChanged(_) => AgentEvent::FseChanged(fse.state()),
                 other => other,

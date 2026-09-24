@@ -6,7 +6,6 @@ use mujina_winutil::package;
 /// Id of the `<Application>` element in `packaging/AppxManifest.xml.in`.
 const APPLICATION_ID: &str = "App";
 
-/// The identity of the running process: Mujina's own, when it runs from its package.
 #[derive(Debug, Default)]
 pub struct WindowsPackageIdentity;
 
@@ -16,9 +15,8 @@ impl PackageIdentity for WindowsPackageIdentity {
     }
 }
 
-/// The identity of the Mujina package of `family`, for a program outside it: Mujina Setup, which
-/// makes that package the home app and gives the setting back, before and after the package
-/// exists.
+/// The identity of the Mujina package of `family`, for Mujina Setup, which runs outside the
+/// package, also before it is installed and after it is removed.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FamilyIdentity {
     family: String,
@@ -38,7 +36,6 @@ impl PackageIdentity for FamilyIdentity {
     }
 }
 
-/// The app ID Windows activates Mujina's home app by, `<family>!App`.
 pub fn app_user_model_id(family: &str) -> String {
     format!("{family}!{APPLICATION_ID}")
 }

@@ -1,26 +1,18 @@
-//! The package this installer carries: the signed MSIX, its certificate (while the package is
-//! self-signed) and a few lines about them. They are not compiled in: `packaging/attach-payload.ps1`
-//! adds them to the finished executable as data resources, before it is signed, so that the job
-//! that holds the signing key needs no compiler (docs/signing.md). A build without them is a
-//! working installer that says it carries no package.
-//!
-//! What the lines say is read here and checked where it can be: the family must follow from the
-//! name and the publisher, as Windows derives it. The certificate is trusted as it is: it and the
-//! lines come from the same file, so a check of one against the other would prove nothing.
+//! The package attached by `packaging/attach-payload.ps1` (docs/signing.md): the signed MSIX,
+//! its certificate and lines about them, not checked against each other (all from one file).
 
 use std::fmt;
 
 use crate::plan::Version;
 
-/// The resources `packaging/attach-payload.ps1` adds, by name, all raw data (`RT_RCDATA`).
+/// Names of the `RT_RCDATA` resources `packaging/attach-payload.ps1` adds.
 pub const MSIX_RESOURCE: &str = "MUJINA_MSIX";
 pub const CER_RESOURCE: &str = "MUJINA_CER";
 pub const ABOUT_RESOURCE: &str = "MUJINA_ABOUT";
 
-/// What the attached package is, as `mujina-setup.exe --about` prints it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct About {
-    /// The manifest's `Identity Name`, `Mujina`.
+    /// The manifest's `Identity Name`.
     pub name: String,
     /// The manifest's `Identity Publisher`, exactly as written there, e.g. `CN=Mujina`.
     pub publisher: String,
@@ -92,7 +84,6 @@ const KEYS: [&str; 6] = [
     "certificate",
 ];
 
-/// As `--about` prints it, one fact per line.
 impl fmt::Display for About {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "Package:     {}", self.msix)?;
@@ -104,7 +95,6 @@ impl fmt::Display for About {
     }
 }
 
-/// The package, as attached to this executable.
 #[cfg(windows)]
 #[derive(Debug, Clone)]
 pub struct Payload {
@@ -113,13 +103,12 @@ pub struct Payload {
     pub cer: &'static [u8],
 }
 
-/// Why this executable has no usable package.
 #[cfg(windows)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Missing {
-    /// Nothing was attached: a build straight from cargo.
+    /// A build straight from cargo.
     NotAttached,
-    /// Something was, but not all of it, or not what it says it is.
+    /// Partly attached, or not what it says it is.
     Damaged(String),
 }
 

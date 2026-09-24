@@ -1,6 +1,5 @@
 //! The launcher at work: find it, start it, tell whether its full-screen UI is up, and bring it
-//! to the front. The kit's `launch` and `focus_ui` keep the foreground rules; what only the
-//! launcher knows is marked `TODO`.
+//! to the front. The kit's `launch` and `focus_ui` keep the foreground rules.
 
 use mujina_adapter_kit::launcher;
 use mujina_adapter_kit::plugin::{LauncherRuntime, SessionParts};
@@ -53,9 +52,8 @@ impl @TYPE@Launcher {
     }
 }
 
-/// Its window. TODO: its full-screen window precisely, by a `WindowRule` and
-/// `window::find_top_level` (docs/new-launcher.md, "Rules that are easy to get wrong"); any main
-/// window of its process is only a start.
+/// TODO: its full-screen window precisely, by a `WindowRule` and `window::find_top_level`
+/// (docs/new-launcher.md, "Rules that are easy to get wrong"); any main window is only a start.
 fn find_window() -> Option<WindowHandle> {
     let pid = process::pid_of_image(PROCESS)?;
     window::main_window_of(&[pid])
