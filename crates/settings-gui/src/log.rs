@@ -11,7 +11,6 @@ pub struct Line {
 
 const LEVELS: [&str; 5] = ["ERROR", "WARN", "INFO", "DEBUG", "TRACE"];
 
-/// The last `limit` lines, newest first.
 pub fn newest_first(text: &str, limit: usize) -> Vec<Line> {
     text.lines().rev().take(limit).map(parse).collect()
 }

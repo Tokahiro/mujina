@@ -21,9 +21,7 @@ export struct CheckRow {
     detail: string,
 }
 
-// Where the device button comes from.
 export enum ButtonSource {
-    // Switched off under Setup.
     off,
     // `[device.button]`, a combination of the user's own.
     own,
@@ -42,7 +40,7 @@ export enum WifiFix {
     not-used
 }
 
-// The device tiles. The handheld and its maker are empty where Windows does not say.
+// The handheld and its maker are empty where Windows does not say.
 export struct DeviceInfo {
     handheld: string,
     maker: string,
@@ -228,7 +226,6 @@ export component StatusPage inherits Rectangle {
             root.leave();
         }
 
-        // The verdict.
         Rectangle {
             border-radius: Theme.radius-card;
             border-width: 1px;
@@ -418,7 +415,6 @@ export component StatusPage inherits Rectangle {
             }
         }
 
-        // A settings reader note, e.g. an ignored line; English, like the doctor's findings.
         if root.note != "": Rectangle {
             background: #d9a44117;
             border-width: 1px;

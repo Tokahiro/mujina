@@ -1,6 +1,5 @@
-//! Texts Rust puts into the window: list entries, and the words launchers, devices and the
-//! doctor's checks bring. This app's `Msg`s share Slint's catalog (the entries without a
-//! context); a launcher's or device's texts come from its own catalogs first.
+//! Texts Rust puts into the window. This app's `Msg`s share Slint's catalog (the entries without
+//! a context); a launcher's or device's texts come from its own catalogs first.
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -10,7 +9,6 @@ use mujina_application::device::DeviceDescriptor;
 use mujina_application::launcher::LauncherDescriptor;
 use mujina_i18n::{Localizer, Msg};
 
-/// This app's catalogs, by the language `lang/` names them in.
 pub const CATALOGS: [(&str, &str); 1] = [(
     "de",
     include_str!("../lang/de/LC_MESSAGES/mujina-settings-gui.po"),
@@ -45,7 +43,6 @@ fn localizer() -> Localizer {
     localizer
 }
 
-/// Switches all texts to `language`.
 pub fn set(language: &str) {
     LOCALIZER.with(|localizer| localizer.borrow_mut().set(language));
     LANGUAGE.with(|set| language.clone_into(&mut set.borrow_mut()));
@@ -56,7 +53,6 @@ pub fn set(language: &str) {
     });
 }
 
-/// `msg` in the language set.
 pub fn t(msg: &Msg) -> String {
     LOCALIZER.with(|localizer| localizer.borrow().t(msg).to_string())
 }
@@ -90,8 +86,7 @@ pub fn launcher_words(launcher: &dyn LauncherDescriptor) -> impl Fn(&str) -> Str
     move |english| part_text(&part, catalogs, english)
 }
 
-/// The words of `device`: its name, its buttons' labels and its options' texts, in the
-/// language set.
+/// The words of `device`: its name, buttons' labels and options' texts, in the language set.
 pub fn device_words(device: &dyn DeviceDescriptor) -> impl Fn(&str) -> String {
     let (part, catalogs) = (format!("device.{}", device.id()), device.catalogs());
     move |english| part_text(&part, catalogs, english)
@@ -108,7 +103,7 @@ mod tests {
 
     #[test]
     fn every_catalog_reads() {
-        // The parts' too: `localizer` skips a catalog that does not parse, leaving it English.
+        // `localizer` skips a catalog that does not parse, leaving it English.
         let parts = tool::catalogs();
         assert!(!parts.is_empty());
         for (language, po) in CATALOGS.iter().chain(&parts) {
@@ -144,11 +139,9 @@ mod tests {
             t_with(&AUTOMATIC_WITH, "Desktop button"),
             "Automatisch (Desktop button)"
         );
-        // From the catalogs of the parts: a launcher's, the doctor's.
         assert_eq!(generic("Another launcher"), "Ein anderer Launcher");
         assert_eq!(t(&Msg::new("Developer Mode")), "Entwicklermodus");
         assert_eq!(t(&Msg::new("Xbox mode")), "Xbox-Modus");
-        // What Mujina Settings adds to a launcher's rows.
         assert_eq!(generic(REQUIRED.english()), "Erforderlich.");
         set("en");
         assert_eq!(t(&AUTOMATIC), "Automatic");
@@ -169,10 +162,8 @@ mod tests {
         set("de");
         let odd = launcher_words(&ODD);
         assert_eq!(odd("None"), "Nichts davon");
-        // Mujina Settings' own "None" stays its own, and another launcher's German is not odd's.
         assert_eq!(t(&NONE), "Keine");
         assert_eq!(odd("Another launcher"), "Another launcher");
-        // Words made before the language changes follow it.
         set("en");
         assert_eq!(odd("None"), "None");
         set("de");

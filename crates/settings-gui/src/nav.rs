@@ -35,8 +35,7 @@ pub fn step(enabled: &[bool], current: i32, delta: i32) -> i32 {
     found
 }
 
-/// For each row of `sections`, whether the controller can land on it: shown, enabled, and not
-/// an info row or a button without a label.
+/// For each row of `sections`, whether the controller can land on it.
 pub fn enabled(sections: impl Iterator<Item = RowSection>) -> Vec<bool> {
     sections
         .flat_map(|section| {
@@ -81,7 +80,6 @@ mod tests {
         let rows = [true, false, false, true, false];
         assert_eq!(step(&rows, 0, 1), 3);
         assert_eq!(step(&rows, 3, -1), 0);
-        // Nothing enabled below the last usable row: stay.
         assert_eq!(step(&rows, 3, 1), 3);
     }
 

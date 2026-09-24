@@ -13,7 +13,6 @@ pub fn capture(cancel: &AtomicBool) -> Result<Option<TriggerChord>, String> {
     storable(tool::capture(cancel))
 }
 
-/// What `[device.button]` can hold of what the watcher saw.
 fn storable(seen: Result<Option<TriggerChord>, String>) -> Result<Option<TriggerChord>, String> {
     match seen? {
         Some(button) if button.keys.keys().len() != 2 => Err(format!(

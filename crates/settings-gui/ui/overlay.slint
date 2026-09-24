@@ -1,5 +1,4 @@
-// Covers the window during a device button capture, then shows the result. Rust reads the
-// controller meanwhile (B cancels, A or B closes the result); keys and taps match it here.
+// The device button capture. Rust reads the controller meanwhile; keys and taps here match it.
 
 import { Theme } from "@mujina/theme.slint";
 import { Icons } from "@mujina/icons.slint";
@@ -22,7 +21,6 @@ export component CaptureOverlay inherits Rectangle {
     // The combination captured, or why the watcher failed (English).
     in property <string> detail;
     in property <Notice> result;
-    // Cancel while waiting, close on the result.
     callback dismiss();
 
     property <bool> shown;
@@ -36,7 +34,6 @@ export component CaptureOverlay inherits Rectangle {
 
     property <bool> waiting: root.phase == CapturePhase.waiting;
     property <bool> stored: root.phase == CapturePhase.captured;
-    // Waiting pulses: 1 → 1.06 in size, 1 → 0.72 in opacity, every 1.6 s.
     property <float> pulse: root.waiting ? (1 - cos(animation-tick() / 1600ms * 360deg)) / 2 : 0;
     property <color> tone: root.waiting ? Theme.accent : root.stored ? Theme.ok : Theme.problem;
     property <string> title: root.waiting ? @tr("Press the device button now") : root.phase == CapturePhase.nothing-seen ? @tr("No button seen") : root.phase == CapturePhase.failed ? @tr("Capture did not work") : @tr("Captured {}", root.detail);

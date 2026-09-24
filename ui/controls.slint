@@ -4,7 +4,6 @@
 import { Theme } from "theme.slint";
 import { Icons } from "icons.slint";
 
-// A group of rows.
 export component Card inherits Rectangle {
     in property <length> inset-x: 8 * Theme.u;
     in property <length> inset-y: 8 * Theme.u;
@@ -47,7 +46,7 @@ export component FocusFrame inherits Rectangle {
     animate background { duration: 120ms; }
 }
 
-// An outlined button with an icon. `turns` spins the icon once per increment (Check again).
+// `turns` spins the icon once per increment.
 export component OutlineButton inherits FocusFrame {
     in property <image> icon;
     in property <string> text;
@@ -102,7 +101,6 @@ export component OutlineButton inherits FocusFrame {
     }
 }
 
-// A faint ring with a bright quarter turning on it, once every 0.8 s.
 export component Spinner inherits Rectangle {
     in property <length> size: 17 * Theme.u;
     in property <color> tint: Theme.accent-focus;

@@ -1,5 +1,4 @@
-//! The Setup page's rows for a launcher's or device's own options, built from its
-//! `SettingSpec`s, so a new launcher or device needs no change here.
+//! Setup rows from a launcher's or device's `SettingSpec`s, so a new one needs no change here.
 
 use mujina_application::settings::SettingValue;
 use mujina_application::settings::schema::{self, Applies, SettingKind, SettingSpec, TextFormat};
@@ -9,28 +8,24 @@ use slint::{ModelRc, SharedString, VecModel};
 use crate::form;
 use crate::ui::{PluginRows, RowData, RowKind};
 
-/// How the Program row asks for a file.
 const PATH_EXAMPLE: &str = "C:\\…\\Launcher.exe";
 
 // The words Mujina Settings adds to a launcher's or a device's own.
 pub const REQUIRED: Msg = Msg::new("Required.");
 pub const APPLIES_NOW: Msg = Msg::new("Applies at once in Xbox mode.");
 pub const APPLIES_NEXT_TIME: Msg = Msg::new("Takes effect the next time you enter Xbox mode.");
-/// A required row of a launcher chosen but not stored yet.
 pub const ENTER_TO_SWITCH: Msg = Msg::new("Enter it to switch to this launcher.");
 pub const NOT_SET: Msg = Msg::new("Not set");
 /// An empty list of arguments.
 pub const NOTHING: Msg = Msg::new("Nothing");
 
-/// Whose options: a launcher's switches join What Mujina fixes; a device's rows stay with its
-/// button.
+/// A launcher's switches join What Mujina fixes; a device's rows stay with its button.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Owner {
     Launcher,
     Device,
 }
 
-/// The rows of one launcher or device, by where they go.
 #[derive(Debug, Default)]
 pub struct Rows {
     pub main: Vec<RowData>,
@@ -49,8 +44,7 @@ impl Rows {
     }
 }
 
-/// The rows of `specs` for `[section]`, with `options` holding what is set. `draft`: the launcher
-/// is chosen but not stored yet. `words` translates an English text.
+/// The rows of `specs` for `[section]`. `draft`: the launcher is chosen but not stored yet.
 pub fn build(
     owner: Owner,
     section: &str,
@@ -102,7 +96,6 @@ pub fn build(
     rows
 }
 
-/// A row of `spec`, showing what applies: the value in `options`, or else the default.
 fn row(spec: &SettingSpec, options: &OptionTable, words: &dyn Fn(&str) -> String) -> RowData {
     let value = spec.value_in(options);
     let title = words(spec.title).into();
@@ -183,8 +176,7 @@ mod tests {
     use super::*;
     use crate::texts;
 
-    /// A launcher Mujina Settings has never heard of: a switch and the path of its program,
-    /// with its own German.
+    /// A launcher Mujina Settings has never heard of, with its own German.
     static PLAYNITE: FakeLauncherDescriptor = FakeLauncherDescriptor {
         settings: &[
             SettingSpec {
@@ -291,7 +283,7 @@ mod tests {
         assert_eq!(rows.main[0].placeholder, PATH_EXAMPLE);
         assert!(rows.advanced.is_empty());
 
-        // Chosen but not stored yet, it asks for what it requires.
+        // Chosen but not stored yet.
         let draft = build(
             Owner::Launcher,
             "launcher.playnite",
@@ -305,7 +297,6 @@ mod tests {
             "Gib es an, um zu diesem Launcher zu wechseln."
         );
 
-        // What is typed in its row is stored under its own key, as its setting takes it.
         let key = "launcher.playnite.path";
         let spec = schema::find(key, &[&PLAYNITE], &[]);
         assert_eq!(

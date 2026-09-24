@@ -1,5 +1,4 @@
-//! Which toast a change ends in: applied now, applied the next time Xbox mode is entered, or
-//! refused. The texts are in `Words` (controls.slint).
+//! Which toast a change ends in. The texts are in `Words` (controls.slint).
 
 use std::time::Duration;
 
@@ -10,16 +9,14 @@ use slint::SharedString;
 
 use crate::ui::{Notice, Said, ToastKind};
 
-/// Why a change was not stored.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Refusal {
     /// What went wrong, in English: the checks `mujinactl config set` runs, or Windows.
     Reason(String),
-    /// Not a key combination Mujina can send: the text as typed.
+    /// The text as typed.
     NotACombination(String),
-    /// Another launcher chosen, without its program.
     ProgramRequired,
-    /// Another launcher chosen without another value it requires: its title, translated.
+    /// The required value's title, translated.
     ValueRequired(String),
 }
 
@@ -51,8 +48,6 @@ fn detailed(kind: ToastKind, said: Said, detail: &str) -> Notice {
     }
 }
 
-/// The toast for a stored change. A live setting still waits for Xbox mode when no agent runs
-/// to take it over.
 pub fn of(outcome: &Result<Applied, Refusal>) -> Notice {
     match outcome {
         Ok(Applied::Now) => notice(ToastKind::Now, Said::Applied),
@@ -70,7 +65,6 @@ pub fn refused(refusal: &Refusal) -> Notice {
     }
 }
 
-/// The toast once the capture overlay closes.
 pub fn captured(chord: &str, outcome: &Result<Applied, Refusal>) -> Notice {
     match outcome {
         Ok(Applied::Now) => detailed(ToastKind::Now, Said::CapturedApplied, chord),
@@ -81,7 +75,7 @@ pub fn captured(chord: &str, outcome: &Result<Applied, Refusal>) -> Notice {
     }
 }
 
-/// Making Mujina the home app. Windows reads the home app when Xbox mode is entered.
+/// Windows reads the home app when Xbox mode is entered.
 pub fn registered(outcome: Result<RegisterOutcome, String>) -> Notice {
     match outcome {
         Ok(RegisterOutcome::Registered) => notice(ToastKind::NextTime, Said::NowHome),

@@ -15,7 +15,6 @@ const DIRECTIONS: u16 = UP | DOWN | LEFT | RIGHT;
 
 /// How far the stick must lean to count as a direction (of 32767).
 const STICK_THRESHOLD: i16 = 16_000;
-/// How long a direction is held before it starts repeating, and how often it then repeats.
 const REPEAT_DELAY: Duration = Duration::from_millis(400);
 const REPEAT_EVERY: Duration = Duration::from_millis(120);
 
@@ -25,7 +24,6 @@ pub enum Action {
     Down,
     Left,
     Right,
-    /// Press the focused row.
     Activate,
     Back,
     NextPage,
@@ -50,7 +48,6 @@ pub struct Navigator {
 }
 
 impl Navigator {
-    /// Forgets what is held, e.g. while another window is in front.
     pub fn reset(&mut self) {
         *self = Self::default();
     }

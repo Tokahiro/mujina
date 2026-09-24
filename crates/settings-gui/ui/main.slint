@@ -1,8 +1,4 @@
-// Mujina Settings: a rail with its pages, a hint bar in full screen, a toast after every change.
-//
-// Navigation is the app's own, not Slint's Tab chain: in the rail, up/down picks the page and A
-// or right enters it; on a page, up/down moves between rows, left/right changes a value, A
-// presses, B goes back. Each page is one FocusScope that knows its current row; pages are only
+// Mujina Settings' window. Navigation is the app's own, not Slint's Tab chain; pages are only
 // hidden, never removed, so the window can hand focus to them.
 
 import { Theme, Health } from "@mujina/theme.slint";
@@ -61,7 +57,6 @@ export component MainWindow inherits Window {
     in property <string> version;
     in property <bool> fullscreen;
     in-out property <int> page: 0;
-    // How many pages the rail lists; the shoulder buttons cycle through them.
     out property <int> page-count: rail.count;
 
     // Status
@@ -72,7 +67,7 @@ export component MainWindow inherits Window {
     in property <string> note;
     in property <[CheckRow]> checks;
 
-    // What came of the last change.
+    // Toast
     in property <Notice> toast;
     in property <bool> toast-shown;
 
@@ -81,11 +76,10 @@ export component MainWindow inherits Window {
     in property <[string]> launcher-names;
     in property <[string]> profiles;
     in property <string> button-in-use;
-    // The options of the launcher shown and of the device in effect, as rows.
     in property <PluginRows> launcher-rows;
     in property <PluginRows> device-rows;
 
-    // The capture overlay; `capture-detail` is the combination captured or why the watcher failed.
+    // Capture overlay
     in property <CapturePhase> capture-phase;
     in property <int> capture-seconds;
     in property <int> capture-total: 10;
@@ -94,7 +88,6 @@ export component MainWindow inherits Window {
 
     // System
     in property <SystemInfo> system-info;
-    // What Windows allows, as the doctor finds it.
     in property <[RowData]> system-checks;
 
     // Help
@@ -117,7 +110,6 @@ export component MainWindow inherits Window {
     // The button of a System page check row, by check `id`.
     callback check-action(string);
     callback copy(string);
-    // Remove Mujina, on the System page: Mujina Setup takes over.
     callback remove-mujina();
 
     // For the shoulder buttons: show another page with the controller on the rail.

@@ -31,7 +31,6 @@ use crate::{capture, log, nav, setup, status, texts};
 
 const LOG_LINES: usize = 400;
 
-/// How often the controller is read while the app is in front.
 const PAD_INTERVAL: Duration = Duration::from_millis(33);
 
 pub fn run() -> Result<(), slint::PlatformError> {
@@ -77,7 +76,6 @@ fn use_own_icon(attempts: u8) {
     });
 }
 
-/// Fronts the window of the instance already running.
 fn show_running() {
     let own = std::process::id();
     let running = winutil_window::top_level_windows()
@@ -92,8 +90,7 @@ fn show_running() {
     }
 }
 
-/// Turns controller input into the keys the window's navigation understands (arrows, Return,
-/// Escape). Polling stops when the returned timer is dropped.
+/// Turns controller input into key presses. Polling stops when the returned timer is dropped.
 fn follow_controller(window: &MainWindow) -> Timer {
     let weak = window.as_weak();
     let mut navigator = Navigator::default();
@@ -109,7 +106,7 @@ fn follow_controller(window: &MainWindow) -> Timer {
         }
         let state = gamepad::first_connected().map(|pad| (pad.buttons, pad.left_x, pad.left_y));
         let actions = navigator.update(state, Instant::now());
-        // During a capture the pad only closes the overlay: B while waiting, A or B on the result.
+        // During a capture the pad only closes the overlay.
         let phase = window.get_capture_phase();
         if phase != CapturePhase::None {
             let result = phase != CapturePhase::Waiting;
@@ -219,7 +216,6 @@ fn connect(window: &MainWindow, data_dir: &Path) {
         if let Some(window) = weak.upgrade()
             && DRAFT.with(Cell::take).is_some()
         {
-            // Drop the unsaved launcher choice; show the one in use.
             show_settings(&window);
         }
     });
@@ -326,8 +322,7 @@ fn show_settings(window: &MainWindow) {
     window.set_button_in_use(page.button_in_use.into());
 }
 
-/// Runs the Status and System checks on a thread: they query Steam's debugging port and can
-/// take seconds. One run at a time, see [`Checks`].
+/// Runs the Status and System checks on a thread, one run at a time (see [`Checks`]).
 fn start_checks(window: &MainWindow) {
     window.set_checking(true);
     let Some(run) = CHECKS.with(|checks| checks.borrow_mut().start()) else {
@@ -338,7 +333,7 @@ fn start_checks(window: &MainWindow) {
         // Built here: the launcher's adapter cannot be handed from one thread to another.
         let mut diagnostics = Diagnostics::new();
         let facts = diagnostics.system(&tool::SYSTEM_CHECKS);
-        // Shown before the doctor runs. An error only means the window is gone.
+        // An error only means the window is gone.
         let _ = weak.upgrade_in_event_loop(move |window| found_facts(&window, run, &facts));
         let probe = probe(diagnostics.examine());
         let _ = weak.upgrade_in_event_loop(move |window| checked(&window, run, &probe));
@@ -358,8 +353,7 @@ fn probe(diagnosis: Diagnosis) -> Probe {
     }
 }
 
-/// Shows the System facts of `run` unless a newer run started; they may arrive after its
-/// findings.
+/// Shows the System facts of `run` unless a newer run started.
 fn found_facts(window: &MainWindow, run: u64, facts: &tool::SystemFacts) {
     if CHECKS.with(|checks| checks.borrow().run) != run {
         return;
@@ -378,7 +372,6 @@ fn found_facts(window: &MainWindow, run: u64, facts: &tool::SystemFacts) {
     show_system_checks(window);
 }
 
-/// Rebuilds the System page's check rows in the current language.
 fn show_system_checks(window: &MainWindow) {
     let icons = window.global::<Icons>();
     let rows: Vec<RowData> = SYSTEM_FINDINGS.with(|shown| {
@@ -480,7 +473,6 @@ fn wifi_fix(settings: &Settings) -> Option<bool> {
     Some(on(spec.key) && spec.requires.is_none_or(on))
 }
 
-/// Starts the agent the way Xbox mode would.
 fn start_agent(window: &MainWindow) {
     let notice = match tool::start_agent() {
         Ok(()) => feedback::notice(ToastKind::Now, Said::AgentStarting),
@@ -532,7 +524,6 @@ fn choose(window: &MainWindow, key: &str, index: i32) {
     apply(window, Ok(vec![setup::choice_change(key, index)]));
 }
 
-/// The app's own language: stored like any setting, and in effect at once.
 fn choose_language(window: &MainWindow, index: i32) {
     let changes = [setup::choice_change("interface.language", index)];
     let outcome = tool::change(&changes).map_err(|error| Refusal::Reason(error.to_string()));
@@ -588,7 +579,6 @@ fn edit(window: &MainWindow, key: &str, text: &str) {
         );
         return;
     }
-    // The last missing value: store it together with the launcher switch.
     let switches = missing.len() == 1;
     let changes = changes.map(|mut changes| {
         if switches {
@@ -678,7 +668,6 @@ impl Checks {
     }
 }
 
-/// Shows a toast and hides it again after its dwell time; a newer one replaces it.
 fn show_toast(window: &MainWindow, notice: Notice) {
     let serial = TOASTS.with(|toasts| {
         toasts.set(toasts.get() + 1);
@@ -700,7 +689,6 @@ fn show_toast(window: &MainWindow, notice: Notice) {
 
 #[derive(Default)]
 struct Capture {
-    /// Set to stop the watcher while it waits.
     cancel: Option<Arc<AtomicBool>>,
     /// The overlay's countdown; dropping it stops the ticks.
     _countdown: Option<Timer>,
@@ -742,7 +730,6 @@ fn start_capture(window: &MainWindow) {
     });
 }
 
-/// The overlay's result: the button stored, nothing seen, or the watcher failing.
 fn captured(window: &MainWindow, result: Result<Option<TriggerChord>, String>) {
     // The button also did its usual job: an elevated program (OneXConsole on a OneXPlayer)
     // sends it, and such input cannot be held back.

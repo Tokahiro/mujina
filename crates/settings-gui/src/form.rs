@@ -1,5 +1,4 @@
-//! Between the pages and `config.toml`: which choice means which value, and how a text field
-//! becomes a change.
+//! Between the pages and `config.toml`: choice indices to values, text fields to changes.
 
 use mujina_application::settings::schema::{self, SettingKind, SettingSpec, TextFormat};
 use mujina_application::settings::{SettingChange, SettingValue};
@@ -27,7 +26,7 @@ pub fn index_of(choices: &[&str], value: &str) -> i32 {
         .unwrap_or(0)
 }
 
-/// Sets `key` to `value`; `None`, the default entry, unsets it.
+/// `None`, the default entry, unsets `key`.
 pub fn choice(key: &str, value: Option<&str>) -> SettingChange {
     match value {
         Some(value) => SettingChange::set(key, SettingValue::Text(value.to_string())),
@@ -89,7 +88,6 @@ fn button_changes(text: &str) -> Result<Vec<SettingChange>, Refusal> {
     }
 }
 
-/// How the button field shows `[device.button]`.
 pub fn button_text(modifier: &str, key: &str) -> String {
     if modifier.is_empty() || key.is_empty() {
         String::new()
@@ -98,7 +96,7 @@ pub fn button_text(modifier: &str, key: &str) -> String {
     }
 }
 
-/// A switch's change. The detailed log is a level in the file, not a flag.
+/// The detailed log is a level in the file, not a flag.
 pub fn flag_change(key: &str, on: bool) -> SettingChange {
     match key {
         "logging.debug" if on => {
@@ -109,7 +107,6 @@ pub fn flag_change(key: &str, on: bool) -> SettingChange {
     }
 }
 
-/// A stored value as a field shows it.
 pub fn as_text(value: Option<SettingValue>) -> String {
     match value {
         Some(SettingValue::Text(text)) => text,
@@ -121,9 +118,7 @@ pub fn as_text(value: Option<SettingValue>) -> String {
 }
 
 /// Splits a launcher's arguments by the Microsoft C runtime's rules, which Rust programs follow
-/// too: spaces and tabs separate, quotes group, backslashes escape only before a quote.
-/// `CommandLineToArgvW` differs only on two quotes inside quotes, which [`join_arguments`] never
-/// writes. Arguments only: the program name's rules do not apply.
+/// too. Arguments only: the program name's rules do not apply.
 pub fn split_arguments(text: &str) -> Vec<String> {
     let mut arguments = Vec::new();
     let mut current = String::new();
@@ -348,7 +343,6 @@ mod tests {
             let list = owned(list);
             assert_eq!(split_arguments(&join_arguments(&list)), list, "{list:?}");
         }
-        // Typed text keeps its arguments through being stored and shown again.
         for line in [r#"a"b"" c d"#, r#"a\\\\"b c" d e"#, r#""ab\"c" "\\" d"#] {
             let arguments = split_arguments(line);
             assert_eq!(split_arguments(&join_arguments(&arguments)), arguments);

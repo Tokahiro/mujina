@@ -1,5 +1,4 @@
-// System: whether Mujina is the home app, what Windows allows it (as the doctor finds it), and how
-// to open these settings from Steam.
+// System: the home app, what Windows allows, and opening these settings from Steam.
 
 import { Theme } from "@mujina/theme.slint";
 import { Icons } from "@mujina/icons.slint";
@@ -123,7 +122,6 @@ export component SystemPage inherits Rectangle {
             root.leave();
         }
 
-        // Whether Windows starts Mujina in Xbox mode.
         Rectangle {
             border-radius: Theme.radius-card;
             border-width: 1px;
@@ -186,7 +184,6 @@ export component SystemPage inherits Rectangle {
             }
         }
 
-        // Once the checks behind it are back.
         if root.checks.length > 0: Group {
             label: @tr("What Windows allows");
             Card {
@@ -225,7 +222,6 @@ export component SystemPage inherits Rectangle {
             }
         }
 
-        // Only with Mujina Setup's copy; otherwise Windows' Settings → Apps removes Mujina.
         if root.info.can-remove: Group {
             label: @tr("Uninstall");
             Card {

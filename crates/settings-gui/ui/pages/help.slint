@@ -8,8 +8,7 @@ import { ScrollPage } from "../page.slint";
 import { RowItem, RowData, RowKind } from "../rows.slint";
 import { Mark } from "@mujina/mark.slint";
 
-// One line of mujina.log, split for colouring. Lines that do not parse keep everything in
-// `message`.
+// One line of mujina.log; a line that does not parse is all `message`.
 export struct LogLine {
     time: string,
     level: string,
@@ -23,7 +22,6 @@ export component HelpPage inherits Rectangle {
     // Why the log could not be read, in English; empty when it could.
     in property <string> log-error;
     in property <string> version;
-    // 0 as Windows, 1 English, 2 German
     in property <int> language;
     callback open-folder();
     callback refresh-log();
@@ -84,7 +82,6 @@ export component HelpPage inherits Rectangle {
             }
             false
         }
-        // Refresh and the log are drawn by the page, so it scrolls them into view.
         moved(row) => {
             if (row == 2) {
                 page.reveal(refresh.absolute-position.y, refresh.height);

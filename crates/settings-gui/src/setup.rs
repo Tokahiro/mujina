@@ -1,5 +1,4 @@
-//! The Setup page's data from `config.toml`, and the change each list entry stands for. Nothing
-//! here names a specific launcher or device.
+//! The Setup page's data and list changes. Nothing here names a specific launcher or device.
 
 use mujina_app::tool::{self, Configuration};
 use mujina_application::device::DeviceDescriptor;
@@ -15,7 +14,7 @@ pub struct Page {
     pub config: Config,
     pub launcher: Rows,
     pub device: Rows,
-    /// The launchers Mujina has, by name, in the registry's order and in the app's language.
+    /// In the registry's order, translated.
     pub launcher_names: Vec<String>,
     /// Automatic, None, then the devices a profile names.
     pub profiles: Vec<String>,
@@ -23,8 +22,7 @@ pub struct Page {
     pub button_in_use: String,
 }
 
-/// The page for `configuration`. `draft`: a launcher chosen but not stored yet, shown as chosen
-/// with its rows.
+/// `draft`: a launcher chosen but not stored yet, shown as chosen with its rows.
 pub fn page(configuration: &Configuration, draft: Option<&'static str>) -> Page {
     let settings = &configuration.loaded.settings;
     let launchers = tool::launchers();
@@ -59,7 +57,6 @@ pub fn page(configuration: &Configuration, draft: Option<&'static str>) -> Page 
                 &crate::texts::device_words(device),
             )
         });
-    // Automatic names the button it finds on this device.
     let found = known
         .iter()
         .find(|device| device.matches(&configuration.system));
@@ -146,7 +143,6 @@ pub fn button_label(device: &dyn DeviceDescriptor) -> String {
     }
 }
 
-/// The core settings, defaults filled in, and the starting screen's state for launcher `shown`.
 /// `known`: the profile devices, listed after `PROFILE_CHOICES`.
 fn config(
     store: &Configuration,
@@ -277,7 +273,6 @@ pub fn choice_change(key: &str, index: i32) -> SettingChange {
     form::choice(key, value.filter(|_| index != 0).as_deref())
 }
 
-/// The spec of dotted `key`, among the core settings and every launcher's and device's.
 pub fn spec(key: &str) -> Option<&'static SettingSpec> {
     schema::find(key, tool::launchers().all, tool::devices().all)
 }
@@ -290,7 +285,6 @@ mod tests {
     fn the_page_shows_the_launcher_the_file_names_where_mujina_has_it() {
         let named = |id: &str| Some(SettingValue::Text(id.to_string()));
         let shown = |stored, in_effect| shown_launcher(stored, in_effect).id();
-        // Stored, but not usable as stored: Steam runs, the page keeps the rows to fix it.
         assert_eq!(shown(named("generic"), "steam"), "generic");
         assert_eq!(shown(named("heroic"), "steam"), "steam");
         assert_eq!(shown(None, "generic"), "generic");
@@ -303,7 +297,6 @@ mod tests {
         let off = OptionTable::from([("ui_link".to_string(), SettingValue::Bool(false))]);
         assert!(!steam.capabilities(&off).navigation);
         assert_eq!(navigation_needs(steam, &off), "Use Steam's debugging port");
-        // No one switch of the generic launcher gives it pages.
         let generic = tool::launchers().get("generic");
         assert_eq!(navigation_needs(generic, &OptionTable::new()), "");
     }
@@ -326,8 +319,7 @@ mod tests {
             choice_change("device.profile", 1),
             SettingChange::set("device.profile", SettingValue::Text("none".into()))
         );
-        // The devices follow the two choices, in the order Mujina has them: a device crate in
-        // `DEVICE_PLUGINS` comes before the profiles.
+        // Not a fixed index: a device crate in `DEVICE_PLUGINS` comes before the profiles.
         let onexplayer = tool::devices()
             .profiles()
             .position(|device| device.id() == "onexplayer")

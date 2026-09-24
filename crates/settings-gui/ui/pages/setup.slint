@@ -1,5 +1,4 @@
-// Setup: what starts in Xbox mode, the device button, what Mujina fixes, and Advanced. The core
-// settings have rows here; a launcher's and a device's own rows come from Rust.
+// Setup: the core settings' rows are here; a launcher's and a device's own rows come from Rust.
 
 import { Theme } from "@mujina/theme.slint";
 import { Icons } from "@mujina/icons.slint";
@@ -8,8 +7,7 @@ import { Group } from "../controls.slint";
 import { ScrollPage } from "../page.slint";
 import { RowItem, RowData, RowKind, RowSection, Rows, PluginRows } from "../rows.slint";
 
-// What config.toml says, as the pages show it. Choices are indices into the lists the pages and
-// the Rust side agree on; an empty text means "the default".
+// Choices are indices into the lists the pages and Rust agree on; an empty text means the default.
 export struct Config {
     // Index into the launcher names; may be a launcher being chosen.
     launcher-kind: int,
@@ -36,7 +34,7 @@ export struct Config {
 
 export component SetupPage inherits Rectangle {
     in property <Config> config;
-    // The launchers Mujina has, by name, in the order Rust lists them.
+    // In the order Rust lists them.
     in property <[string]> launcher-names;
     // Automatic, None, then the built-in profiles.
     in property <[string]> profiles;
@@ -51,7 +49,7 @@ export component SetupPage inherits Rectangle {
     property <bool> games: root.config.game-detection;
     property <bool> advanced;
 
-    // The rows, by group. Changes go to Rust through `Change`, by key.
+    // Changes go to Rust through `Change`, by key.
     property <[RowData]> start-rows: [
         {
             kind: RowKind.choice,
@@ -205,7 +203,6 @@ export component SetupPage inherits Rectangle {
         { rows: root.device.advanced, hidden: !root.advanced }
     ]);
 
-    // A button row or the Advanced header.
     function pressed(key: string) {
         if (key == "capture") {
             root.capture();
@@ -218,7 +215,6 @@ export component SetupPage inherits Rectangle {
         page.enter();
     }
 
-    // Back from the capture overlay, on the same row.
     public function resume() {
         page.resume();
     }

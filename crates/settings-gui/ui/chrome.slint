@@ -23,7 +23,6 @@ component RailEntry inherits Rectangle {
     }
     drop-shadow-blur: root.focused ? 16 * Theme.u : 0px;
     drop-shadow-color: Theme.glow;
-    // The current page's accent bar on the left edge.
     Rectangle {
         x: 0;
         width: 3 * Theme.u;
@@ -69,7 +68,6 @@ export component Rail inherits Rectangle {
     in property <bool> fullscreen;
     // Where the controller is in the rail: a page, or Close after the last one.
     in-out property <int> selected;
-    // The pages, in order; what the window shows for each is in main.slint.
     property <[RailPage]> pages: [
         { icon: Icons.status, text: @tr("Status") },
         { icon: Icons.setup, text: @tr("Setup") },
@@ -78,15 +76,13 @@ export component Rail inherits Rectangle {
     ];
     out property <int> count: root.pages.length;
     out property <bool> focused: keys.has-focus;
-    // Into the page shown, onto its first row.
     callback enter();
     callback close();
     forward-focus: keys;
     width: 300 * Theme.u;
     background: @linear-gradient(180deg, #9184d912 0%, #9184d900 40%);
 
-    // Up and down show the page at once; A or right enters it. B leaves the app in full screen,
-    // where there is no title bar to close it with.
+    // B leaves the app in full screen, where there is no title bar to close it with.
     keys := FocusScope {
         key-pressed(event) => {
             if (event.text == Key.DownArrow) {
