@@ -7,6 +7,7 @@ use mujina_domain::keys::{KeyChord, VirtualKey};
 
 const SETTING: &str = "\"InGameOverlayShortcutKey\"";
 
+/// Fixed in Big Picture, unlike the overlay's.
 pub fn menu() -> KeyChord {
     KeyChord::pair(VirtualKey::LCONTROL, VirtualKey::DIGIT_1)
 }

@@ -112,8 +112,8 @@ impl SteamWifiIndicator {
 
 const DOWN: u64 = 0;
 
-/// Whether Steam's UI can be reached, as the worker last found. The worker looks only on signs
-/// of life from Steam, so this may be hours old.
+/// Whether Steam's UI can be reached, as the worker last found; up only once the hook is ready.
+/// The worker looks only on signs of life from Steam, so this may be hours old.
 #[derive(Clone)]
 pub struct UiLink {
     /// The number of the worker's session while it is up, [`DOWN`] otherwise. A new number means
@@ -574,7 +574,6 @@ mod tests {
         }
     }
 
-    /// For a fake Steam whose sockets stay open.
     fn never(_: usize, _: &str) -> bool {
         false
     }

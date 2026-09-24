@@ -66,7 +66,6 @@ impl SteamBigPicture {
         }
     }
 
-    /// [`Direct::NotTaken`] means "use the shortcut".
     fn toggle(&self, host: MenuHost) -> Direct {
         let Some(menus) = &self.menus else {
             return Direct::NotTaken;

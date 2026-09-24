@@ -148,7 +148,6 @@ impl Session {
         Ok(Self { socket, next_id: 0 })
     }
 
-    /// Calls a protocol method and returns its `result`.
     pub fn call(&mut self, method: &str, params: &Value) -> Result<Value, CdpError> {
         self.call_until(method, params, Instant::now() + IO_TIMEOUT)
     }

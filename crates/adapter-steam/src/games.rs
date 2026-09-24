@@ -85,8 +85,7 @@ fn game_folder() -> Option<PathBuf> {
     library::game_folder(steam.parent()?, app)
 }
 
-/// Reads Steam's library files and the path of every running process: for a button press, not a
-/// loop.
+/// Reads Steam's library files and every running process's path: for a button press, not a loop.
 fn find() -> Found {
     let installed =
         game_folder().map(|folder| process::running_from(|image| library::lies_in(image, &folder)));
