@@ -316,7 +316,7 @@ impl SignInCheck for WindowsHost {
 impl CreatedFiles for WindowsHost {
     fn forget(&self) -> Result<(), StepError> {
         let failed = |error: String| StepError::new(ErrorKind::Files, error);
-        // Any program of the user's can add to the list, so never delete from it as
+        // Any program of the user's can add to the list, so never delete what it names as
         // administrator; the check at sign-in, which runs as the user, does.
         if process::is_elevated() {
             return Ok(());
