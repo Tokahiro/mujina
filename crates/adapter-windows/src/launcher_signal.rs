@@ -9,7 +9,6 @@ use mujina_winutil::wait::WaitSource;
 
 const NAME: &str = r"Local\Mujina.launcher-started";
 
-/// For the agent: the event to wait on.
 pub fn listen() -> Option<LauncherStartedSource> {
     LauncherStartedSource::named(NAME)
 }

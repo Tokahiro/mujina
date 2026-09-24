@@ -38,7 +38,7 @@ pub struct LauncherPlugin {
 /// A device's Windows side, for the resident agent. One runtime may serve several devices, so
 /// that switching between them applies at once ([`DeviceButtons::reconfigure`]).
 pub trait DeviceRuntime: Sync {
-    /// On the main thread, also with `device.id` `None` (off); stops when the parts drop.
+    /// Called on the agent's main thread, even with no button mapped; runs as long as the parts.
     fn start(&self, device: &DeviceSelection) -> PortResult<DeviceParts>;
 
     /// What `doctor` should look at, e.g. the device's own software that also reacts to a button.

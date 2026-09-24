@@ -8,7 +8,6 @@ use mujina_winutil::wait::WaitSource;
 
 const NAME: &str = r"Local\Mujina.settings";
 
-/// For the agent: the event to wait on.
 pub fn listen() -> Option<SettingsChangedSource> {
     SettingsChangedSource::named(NAME)
 }

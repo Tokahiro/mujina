@@ -9,7 +9,6 @@ pub use descriptor::{DESCRIPTOR, GenericDescriptor, GenericLauncherConfig};
 #[cfg(windows)]
 pub use runtime::GenericLauncher;
 
-/// The generic launcher, as `crates/app/src/registry.rs` lists it.
 #[cfg(windows)]
 pub static PLUGIN: mujina_adapter_kit::plugin::LauncherPlugin =
     mujina_adapter_kit::plugin::LauncherPlugin {
