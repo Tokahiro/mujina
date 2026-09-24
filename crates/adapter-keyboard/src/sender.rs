@@ -1,6 +1,5 @@
 //! The thread that sends keys: the launcher's shortcuts, a button passed on, and what the hook
-//! held back and sends on. One for the process, started on first use; blocked on its channel
-//! while nothing is to be sent.
+//! held back. One per process, started on first use.
 
 use std::collections::VecDeque;
 use std::sync::OnceLock;
@@ -69,16 +68,12 @@ pub(crate) fn start() -> bool {
 
 /// Hands `job` to the sender thread; `false` when there is none.
 pub(crate) fn send(job: Job) -> bool {
-    // The thread lives as long as the process; a failed send means there is none.
     jobs().is_some_and(|jobs| jobs.send(job).is_ok())
 }
 
-/// Whether `key` has an extended scan code (`0xE0` first), which a key Mujina sends of its own
-/// has to say: the right Alt and Ctrl, Insert, Delete, Home, End, Page Up, Page Down, the arrows,
-/// Break, Print Screen, the keypad's Divide, and the Windows and Application keys
-/// ([Keyboard Input Overview, Extended-Key Flag](https://learn.microsoft.com/en-us/windows/win32/inputdev/about-keyboard-input#extended-key-flag)).
-/// Num Lock is not one, the same page says. The keypad's Enter is, but has the main Enter's
-/// virtual key, so it cannot be told from it here; a key held back keeps the flag it came with.
+/// Whether `key` has an extended scan code (`0xE0` first)
+/// ([Extended-Key Flag](https://learn.microsoft.com/en-us/windows/win32/inputdev/about-keyboard-input#extended-key-flag)).
+/// Num Lock is not one. The keypad's Enter is, but shares the main Enter's virtual key.
 fn is_extended(key: VirtualKey) -> bool {
     matches!(
         key.0,
@@ -118,7 +113,6 @@ fn keyboard_input(key: u16, scan: u16, flags: u32, tag: usize) -> INPUT {
     }
 }
 
-/// One key event of Mujina's own, tagged as `tag` says.
 fn key_input(key: VirtualKey, up: bool, tag: usize) -> INPUT {
     // SAFETY: plain call; an unknown key yields scan code 0.
     let scan = unsafe { MapVirtualKeyW(u32::from(key.0), MAPVK_VK_TO_VSC) };
@@ -130,14 +124,11 @@ fn key_input(key: VirtualKey, up: bool, tag: usize) -> INPUT {
     keyboard_input(key.0, u16::try_from(scan).unwrap_or(0), flags, tag)
 }
 
-/// A key event the hook held back, sent on as it came: with its own scan code and extended flag,
-/// which programs that read scan codes go by. A character a program typed as such (`VK_PACKET`,
-/// as the touch keyboard does; SendInput, Remarks) goes on as that character: `KEYEVENTF_UNICODE`
-/// with the virtual key 0 and the UTF-16 unit as the scan code
-/// ([KEYBDINPUT](https://learn.microsoft.com/en-us/windows/win32/api/winuser/ns-winuser-keybdinput)).
-/// The hook reports that unit as the event's scan code, which the hook's own page does not say;
-/// checked on Windows 11 (build 26200) with a scratch hook, which saw `VK_PACKET` with the
-/// character as its scan code, and the extended flag as sent.
+/// A key event the hook held back, sent on with its own scan code and extended flag. A
+/// `VK_PACKET` character (as the touch keyboard types) goes on as `KEYEVENTF_UNICODE` with the
+/// UTF-16 unit as scan code
+/// ([KEYBDINPUT](https://learn.microsoft.com/en-us/windows/win32/api/winuser/ns-winuser-keybdinput));
+/// the hook reports that unit as the scan code (undocumented; observed on Windows 11).
 fn replay_input(event: KeyEvent) -> INPUT {
     let mut flags = if event.direction == Direction::Up {
         KEYEVENTF_KEYUP
@@ -242,13 +233,9 @@ fn hold(chord: KeyChord, timing: HoldTiming) -> bool {
     all
 }
 
-/// Our own keystrokes pass back through our own hook, so not seeing them means Windows dropped
-/// it. Runs only right after a chord that Windows took, so it costs nothing while idle, and only
-/// while there is a hook: a device whose buttons come another way has none to prove.
-///
-/// While it waits, what the hook held back goes out at once: the hook holds back every key that
-/// follows until that comes back, and the chord is released by now, so none of its keys can mix
-/// in. Another chord waits in `waiting` until the check is done.
+/// Asks for the hook to be reinstalled if our own keystrokes did not pass back through it, which
+/// means Windows dropped it. Meanwhile replays go out at once, since the hook holds back every
+/// key until they come back; another chord waits in `waiting`.
 fn verify_hook(jobs: &Receiver<Job>, waiting: &mut VecDeque<Job>) {
     if HOOK_THREAD.load(Ordering::Relaxed) == 0 {
         return;

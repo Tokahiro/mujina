@@ -19,9 +19,8 @@ pub fn run() -> ExitCode {
 
     let arguments: Vec<String> = std::env::args().skip(1).collect();
     let argument = arguments.first().map(String::as_str);
-    // Only what Windows passes is taken as it comes: any program or web page can open `mujina:`.
-    // Checked before the home turn is claimed, so that an ignored activation never holds up one
-    // from Windows; Windows' own activations skip the check, this path has to be fast.
+    // Any program or web page can open `mujina:`, so only what Windows passes is taken as it
+    // comes. Checked before the home turn is claimed, so an ignored activation never holds one up.
     let source = ActivationSource::of(argument);
     if source == ActivationSource::Anyone {
         let console = WindowsFse::bind().state() == FseState::Active;
@@ -35,8 +34,8 @@ pub fn run() -> ExitCode {
         }
     }
 
-    // Windows activates the home app again while it is not satisfied (three times during one
-    // boot was seen). Only one activation at a time brings the launcher up.
+    // Windows may activate the home app several times in a row; only one at a time brings the
+    // launcher up.
     let Some(_turn) = HomeInstance::claim_home() else {
         log::info!("activated while another activation is still bringing the launcher up");
         return ExitCode::SUCCESS;

@@ -1,5 +1,5 @@
 //! Wiring of adapters. The only place that names concrete adapter types; the launchers and
-//! devices are listed in [`registry`](crate::registry).
+//! devices are listed in [`registry`].
 
 use mujina_adapter_config::ConfigFile;
 use mujina_adapter_kit::plugin::{DeviceParts, DeviceRuntime, LauncherPlugin, SessionParts};
@@ -15,8 +15,7 @@ use mujina_application::settings::{LoadedSettings, SettingsSource};
 
 use crate::registry;
 
-// Defined in the application ring; also named here, where the entry points and Mujina Settings
-// ask for their adapters.
+// Re-exported for the entry points and Mujina Settings, which ask for their adapters here.
 pub use mujina_application::Role;
 
 /// The adapters every entry point needs.

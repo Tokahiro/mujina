@@ -19,19 +19,15 @@ pub static LAUNCHERS: &[&LauncherPlugin] = &[
 /// which Mujina is built around.
 pub static FALLBACK: &LauncherPlugin = &mujina_adapter_steam::PLUGIN;
 
-/// Devices whose buttons reach Windows some other way than as key chords (a vendor HID report,
-/// a WMI event): one line each, and their crate named once in `[workspace.dependencies]` and once
-/// in this crate's `Cargo.toml`. A device whose buttons are key chords needs no line: every file
-/// in `profiles/devices/` is one.
+/// Devices whose buttons are not key chords (a vendor HID report, a WMI event), one line each;
+/// their crate is also named in `[workspace.dependencies]` and this crate's `Cargo.toml`.
 pub static DEVICE_PLUGINS: &[&DevicePlugin] = &[];
 
 static DESCRIPTORS: LazyLock<Vec<&'static dyn LauncherDescriptor>> =
     LazyLock::new(|| LAUNCHERS.iter().map(|plugin| plugin.descriptor).collect());
 
-/// Every device: those of their own crates, then the key-chord profiles and the button of one's
-/// own. `profile = "auto"` takes the first that says it is the machine, so a crate written for
-/// some machines is not hidden by a profile for their whole family (`onexplayer.toml` takes every
-/// ONE-NETBOOK machine); a crate's `matches` is as narrow as the machines it knows.
+/// Every device: those of their own crates, then the key-chord devices. `profile = "auto"` takes
+/// the first that matches, so a device crate is not hidden by a profile for a whole family.
 static DEVICES: LazyLock<Vec<DevicePlugin>> = LazyLock::new(|| {
     DEVICE_PLUGINS
         .iter()
@@ -83,9 +79,8 @@ pub fn device_runtime(id: Option<&str>) -> &'static dyn DeviceRuntime {
 /// The runtime of every key-chord device.
 static KEYBOARD: &dyn DeviceRuntime = &mujina_adapter_keyboard::RUNTIME;
 
-/// Whether an agent whose device `running` runs has to wait for the next session to take over
-/// the device `next` names: one another runtime runs. No device at all every runtime takes over
-/// at once (`DeviceButtons::reconfigure`).
+/// Whether an agent on runtime `running` must wait for the next session to take over the device
+/// `next` names, which is when another runtime runs it. `None` never waits.
 pub fn device_waits(running: &dyn DeviceRuntime, next: Option<&str>) -> bool {
     next.is_some() && !std::ptr::addr_eq(device_runtime(next), running)
 }

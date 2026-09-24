@@ -31,15 +31,13 @@ mujina-adapter-windows.workspace = true
 # The launchers, one line each; src/registry.rs lists them.
 mujina-adapter-steam.workspace = true
 mujina-adapter-generic.workspace = true
-# The devices: every key-chord device (profiles/devices/*.toml), then one line per device crate
-# with a mechanism of its own; src/registry.rs lists them.
+# The devices: the key-chord devices, then one line per device crate; src/registry.rs lists them.
 mujina-adapter-keyboard.workspace = true
 lexopt.workspace = true
 log.workspace = true
 
 [dev-dependencies]
-# The conformance tests of the launchers and devices in src/registry.rs, and the fake device of
-# src/fake_hid.rs.
+# The conformance tests in src/registry.rs and the fake device of src/fake_hid.rs.
 mujina-application = { workspace = true, features = ["test-util"] }
 
 [lints]

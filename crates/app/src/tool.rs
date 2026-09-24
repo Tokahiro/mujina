@@ -1,10 +1,6 @@
-//! What the tools share, `mujinactl` and Mujina Settings: the configuration and when a change
-//! applies, the doctor, the home app setting, the launchers and devices compiled in, the
-//! capture, and where Mujina keeps its files. Mujina Settings reaches the rest of Mujina through
-//! here only, so that it names no adapter (docs/architecture.md); what it gets is the
-//! application ring's types and plain data. arch-check sees crates, not modules: a test in
-//! Mujina Settings keeps it from naming `compose` or `registry`, which would make it a second
-//! composition root.
+//! What `mujinactl` and Mujina Settings share. Mujina Settings reaches the rest of Mujina only
+//! through here, so that it names no adapter (docs/architecture.md); a test in Mujina Settings
+//! keeps it from naming `compose` or `registry`.
 
 use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
@@ -37,7 +33,6 @@ pub fn data_dir() -> PathBuf {
     paths::data_dir()
 }
 
-/// Whether Xbox mode is on now.
 pub fn in_xbox_mode() -> bool {
     WindowsFse::bind().state() == FseState::Active
 }
@@ -66,7 +61,6 @@ pub fn launchers() -> Launchers {
     registry::launchers()
 }
 
-/// The devices compiled in.
 pub fn devices() -> Devices {
     registry::devices()
 }
@@ -132,9 +126,8 @@ pub enum Applied {
 /// share.
 pub fn change(changes: &[SettingChange]) -> Result<Applied, PortError> {
     let config = compose::config();
-    // The device the file chose before, standing in for the one the agent runs, as the file's
-    // launcher does below: right unless a change during the session had to wait already, and
-    // then this errs towards "next session".
+    // The file's device before the change stands in for the one the agent runs; if an earlier
+    // change is still waiting, this errs towards "next session".
     let device_before = changes
         .iter()
         .any(|change| change.key.starts_with("device."))
@@ -143,11 +136,10 @@ pub fn change(changes: &[SettingChange]) -> Result<Applied, PortError> {
     mujina_adapter_windows::settings_signal::notify();
     let (launchers, devices) = (registry::launchers(), registry::devices());
     let now = config.load().settings;
-    // The launcher the file names, which is the one running unless it was changed during the
-    // session; the agent follows only that one's options.
+    // The running launcher, unless it was changed during the session; the agent follows only its
+    // options.
     let named = now.launcher.id;
-    // Every device key applies at once as far as the configuration goes, but a device another
-    // runtime runs waits for the next session, as the agent's log says.
+    // A device another runtime runs waits for the next session, as the agent's log says.
     let device_waits = device_before.is_some_and(|before| {
         let running = registry::device_runtime(before.as_deref());
         registry::device_waits(running, now.device.id.as_deref())
@@ -163,10 +155,8 @@ pub fn change(changes: &[SettingChange]) -> Result<Applied, PortError> {
     })
 }
 
-/// The doctor's checks that say what Windows allows Mujina, by the ids their crates give them,
-/// in the order Mujina Settings' System page lists them: Xbox mode, Developer Mode, the location
-/// permission (checked only while Steam's Wi-Fi fix, which needs it, is on) and the background
-/// agent.
+/// The doctor's checks of what Windows allows Mujina, in the order Mujina Settings' System page
+/// lists them. The location permission is checked only while Steam's Wi-Fi fix is on.
 pub const SYSTEM_CHECKS: [&str; 4] = [
     mujina_application::doctor::FULL_SCREEN_EXPERIENCE,
     mujina_adapter_windows::checks::DEVELOPER_MODE,
@@ -175,8 +165,7 @@ pub const SYSTEM_CHECKS: [&str; 4] = [
 ];
 
 /// Everything `doctor` looks at.
-// `Doctor::examine` itself is tied to one doctor's lifetime, which the doctor built inside
-// `ask_doctor` does not have.
+// `Doctor::examine` is tied to a doctor's lifetime, which the one built in `ask_doctor` lacks.
 #[allow(clippy::redundant_closure_for_method_calls)]
 pub(crate) fn examine(adapters: &Adapters) -> Vec<Finding> {
     ask_doctor(adapters, |doctor| doctor.examine())
@@ -275,7 +264,6 @@ pub fn make_home_app() -> Result<RegisterOutcome, RegisterError> {
     HomeAppRegistration::new(&adapters.identity, &adapters.home_registry).register()
 }
 
-/// Gives the home app setting back to the app before Mujina.
 pub fn give_home_app_back() -> Result<UnregisterOutcome, RegisterError> {
     let adapters = Adapters::new(Role::Tool);
     HomeAppRegistration::new(&adapters.identity, &adapters.home_registry).unregister()

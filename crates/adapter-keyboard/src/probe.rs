@@ -1,10 +1,5 @@
-//! Watching the keyboard to find out what a device button sends.
-//!
-//! Events are either passed on untouched ([`Keys::PassOn`], for `mujinactl probe`) or held back
-//! from every other program for the short time of a capture ([`Keys::Hold`]), so that the button
-//! does not also show the desktop or bring the launcher forward while it is being identified. The
-//! hook callback stores events in a buffer allocated up front, so it never allocates or does I/O;
-//! reporting happens afterwards on the same thread.
+//! Watching the keyboard to find out what a device button sends. The hook callback only fills a
+//! buffer allocated up front; reporting happens afterwards on the same thread.
 
 use std::cell::RefCell;
 use std::ptr::{null, null_mut};

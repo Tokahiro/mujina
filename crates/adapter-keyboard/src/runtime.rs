@@ -20,8 +20,7 @@ pub struct KeyboardRuntime;
 /// The one runtime of every device of this crate, so that a switch between them applies at once.
 pub static RUNTIME: KeyboardRuntime = KeyboardRuntime;
 
-/// Every device of this crate, as `crates/app/src/registry.rs` lists them: the built-in profiles
-/// by file name, then the button of one's own.
+/// Every device of this crate ([`descriptors`]), each run by [`RUNTIME`].
 pub fn plugins() -> &'static [DevicePlugin] {
     static PLUGINS: LazyLock<Vec<DevicePlugin>> = LazyLock::new(|| {
         descriptors()
@@ -98,7 +97,6 @@ impl DeviceButtons for KeyboardButtons {
     }
 }
 
-/// Says in the log which chords are caught.
 fn describe(chords: &[(ButtonId, TriggerChord)]) {
     if chords.is_empty() {
         log::info!("device button: not mapped");

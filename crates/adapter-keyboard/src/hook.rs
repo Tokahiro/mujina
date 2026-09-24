@@ -1,16 +1,9 @@
-//! The low-level keyboard hook, on a thread of its own.
+//! The low-level keyboard hook, on a dedicated thread with a message loop.
 //!
-//! Windows calls a `WH_KEYBOARD_LL` hook "in the context of the thread that installed it … by
-//! sending a message to the thread", which "must have a message loop"; a hook that answers slower
-//! than `LowLevelHooksTimeout` (at most one second since Windows 10 1709) "is silently removed";
-//! and an application "should run the hooks on a dedicated thread that passes the work off to a
-//! worker thread and then immediately returns"
+//! Windows delivers a `WH_KEYBOARD_LL` hook's calls through the installing thread's message loop
+//! and silently removes a hook that answers slower than `LowLevelHooksTimeout`
 //! ([LowLevelKeyboardProc, Remarks](https://learn.microsoft.com/en-us/windows/win32/winmsg/lowlevelkeyboardproc)).
-//! So this thread does nothing but wait in `GetMessageW`, run the allocation-free matcher, and
-//! take messages from the rest of Mujina: new buttons, a replay to hand to the sender, a hook to
-//! install again. A press sets a bit and signals an auto-reset event the agent's event loop waits
-//! on ([`ButtonSource`]), so however long the agent's main thread takes over something, the hook
-//! answers at once.
+//! A press sets a bit and signals an event the agent's event loop waits on ([`ButtonSource`]).
 
 use std::cell::RefCell;
 use std::os::windows::io::{AsHandle, BorrowedHandle};
@@ -51,13 +44,10 @@ const WM_SET_BUTTONS: u32 = WM_APP + 2;
 const WM_FLUSH_REPLAY: u32 = WM_APP + 3;
 /// Posted by the sender: Windows refused `wParam` events of a replay, which will not come back.
 pub(crate) const WM_REPLAY_LOST: u32 = WM_APP + 4;
-/// Posted to the hook thread when it is to end.
 const WM_STOP: u32 = WM_APP + 5;
 
-/// `HC_ACTION`: the hook code that carries a key event.
 const HC_ACTION: i32 = 0;
 
-/// What the hook thread and the rest of Mujina share.
 struct Shared {
     /// Signalled on a press; the agent's event loop waits for it.
     fired: Event,
@@ -68,8 +58,7 @@ struct Shared {
     next: Mutex<Vec<(ButtonId, TriggerChord)>>,
 }
 
-/// The hook thread, as the rest of Mujina holds it. Dropping it ends the thread, which removes
-/// its hook.
+/// The hook thread. Dropping it ends the thread, which removes its hook.
 pub(crate) struct KeyboardHook {
     thread: u32,
     shared: Arc<Shared>,
@@ -108,7 +97,6 @@ impl KeyboardHook {
         post(self.thread, WM_SET_BUTTONS)
     }
 
-    /// What the agent's event loop waits on for the presses.
     pub(crate) fn source(&self) -> ButtonSource {
         ButtonSource {
             shared: Arc::clone(&self.shared),
@@ -142,8 +130,8 @@ impl WaitSource<AgentEvent> for ButtonSource {
         Some(self.shared.fired.as_handle())
     }
 
-    /// The wait consumed the auto-reset event. Two presses of one button before this runs come
-    /// out as one: rare for a button a person presses, and the second would repeat the first.
+    /// Two presses of one button before this runs come out as one; the second would only repeat
+    /// the first.
     fn signalled(&mut self, out: &mut Vec<AgentEvent>) {
         let pressed = self.shared.pressed.swap(0, Ordering::AcqRel);
         for id in 0..32u8 {
@@ -175,8 +163,8 @@ thread_local! {
 fn run(shared: &Arc<Shared>, ready: &SyncSender<u32>) {
     // SAFETY: MSG is plain data for which all-zero is a valid value.
     let mut message: MSG = unsafe { std::mem::zeroed() };
-    // SAFETY: `message` is writable. Asking for any message makes Windows create this thread's
-    // queue, as PostThreadMessageW's Remarks advise; nothing is taken out.
+    // SAFETY: `message` is writable. This creates the thread's queue (PostThreadMessageW,
+    // Remarks); nothing is taken out.
     unsafe { PeekMessageW(&raw mut message, null_mut(), WM_USER, WM_USER, PM_NOREMOVE) };
     // SAFETY: plain call.
     let thread = unsafe { GetCurrentThreadId() };
@@ -220,9 +208,8 @@ fn run(shared: &Arc<Shared>, ready: &SyncSender<u32>) {
     CONTEXT.with(|slot| slot.borrow_mut().take());
 }
 
-/// Runs `work` on the thread's state, outside the callback. Nothing in here pumps messages, so
-/// the callback cannot run meanwhile; if it did, it would find the state busy and let the key
-/// through.
+/// Runs `work` on the thread's state, outside the callback. `work` must not pump messages: a
+/// callback run meanwhile would find the state busy and let the key through.
 fn with_context(work: impl FnOnce(&mut Context)) {
     CONTEXT.with(|slot| {
         if let Some(context) = slot.borrow_mut().as_mut() {
@@ -301,7 +288,7 @@ impl Context {
         self.flush();
     }
 
-    /// Hands what the matcher held back to the sender, which sends it on in one go.
+    /// Hands what the matcher held back to the sender.
     fn flush(&mut self) {
         self.flush_posted = false;
         if std::mem::take(&mut self.gave_up) {
@@ -326,7 +313,7 @@ impl Context {
         }
     }
 
-    /// Decides about one key event. Allocation-free and lock-free: this runs in the callback.
+    /// Runs in the callback, so it must not allocate or lock.
     fn swallow(&mut self, info: &KBDLLHOOKSTRUCT, wparam: WPARAM) -> bool {
         let event = key_event(info, wparam);
         if matches!(event.origin, Origin::Own | Origin::Replayed) {

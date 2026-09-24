@@ -66,8 +66,6 @@ impl SettingsSource for AgentConfig {
         } else {
             log::info!("the launcher changes the next time Xbox mode is entered");
         }
-        // Another device of the same runtime (another key-chord device) is taken over at once, and
-        // so is none; a device another runtime runs has to wait.
         if registry::device_waits(self.device_runtime, loaded.settings.device.id.as_deref()) {
             log::info!("the device changes the next time Xbox mode is entered");
         }
@@ -86,7 +84,7 @@ fn level(detailed: bool) -> LevelFilter {
 /// `standalone`: keep running on the desktop (troubleshooting).
 pub fn run(standalone: bool) -> ExitCode {
     let data_dir = paths::data_dir();
-    // The `debug` marker file still works; the configuration is the documented way.
+    // An undocumented alternative to the configuration's log level.
     let debug_marker = data_dir.join("debug").exists();
     let _ = log_file::init(&data_dir, "agent", level(debug_marker));
 
@@ -99,15 +97,11 @@ pub fn run(standalone: bool) -> ExitCode {
         "started: version {}, standalone {standalone}",
         env!("CARGO_PKG_VERSION")
     );
-    // Opened first, so that as little as possible of what the home role signals while the agent
-    // gets ready is missed: the home role starts the agent, then the launcher. A signal before
-    // this point is lost with its event (`launcher_signal::notify`); the look for the launcher's
-    // process before the first wait finds a launcher started meanwhile all the same.
+    // Opened first: the home role starts the agent, then the launcher, and a signal sent before
+    // this point is lost. A launcher started meanwhile is still found by its process.
     let mut sources = signals();
-    // This thread activates the home role through ShellExecute, which wants COM first. The
-    // shell wrapper enters an STA for each call anyway; entered here for the thread's life, COM
-    // is not closed, nor what the shell loaded unloaded, after every activation. The thread
-    // pumps messages throughout, as an STA thread must.
+    // ShellExecute, which activates the home role, wants COM; an STA for the thread's life keeps
+    // it from being torn down after every activation (ADR-0014).
     let _apartment = com::Apartment::sta().inspect_err(|code| {
         log::warn!("COM could not be initialised (error {code:#x}); activations may fail");
     });
@@ -180,20 +174,17 @@ pub fn run(standalone: bool) -> ExitCode {
         said: Cell::new(false),
     });
     let last_words = Rc::clone(&farewell);
-    // What the button led to is named as the user knows it, e.g. "Steam Big Picture".
     let launcher_name = adapters.launcher.display_name();
     event_loop.run(
         &mut |event| {
-            // After the closing lines nothing is counted or logged (only the session ending
-            // comes then), so they stay the last lines and their count stays true.
+            // After the closing lines nothing is counted or logged, so they stay the last lines.
             if !farewell.said.get() {
                 farewell.events.set(farewell.events.get() + 1);
                 log::debug!("{event:?}");
             }
             let flow = service.handle(&event);
-            // One line per press, in roles only: it shows that the press arrived, and what it
-            // came to and why, without the names of what the user had open. Taken in any case,
-            // and after the closing lines not logged, as the events are not.
+            // One line per press, in roles only, without the names of what the user had open.
+            // Always taken, but not logged after the closing lines.
             if let Some(press) = service.take_press_report()
                 && !farewell.said.get()
             {
@@ -204,8 +195,6 @@ pub fn run(standalone: bool) -> ExitCode {
             }
             flow
         },
-        // What ends the session (a sign-out, a shutdown, the Restart Manager) is logged just
-        // before, by `session_end`, which has the message's flags.
         Box::new(move || last_words.say()),
     );
 
@@ -218,7 +207,7 @@ pub fn run(standalone: bool) -> ExitCode {
 struct Farewell {
     started: Instant,
     startup: Option<ProcessCost>,
-    /// Events handled before the closing lines; what comes after them is not counted.
+    /// Events handled before the closing lines.
     events: Cell<u64>,
     said: Cell<bool>,
 }
@@ -288,8 +277,7 @@ fn describe(adapters: &Adapters) {
     );
 }
 
-/// States what the session cost, so that "idle means idle" is a number anyone can check on their
-/// own device rather than a claim.
+/// Logs what the session cost, so that "idle means idle" can be checked on any device.
 fn log_cost(startup: Option<ProcessCost>, session: Duration, events: u64) {
     let (Some(startup), Some(total)) = (startup, cost::of_this_process()) else {
         return;
