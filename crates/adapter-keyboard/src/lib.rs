@@ -1,6 +1,5 @@
-//! Devices whose extra buttons arrive as keyboard chords (a OneXPlayer's injected `LWIN`+`D`),
-//! the low-level hook that catches them, and the thread that sends Mujina's keys. A device is a
-//! file in `profiles/devices/` or `[device.button]`; the hook's rules are in ADR-0005.
+//! Devices whose buttons arrive as key chords (`profiles/devices/*.toml`, `[device.button]`), the
+//! low-level hook that catches them (ADR-0005), and the thread that sends Mujina's keys.
 
 mod custom;
 mod profile;
@@ -25,8 +24,7 @@ pub use runtime::{KeyboardRuntime, KeyboardSender, RUNTIME, plugins};
 /// How many buttons of one device the hook catches; a profile with more is refused.
 pub const MAX_BUTTONS: usize = 8;
 
-/// Every device this crate serves: the built-in profiles by file name, then the button of one's
-/// own.
+/// The built-in profiles by file name, then the button of one's own.
 pub fn descriptors() -> Vec<&'static dyn DeviceDescriptor> {
     let mut all: Vec<&'static dyn DeviceDescriptor> = builtin()
         .iter()
@@ -36,8 +34,7 @@ pub fn descriptors() -> Vec<&'static dyn DeviceDescriptor> {
     all
 }
 
-/// The chords to catch for `device`: none for no device, `None` for one this crate does not
-/// serve. A button of one's own that cannot be used catches nothing.
+/// Empty for no device or an unusable own button; `None` for a device this crate does not serve.
 pub fn chords_for(device: &DeviceSelection) -> Option<Vec<(ButtonId, TriggerChord)>> {
     let Some(id) = device.id.as_deref() else {
         return Some(Vec::new());
@@ -91,7 +88,6 @@ mod tests {
     #[test]
     fn the_chords_follow_the_device_chosen() {
         assert_eq!(chords_for(&DeviceSelection::none()), Some(Vec::new()));
-        // An id no profile can have: its file would not be named after it.
         assert_eq!(
             chords_for(&device("no such device", OptionTable::new())),
             None
@@ -107,7 +103,6 @@ mod tests {
         let chords = chords_for(&device(OWN_ID, own)).unwrap();
         assert_eq!(chords.len(), 1);
         assert_eq!(chords[0].1.trigger(), VirtualKey(0x87));
-        // Half a button catches nothing, but it is still this crate's to serve.
         let half = OptionTable::from([("key".to_string(), SettingValue::Text("F24".into()))]);
         assert_eq!(chords_for(&device(OWN_ID, half)), Some(Vec::new()));
     }

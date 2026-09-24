@@ -1,9 +1,5 @@
-//! `mujinactl capture`: waits for one key combination, such as the device button, and prints it.
-//! Keys are held back from other programs meanwhile, except what a program with administrator
-//! rights sends (OneXConsole), which Windows delivers anyway (this still sees it).
-//!
-//! Mujina Settings runs it with [`watch`]: a hook on a thread of the app got no key events on a
-//! device where this console program's hook did.
+//! `mujinactl capture`: waits for one key combination and prints it, holding keys back meanwhile.
+//! Mujina Settings runs it via [`watch`]: on one device, a hook inside the app got no key events.
 
 use std::io::Read as _;
 use std::os::windows::process::CommandExt as _;
@@ -22,8 +18,8 @@ struct Capture {
 }
 
 impl Capture {
-    /// Takes one event; `false` once a chord was seen and all its keys are up again, so that no
-    /// key release reaches other programs without its press. Mujina's own keys are no part of it.
+    /// `false` once a chord was seen and all its keys are up again, so that no key release reaches
+    /// other programs without its press. Mujina's own keys are ignored.
     fn see(&mut self, event: KeyEvent) -> bool {
         if matches!(event.origin, Origin::Own | Origin::Replayed) {
             return true;
@@ -38,8 +34,7 @@ impl Capture {
     }
 }
 
-/// How a captured chord is printed, one line: `LWIN+D injected` or `LCTRL+LWIN+LALT physical`,
-/// every key held at once in the order pressed.
+/// The chord as one line, e.g. `LWIN+D injected` or `LCTRL+LWIN+LALT physical`.
 pub fn line(button: TriggerChord) -> String {
     let origin = if button.injected_only {
         "injected"
@@ -60,12 +55,10 @@ pub fn parse(line: &str) -> Option<TriggerChord> {
     TriggerChord::parse(chord, injected_only).ok()
 }
 
-/// Runs `mujinactl capture` next to the running program, in a process of its own without a
-/// window, for `time`, and reads its line: the chord, `Ok(None)` if none was pressed in time or
-/// `cancel` was set meanwhile, `Err` with what went wrong otherwise.
+/// Runs `mujinactl capture` from the program's folder and blocks until it ends: `Ok(None)` if no
+/// chord came within `time` or `cancel` was set.
 pub fn watch(time: Duration, cancel: &AtomicBool) -> Result<Option<TriggerChord>, String> {
     const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-    /// How often a waiting capture looks whether it was cancelled.
     const POLL: Duration = Duration::from_millis(50);
 
     let program = std::env::current_exe()
@@ -92,7 +85,7 @@ pub fn watch(time: Duration, cancel: &AtomicBool) -> Result<Option<TriggerChord>
             Err(error) => return Err(error.to_string()),
         }
     };
-    // One line each at most, read once the watcher is done.
+    // At most one line each, so the pipes cannot fill before the watcher ends.
     let mut stdout = String::new();
     let mut stderr = String::new();
     if let Some(mut pipe) = child.stdout.take() {

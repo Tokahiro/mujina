@@ -1,9 +1,5 @@
-//! `mujina.exe`: the executable Windows activates as the console home.
-//!
+//! `mujina.exe`: the console home, or with `agent [--standalone]` the resident agent.
 //! Built for the GUI subsystem so that an activation never flashes a console window.
-//!
-//! - no argument, or whatever Windows passes on activation (`windows.gaming:///home`): home role
-//! - `agent`: the resident agent; `agent --standalone` keeps it running on the desktop
 
 #![windows_subsystem = "windows"]
 

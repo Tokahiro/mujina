@@ -1,5 +1,4 @@
-//! The thread that sends keys: the launcher's shortcuts, a button passed on, and what the hook
-//! held back. One per process, started on first use.
+//! The thread that sends Mujina's keys; one per process, started on first use.
 
 use std::collections::VecDeque;
 use std::sync::OnceLock;
@@ -23,8 +22,7 @@ use crate::hook::{WM_REINSTALL_HOOK, WM_REPLAY_LOST};
 // Marks keystrokes synthesized by Mujina; defined next to the one other place that sends them.
 pub(crate) use mujina_winutil::window::OWN_INPUT_TAG;
 
-/// Marks what the hook held back and sends on ("MUJR"), apart from Mujina's own keystrokes, so
-/// that the hook can count it coming back.
+/// Tags held-back keys sent on ("MUJR") apart from our own, so the hook can count their return.
 pub(crate) const REPLAY_TAG: usize = 0x4D55_4A52;
 
 /// How long after a chord the hook must have seen our own keystrokes.
@@ -33,20 +31,20 @@ const HOOK_PROOF_DELAY: Duration = Duration::from_millis(30);
 /// Set by the hook whenever it sees keystrokes of ours, either tag.
 pub(crate) static SAW_OWN_INPUT: AtomicBool = AtomicBool::new(false);
 
-/// The thread whose hook is installed, 0 while there is none: whom to tell that the hook is gone.
+/// The thread whose hook is installed; 0 while there is none.
 pub(crate) static HOOK_THREAD: AtomicU32 = AtomicU32::new(0);
 
 pub(crate) enum Job {
-    /// A chord held as `timing` says: a launcher's shortcut, or a button passed on.
     Chord(KeyChord, HoldTiming),
-    /// What the hook held back, sent on at once and in one go; the hook thread `from` hears how
-    /// much of it Windows refused. Boxed, being far larger than a chord; made outside the hook
-    /// callback, which must not allocate.
-    Replay { events: Box<Replay>, from: u32 },
+    /// The hook thread `from` hears how much Windows refused. Built outside the hook callback,
+    /// which must not allocate.
+    Replay {
+        events: Box<Replay>,
+        from: u32,
+    },
 }
 
-/// The channel to the sender thread, which is started the first time it is asked for; `None`
-/// if it could not be started.
+/// Starts the sender thread on first use; `None` if it could not be started.
 fn jobs() -> Option<&'static Sender<Job>> {
     static JOBS: OnceLock<Option<Sender<Job>>> = OnceLock::new();
     JOBS.get_or_init(|| {
@@ -71,9 +69,8 @@ pub(crate) fn send(job: Job) -> bool {
     jobs().is_some_and(|jobs| jobs.send(job).is_ok())
 }
 
-/// Whether `key` has an extended scan code (`0xE0` first)
+/// Num Lock is not extended; the keypad's Enter is, but shares Enter's virtual key
 /// ([Extended-Key Flag](https://learn.microsoft.com/en-us/windows/win32/inputdev/about-keyboard-input#extended-key-flag)).
-/// Num Lock is not one. The keypad's Enter is, but shares the main Enter's virtual key.
 fn is_extended(key: VirtualKey) -> bool {
     matches!(
         key.0,
@@ -124,9 +121,7 @@ fn key_input(key: VirtualKey, up: bool, tag: usize) -> INPUT {
     keyboard_input(key.0, u16::try_from(scan).unwrap_or(0), flags, tag)
 }
 
-/// A key event the hook held back, sent on with its own scan code and extended flag. A
-/// `VK_PACKET` character (as the touch keyboard types) goes on as `KEYEVENTF_UNICODE` with the
-/// UTF-16 unit as scan code
+/// A `VK_PACKET` character goes on as `KEYEVENTF_UNICODE` with the UTF-16 unit as scan code
 /// ([KEYBDINPUT](https://learn.microsoft.com/en-us/windows/win32/api/winuser/ns-winuser-keybdinput));
 /// the hook reports that unit as the scan code (undocumented; observed on Windows 11).
 fn replay_input(event: KeyEvent) -> INPUT {
@@ -144,8 +139,7 @@ fn replay_input(event: KeyEvent) -> INPUT {
     keyboard_input(event.key.0, event.scan.code, flags, REPLAY_TAG)
 }
 
-/// Puts `inputs` into the input stream in one go, which nothing else is interspersed with
-/// (SendInput, Remarks); how many went in.
+/// Sends `inputs` without other input in between (SendInput, Remarks); how many went in.
 fn inject(inputs: &[INPUT]) -> usize {
     let (Ok(count), Ok(size)) = (
         u32::try_from(inputs.len()),
@@ -158,7 +152,7 @@ fn inject(inputs: &[INPUT]) -> usize {
     usize::try_from(sent).unwrap_or(0)
 }
 
-/// Presses or releases one key of ours; whether Windows took it.
+/// Whether Windows took the key.
 fn press(key: VirtualKey, up: bool) -> bool {
     let sent = inject(&[key_input(key, up, OWN_INPUT_TAG)]) == 1;
     if !sent {
@@ -198,8 +192,7 @@ fn run(jobs: &Receiver<Job>) {
     }
 }
 
-/// Sends on what the hook held back, in one go; tells the hook thread `from` how much of it
-/// Windows refused, since that will not come back through the hook.
+/// Tells the hook thread `from` how much Windows refused, since that never comes back.
 fn replay(events: &Replay, from: u32) {
     let inputs: Vec<INPUT> = events.events().iter().copied().map(replay_input).collect();
     let lost = inputs.len().saturating_sub(inject(&inputs));
@@ -210,8 +203,7 @@ fn replay(events: &Replay, from: u32) {
     }
 }
 
-/// Presses `chord`'s keys in order, holds the last, and releases them in reverse, pausing as
-/// `timing` says; whether Windows took every key.
+/// Whether Windows took every key.
 fn hold(chord: KeyChord, timing: HoldTiming) -> bool {
     let keys = chord.keys();
     let Some((&last, modifiers)) = keys.split_last() else {
@@ -233,9 +225,8 @@ fn hold(chord: KeyChord, timing: HoldTiming) -> bool {
     all
 }
 
-/// Asks for the hook to be reinstalled if our own keystrokes did not pass back through it, which
-/// means Windows dropped it. Meanwhile replays go out at once, since the hook holds back every
-/// key until they come back and the chord is already released; another chord waits in `waiting`.
+/// Has the hook reinstalled if our keystrokes did not pass through it: Windows dropped it.
+/// Replays meanwhile go out at once, since the hook holds back every key until they come back.
 fn verify_hook(jobs: &Receiver<Job>, waiting: &mut VecDeque<Job>) {
     if HOOK_THREAD.load(Ordering::Relaxed) == 0 {
         return;
@@ -295,7 +286,6 @@ mod tests {
         );
         assert_eq!(right.dwExtraInfo, REPLAY_TAG);
 
-        // The keypad's 6 itself keeps its plain scan code.
         let six = keyboard(&replay_input(held_back(0x66, Direction::Up, 0x4D, false)));
         assert_eq!((six.wScan, six.dwFlags), (0x4D, KEYEVENTF_KEYUP));
     }
@@ -327,7 +317,7 @@ mod tests {
         ] {
             assert_eq!(flags(key), KEYEVENTF_EXTENDEDKEY, "{key:#04x}");
         }
-        // Num Lock is not, nor is the left Ctrl.
+        // 0x90 is Num Lock.
         for key in [0x90, VirtualKey::LCONTROL.0, VirtualKey::D.0] {
             assert_eq!(flags(key), 0, "{key:#04x}");
         }

@@ -20,8 +20,7 @@ pub fn run() -> ExitCode {
     let arguments: Vec<String> = std::env::args().skip(1).collect();
     let argument = arguments.first().map(String::as_str);
     // Any program or web page can open `mujina:`, so only what Windows passes is taken as it
-    // comes. Checked before the home turn is claimed, so an ignored activation never holds up
-    // one from Windows.
+    // comes. Checked before the turn is claimed, so an ignored one never holds up one from Windows.
     let source = ActivationSource::of(argument);
     if source == ActivationSource::Anyone {
         let console = WindowsFse::bind().state() == FseState::Active;

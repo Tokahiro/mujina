@@ -1,5 +1,4 @@
-//! A button of one's own: `[device.button]`, a modifier and a key, for a device no profile knows.
-//! What Mujina Settings' capture stores; it wins over any profile while it names a button.
+//! `[device.button]`: a modifier and a key for a device no profile knows; it wins over any profile.
 
 use mujina_application::device::{
     ButtonId, ButtonSpec, DeviceDescriptor, Suppression, SystemIdentity,
@@ -10,10 +9,9 @@ use mujina_application::settings::schema::SettingSpec;
 use mujina_domain::chord::TriggerChord;
 use mujina_domain::keys::{KeyChord, VirtualKey};
 
-/// Its id: never in a configuration file, only in `mujinactl doctor` and the log.
+/// Never in a configuration file; shown only in `mujinactl doctor` and the log.
 pub const OWN_ID: &str = "custom";
 
-/// The device `[device.button]` describes.
 #[derive(Debug)]
 pub struct OwnButton;
 
@@ -47,7 +45,6 @@ impl DeviceDescriptor for OwnButton {
         &[]
     }
 
-    /// With neither key the section names no button, which is no mistake.
     fn validate(&self, options: &OptionTable, notes: &mut Vec<String>) {
         if let Err(problem) = own_chord(options) {
             notes.push(problem);

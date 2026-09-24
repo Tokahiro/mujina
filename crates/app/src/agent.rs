@@ -30,12 +30,10 @@ use crate::registry;
 /// Windows may start the home app a little before it reports the experience as active.
 const FSE_GRACE: Duration = Duration::from_secs(120);
 
-/// The configuration as the agent re-reads it when told it changed: says in the log what it
-/// found, follows the log level, and names what waits for the next session.
+/// Re-read when the configuration changed; logs what it found and what waits for the next session.
 struct AgentConfig {
     file: ConfigFile,
     started_with: Settings,
-    /// The launcher running this session.
     launcher: &'static dyn LauncherDescriptor,
     /// What runs the device this session started with.
     device_runtime: &'static dyn DeviceRuntime,
@@ -98,7 +96,7 @@ pub fn run(standalone: bool) -> ExitCode {
         env!("CARGO_PKG_VERSION")
     );
     // Opened first: the home role starts the agent, then the launcher, and a signal sent before
-    // this point is lost. A launcher started meanwhile is still found by its process.
+    // this point is lost.
     let mut sources = signals();
     // ShellExecute, which activates the home role, wants COM; an STA for the thread's life keeps
     // it from being torn down after every activation (ADR-0014).
@@ -183,8 +181,7 @@ pub fn run(standalone: bool) -> ExitCode {
                 log::debug!("{event:?}");
             }
             let flow = service.handle(&event);
-            // One line per press, in roles only, without the names of what the user had open.
-            // Always taken, but not logged after the closing lines.
+            // Roles only, no names of what the user had open. Always taken, even when not logged.
             if let Some(press) = service.take_press_report()
                 && !farewell.said.get()
             {
@@ -202,12 +199,11 @@ pub fn run(standalone: bool) -> ExitCode {
     ExitCode::SUCCESS
 }
 
-/// The session's closing lines. Said once: when the event loop ends, or before that from inside
+/// The session's closing lines, said once: when the event loop ends, or earlier from inside
 /// `WM_ENDSESSION`, after which Windows may end the process at any moment.
 struct Farewell {
     started: Instant,
     startup: Option<ProcessCost>,
-    /// Events handled before the closing lines.
     events: Cell<u64>,
     said: Cell<bool>,
 }
@@ -227,7 +223,6 @@ impl Farewell {
     }
 }
 
-/// Says why the agent leaves after `event`, before the closing lines.
 fn say_why_leaving(event: &AgentEvent) {
     match event {
         // Said just before, by `session_end`, which has the message's flags.
@@ -241,8 +236,7 @@ fn say_why_leaving(event: &AgentEvent) {
     }
 }
 
-/// The named events through which other Mujina processes speak to the agent, as wait sources
-/// of its event loop.
+/// The named events through which other Mujina processes speak to the agent.
 fn signals() -> Vec<Box<dyn WaitSource<AgentEvent>>> {
     let mut sources: Vec<Box<dyn WaitSource<AgentEvent>>> = Vec::new();
     match settings_signal::listen() {
@@ -260,7 +254,6 @@ fn signals() -> Vec<Box<dyn WaitSource<AgentEvent>>> {
     sources
 }
 
-/// What the agent starts with, for the log.
 fn describe(adapters: &Adapters) {
     for note in &adapters.settings.notes {
         log::warn!("configuration: {note}");

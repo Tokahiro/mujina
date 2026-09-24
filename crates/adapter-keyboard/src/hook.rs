@@ -1,9 +1,6 @@
-//! The low-level keyboard hook, on a dedicated thread with a message loop.
-//!
-//! Windows delivers a `WH_KEYBOARD_LL` hook's calls through the installing thread's message loop
-//! and silently removes a hook that answers slower than `LowLevelHooksTimeout`
+//! The low-level keyboard hook, on a thread whose message loop delivers its calls. Windows silently
+//! removes a hook that answers slower than `LowLevelHooksTimeout`
 //! ([LowLevelKeyboardProc, Remarks](https://learn.microsoft.com/en-us/windows/win32/winmsg/lowlevelkeyboardproc)).
-//! A press sets a bit and signals an event the agent's event loop waits on ([`ButtonSource`]).
 
 use std::cell::RefCell;
 use std::os::windows::io::{AsHandle, BorrowedHandle};
@@ -39,8 +36,8 @@ use crate::sender::{self, HOOK_THREAD, Job, OWN_INPUT_TAG, REPLAY_TAG, SAW_OWN_I
 pub(crate) const WM_REINSTALL_HOOK: u32 = WM_APP + 1;
 /// Posted to the hook thread when new buttons wait in [`Shared::next`].
 const WM_SET_BUTTONS: u32 = WM_APP + 2;
-/// Posted by the hook to its own thread: what it held back waits to be sent on. The callback
-/// must not do that itself, and only a posted message ends the thread's `GetMessageW`.
+/// Posted by the callback to its own thread to send on what it held back: the callback must not
+/// send, and only a posted message ends the thread's `GetMessageW`.
 const WM_FLUSH_REPLAY: u32 = WM_APP + 3;
 /// Posted by the sender: Windows refused `wParam` events of a replay, which will not come back.
 pub(crate) const WM_REPLAY_LOST: u32 = WM_APP + 4;
@@ -49,16 +46,14 @@ const WM_STOP: u32 = WM_APP + 5;
 const HC_ACTION: i32 = 0;
 
 struct Shared {
-    /// Signalled on a press; the agent's event loop waits for it.
     fired: Event,
     /// A bit per button pressed since the event loop last looked.
     pressed: AtomicU32,
-    /// The buttons to catch, handed over with [`WM_SET_BUTTONS`]. Only the thread's message
-    /// handler locks it, never the hook callback.
+    /// Handed over with [`WM_SET_BUTTONS`]; locked by the message handler, never the callback.
     next: Mutex<Vec<(ButtonId, TriggerChord)>>,
 }
 
-/// The hook thread. Dropping it ends the thread, which removes its hook.
+/// Dropping it ends the hook thread, which removes the hook.
 pub(crate) struct KeyboardHook {
     thread: u32,
     shared: Arc<Shared>,
@@ -79,8 +74,7 @@ impl KeyboardHook {
             .name("keyboard-hook".into())
             .spawn(move || run(&theirs, &ready))
             .map_err(|error| format!("the keyboard hook thread could not be started: {error}"))?;
-        // Posting to a thread fails until it has a message queue (PostThreadMessageW, Remarks):
-        // wait until the thread has made one.
+        // Posting fails until the thread has a message queue (PostThreadMessageW, Remarks).
         let thread = started
             .recv()
             .map_err(|_| "the keyboard hook thread ended at once".to_string())?;
@@ -115,8 +109,7 @@ fn post(thread: u32, message: u32) -> bool {
     unsafe { PostThreadMessageW(thread, message, 0, 0) != 0 }
 }
 
-/// The presses the hook caught, as the agent's event loop waits for them: one
-/// [`AgentEvent::ButtonPressed`] per button.
+/// The hook's presses for the agent's event loop, one [`AgentEvent::ButtonPressed`] per button.
 pub struct ButtonSource {
     shared: Arc<Shared>,
 }
@@ -130,8 +123,7 @@ impl WaitSource<AgentEvent> for ButtonSource {
         Some(self.shared.fired.as_handle())
     }
 
-    /// Two presses of one button before this runs come out as one; the second would only repeat
-    /// the first.
+    /// Presses of one button since the last call come out as one.
     fn signalled(&mut self, out: &mut Vec<AgentEvent>) {
         let pressed = self.shared.pressed.swap(0, Ordering::AcqRel);
         for id in 0..32u8 {
@@ -142,17 +134,14 @@ impl WaitSource<AgentEvent> for ButtonSource {
     }
 }
 
-/// The hook thread's own state; the callback reaches it through the thread-local below, since a
-/// low-level hook takes no context.
+/// The hook thread's state, in a thread-local since a low-level hook takes no context.
 struct Context {
     matcher: ChordSetMatcher<MAX_BUTTONS>,
     shared: Arc<Shared>,
     thread: u32,
     hook: Option<HHOOK>,
-    /// A flush is posted and not yet handled; one is enough.
     flush_posted: bool,
-    /// The callback stopped waiting for keys sent on that never came back; the flush says so in
-    /// the log, which the callback must not write.
+    /// Keys sent on never came back; the flush logs it, since the callback must not.
     gave_up: bool,
 }
 
@@ -163,8 +152,7 @@ thread_local! {
 fn run(shared: &Arc<Shared>, ready: &SyncSender<u32>) {
     // SAFETY: MSG is plain data for which all-zero is a valid value.
     let mut message: MSG = unsafe { std::mem::zeroed() };
-    // SAFETY: `message` is writable. This creates the thread's queue (PostThreadMessageW,
-    // Remarks); nothing is taken out.
+    // SAFETY: `message` is writable; this only creates the thread's queue, taking nothing out.
     unsafe { PeekMessageW(&raw mut message, null_mut(), WM_USER, WM_USER, PM_NOREMOVE) };
     // SAFETY: plain call.
     let thread = unsafe { GetCurrentThreadId() };
@@ -182,11 +170,9 @@ fn run(shared: &Arc<Shared>, ready: &SyncSender<u32>) {
         return;
     }
     loop {
-        // SAFETY: `message` is writable; a null window means any message of this thread. The
-        // hook's calls are delivered in here, as sent messages.
+        // SAFETY: `message` is writable; a null window means any message of this thread.
         let got = unsafe { GetMessageW(&raw mut message, null_mut(), 0, 0) };
-        // 0 is WM_QUIT; -1 is an error, after which waiting again would spin (GetMessageW,
-        // Return value).
+        // 0 is WM_QUIT; after -1, an error, waiting again would spin (GetMessageW, Return value).
         if got == 0 || got == -1 {
             break;
         }
@@ -208,8 +194,8 @@ fn run(shared: &Arc<Shared>, ready: &SyncSender<u32>) {
     CONTEXT.with(|slot| slot.borrow_mut().take());
 }
 
-/// Runs `work` on the thread's state, outside the callback. `work` must not pump messages: a
-/// callback run meanwhile would find the state busy and let the key through.
+/// `work` must not pump messages: a callback run meanwhile would find the state busy and let the
+/// key through.
 fn with_context(work: impl FnOnce(&mut Context)) {
     CONTEXT.with(|slot| {
         if let Some(context) = slot.borrow_mut().as_mut() {
@@ -240,14 +226,11 @@ impl Context {
         } else if self.hook.is_none() {
             self.install_hook();
         }
-        // What a chord under way had held back.
         self.flush();
     }
 
     fn install_hook(&mut self) {
-        // SAFETY: `keyboard_proc` matches HOOKPROC and stays valid for the life of the process;
-        // the module handle of the executable is what low-level hooks expect, and thread 0 means
-        // every thread of the desktop.
+        // SAFETY: `keyboard_proc` matches HOOKPROC and stays valid for the life of the process.
         let hook = unsafe {
             SetWindowsHookExW(
                 WH_KEYBOARD_LL,
@@ -370,8 +353,7 @@ unsafe extern "system" fn keyboard_proc(code: i32, wparam: WPARAM, lparam: LPARA
     unsafe { CallNextHookEx(null_mut(), code, wparam, lparam) }
 }
 
-/// A key event as a low-level hook reports it. Mujina's own keystrokes are told apart by their
-/// tag: those it sent of its own accord, and those it sent on after holding them back.
+/// Mujina's own keystrokes are told apart by their tag, which counts only on injected keys.
 pub(crate) fn key_event(info: &KBDLLHOOKSTRUCT, wparam: WPARAM) -> KeyEvent {
     let injected = info.flags & LLKHF_INJECTED != 0;
     let origin = match info.dwExtraInfo {
@@ -432,7 +414,7 @@ mod tests {
         assert!(source.handle().is_some());
         let thread = hook.thread;
         drop(hook);
-        // Once the thread has taken WM_STOP, posting to it fails; it may take a moment.
+        // Posting fails once the thread has taken WM_STOP, which may take a moment.
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
         while post(thread, WM_SET_BUTTONS) {
             assert!(
@@ -456,7 +438,6 @@ mod tests {
         assert_eq!(origin(LLKHF_INJECTED, OWN_INPUT_TAG), Origin::Own);
         assert_eq!(origin(LLKHF_INJECTED, REPLAY_TAG), Origin::Replayed);
         assert_eq!(origin(LLKHF_INJECTED, 0), Origin::Injected);
-        // A tag on a real key means nothing.
         assert_eq!(origin(0, OWN_INPUT_TAG), Origin::Physical);
     }
 
