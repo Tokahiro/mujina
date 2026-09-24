@@ -60,6 +60,7 @@ pub enum ErrorKind {
     Declined,
     /// Windows did not start the administrator part (a policy, say); `code` is the Win32 error.
     ElevationFailed,
+    // The administrator part's own failures, one per `ElevatedFailure`.
     ElevatedArguments,
     DeveloperMode,
     Certificate,
@@ -710,7 +711,7 @@ mod tests {
             sign_in(&host);
         }
         assert_eq!(host.attempts.get(), 2);
-        // Installed again before the check gave up, then removed the same way again.
+        // Installed again before the check gave up, then removed through Settings → Apps again.
         installing(&host, HOME).unwrap();
         host.installed.set(false);
         for attempt in 1..SIGN_IN_ATTEMPTS {
@@ -781,7 +782,6 @@ mod tests {
             hresult_in("x 0x00000001 then 0x800b0109 (untrusted)"),
             Some(0x800B_0109)
         );
-        // Not eight digits, or none at all.
         assert_eq!(hresult_in("0x800B01090 and 0x8007"), None);
         assert_eq!(hresult_in("Access is denied."), None);
         assert_eq!(

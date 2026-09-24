@@ -12,6 +12,7 @@ pub const ABOUT_RESOURCE: &str = "MUJINA_ABOUT";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct About {
+    /// The manifest's `Identity Name`.
     pub name: String,
     /// The manifest's `Identity Publisher`, exactly as written there, e.g. `CN=Mujina`.
     pub publisher: String,

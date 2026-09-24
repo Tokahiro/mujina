@@ -59,7 +59,6 @@ impl Localizer {
         self.current = current;
     }
 
-    /// `msg` in the language set.
     pub fn t(&self, msg: &Msg) -> &str {
         self.text(msg.english())
     }

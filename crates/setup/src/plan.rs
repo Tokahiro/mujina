@@ -128,14 +128,14 @@ pub enum Step {
     MakeHomeApp,
     GiveHomeAppBack,
     RemovePackage,
-    /// Deletes the files Mujina recorded making outside its own folders, then the record.
     ForgetCreatedFiles,
     RemoveCleanup,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Blocker {
-    /// Older than [`REQUIRED_BUILD`]; Windows would refuse the package only after the prompt.
+    /// Older than [`REQUIRED_BUILD`]: Windows would refuse the package only after the prompt and
+    /// the changes to the machine.
     WindowsTooOld { build: u32 },
 }
 
