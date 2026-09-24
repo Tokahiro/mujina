@@ -1,0 +1,521 @@
+// Status: does everything work? The doctor's verdict, the device at a glance, and every check.
+
+import { Theme, Health } from "@mujina/theme.slint";
+import { Icons } from "@mujina/icons.slint";
+import { ScrollPage } from "../page.slint";
+import { Card, FocusFrame, OutlineButton } from "@mujina/controls.slint";
+import { SectionLabel, StateIcon } from "../controls.slint";
+
+// The doctor's counts. `known` once the first checks are back; the page says it is checking
+// until then.
+export struct Verdict {
+    known: bool,
+    problems: int,
+    warnings: int,
+    total: int,
+}
+
+// One doctor finding. `title` names its check in the app's language; Rust names it again when
+// the language changes. The detail is English in every language, as in `mujinactl doctor`.
+export struct CheckRow {
+    health: Health,
+    title: string,
+    detail: string,
+}
+
+// Where the device button comes from.
+export enum ButtonSource {
+    // Switched off under Setup.
+    off,
+    // `[device.button]`, a combination of the user's own.
+    own,
+    // A device profile, found on this handheld or chosen under Setup.
+    automatic,
+    chosen,
+    // No button: None chosen under Setup, or no profile for this handheld.
+    set-to-none,
+    no-profile
+}
+
+// Steam's Wi-Fi fix; not used with another launcher.
+export enum WifiFix {
+    on,
+    off,
+    not-used
+}
+
+// The device tiles. The handheld and its maker are empty where Windows does not say.
+export struct DeviceInfo {
+    handheld: string,
+    maker: string,
+    // The combination, or what the button is called on the device.
+    button: string,
+    button-source: ButtonSource,
+    launcher: string,
+    wifi: WifiFix,
+    folder: string,
+}
+
+component TileLabel inherits HorizontalLayout {
+    in property <image> icon;
+    in property <string> text;
+    spacing: 8 * Theme.u;
+    alignment: start;
+    VerticalLayout {
+        alignment: center;
+        Image {
+            width: 17 * Theme.u;
+            height: 17 * Theme.u;
+            source: root.icon;
+            colorize: Theme.muted;
+        }
+    }
+    Text {
+        text: root.text;
+        font-size: 14 * Theme.u;
+        color: Theme.muted;
+        overflow: elide;
+    }
+}
+
+component Tile inherits Rectangle {
+    in property <image> icon;
+    in property <string> label;
+    in property <string> value;
+    in property <string> note;
+    background: Theme.tile;
+    border-width: 1px;
+    border-color: #e9e9ed17;
+    border-radius: Theme.radius-tile;
+    VerticalLayout {
+        padding-top: 18 * Theme.u;
+        padding-bottom: 18 * Theme.u;
+        padding-left: 20 * Theme.u;
+        padding-right: 20 * Theme.u;
+        spacing: 4 * Theme.u;
+        TileLabel {
+            icon: root.icon;
+            text: root.label;
+        }
+        Text {
+            text: root.value;
+            font-size: Theme.row-title;
+            font-weight: 500;
+            color: Theme.text;
+            overflow: elide;
+        }
+        Text {
+            text: root.note;
+            font-size: 14 * Theme.u;
+            color: Theme.muted;
+            overflow: elide;
+        }
+    }
+}
+
+export component StatusPage inherits Rectangle {
+    in property <Verdict> verdict;
+    // The checks are under way.
+    in property <bool> checking;
+    // When the checks were last done, as HH:MM.
+    in property <string> checked-time;
+    in property <DeviceInfo> device;
+    // What the settings reader noted, English; empty: nothing.
+    in property <string> note;
+    in property <[CheckRow]> checks;
+    callback check-again();
+    callback open-folder();
+    // Back to the rail.
+    callback leave();
+
+    // The rows the controller lands on: 0 Check again, 1 the folder tile.
+    property <[bool]> rows: [true, true];
+    property <int> turns;
+
+    property <Health> health: root.verdict.problems > 0 ? Health.problem : root.verdict.warnings > 0 ? Health.warning : Health.ok;
+    property <string> checked-at: root.checking ? @tr("Checking…") : root.checked-time != "" ? @tr("Checked at {}", root.checked-time) : "";
+    property <int> passed: max(0, root.verdict.total - root.verdict.problems - root.verdict.warnings);
+
+    pure function hero-title() -> string {
+        if (!root.verdict.known) {
+            return @tr("Checking…");
+        }
+        if (root.verdict.problems > 0) {
+            return @tr("One thing needs fixing." | "{n} things need fixing." % root.verdict.problems);
+        }
+        if (root.verdict.warnings > 0) {
+            return @tr("Working, with one thing to look at." | "Working, with {n} things to look at." % root.verdict.warnings);
+        }
+        @tr("Everything Mujina needs is in order.")
+    }
+
+    pure function hero-sub() -> string {
+        if (!root.verdict.known) {
+            return "";
+        }
+        if (root.verdict.problems == 0 && root.verdict.warnings == 0) {
+            return @tr("All {} checks passed.", root.verdict.total);
+        }
+        let passed = @tr("{n} check passed" | "{n} checks passed" % root.passed);
+        let problems = root.verdict.problems > 0 ? ", " + @tr("{n} problem" | "{n} problems" % root.verdict.problems) : "";
+        let warnings = root.verdict.warnings > 0 ? ", " + @tr("{n} warning" | "{n} warnings" % root.verdict.warnings) : "";
+        passed + problems + warnings + "."
+    }
+
+    // A tile's value or note: empty until the first checks are back.
+    pure function known(text: string) -> string {
+        root.verdict.known ? text : ""
+    }
+
+    pure function or-unknown(text: string) -> string {
+        root.known(text != "" ? text : @tr("Unknown"))
+    }
+
+    pure function button-value() -> string {
+        let source = root.device.button-source;
+        root.known(source == ButtonSource.off ? @tr("Switched off") : source == ButtonSource.set-to-none || source == ButtonSource.no-profile ? @tr("Not mapped") : root.device.button)
+    }
+
+    pure function button-note() -> string {
+        let source = root.device.button-source;
+        root.known(source == ButtonSource.off ? @tr("Turned off under Setup") : source == ButtonSource.own ? @tr("Your own combination") : source == ButtonSource.automatic ? @tr("Chosen automatically") : source == ButtonSource.chosen ? @tr("Chosen by you") : source == ButtonSource.set-to-none ? @tr("Set to None under Setup") : @tr("No profile for this handheld"))
+    }
+
+    pure function wifi-value() -> string {
+        let wifi = root.device.wifi;
+        root.known(wifi == WifiFix.on ? @tr("On") : wifi == WifiFix.off ? @tr("Off") : @tr("Not used"))
+    }
+
+    pure function wifi-note() -> string {
+        let wifi = root.device.wifi;
+        root.known(wifi == WifiFix.on ? @tr("Steam shows the real network") : wifi == WifiFix.off ? @tr("Steam shows its own icon") : @tr("Only for Steam Big Picture"))
+    }
+
+    public function enter() {
+        page.enter();
+    }
+
+    function activate(row: int) {
+        if (row == 0) {
+            root.turns += 1;
+            root.check-again();
+        } else {
+            root.open-folder();
+        }
+    }
+
+    page := ScrollPage {
+        shown: root.visible;
+        title: @tr("Status");
+        aside: root.checked-at;
+        spacing: 26 * Theme.u;
+        rows: root.rows;
+        // Scrolled on past the folder tile, reading the checks, up first scrolls back to it.
+        step(delta) => {
+            if (delta < 0 && page.current == 1 && page.top-of(folder.absolute-position.y) < 24 * Theme.u) {
+                page.scroll-by(160 * Theme.u);
+                return true;
+            }
+            false
+        }
+        // Both rows are the page's own.
+        activate(row) => {
+            root.activate(row);
+            true
+        }
+        moved(row) => {
+            if (row == 1) {
+                page.reveal(folder.absolute-position.y, folder.height);
+            }
+        }
+        leave => {
+            root.leave();
+        }
+
+        // The verdict.
+        Rectangle {
+            border-radius: Theme.radius-card;
+            border-width: 1px;
+            border-color: Theme.state-color(root.health).transparentize(0.7);
+            background: @linear-gradient(115deg, Theme.state-tint(root.health) 0%, #1e213099 46%, #1e213059 100%);
+            HorizontalLayout {
+                padding-top: 26 * Theme.u;
+                padding-bottom: 26 * Theme.u;
+                padding-left: 28 * Theme.u;
+                padding-right: 28 * Theme.u;
+                spacing: 26 * Theme.u;
+                VerticalLayout {
+                    alignment: center;
+                    Rectangle {
+                        width: 86 * Theme.u;
+                        height: 86 * Theme.u;
+                        border-radius: 24 * Theme.u;
+                        background: Theme.state-tint(root.health);
+                        border-width: 1.5px;
+                        border-color: Theme.state-ring(root.health);
+                        StateIcon {
+                            width: 44 * Theme.u;
+                            height: 44 * Theme.u;
+                            health: root.health;
+                        }
+                    }
+                }
+                VerticalLayout {
+                    alignment: center;
+                    spacing: 6 * Theme.u;
+                    horizontal-stretch: 1;
+                    Text {
+                        text: root.hero-title();
+                        font-size: Theme.hero;
+                        font-weight: 500;
+                        letter-spacing: Theme.hero * -0.015;
+                        color: Theme.text;
+                        wrap: word-wrap;
+                    }
+                    Text {
+                        text: root.hero-sub();
+                        font-size: Theme.body;
+                        color: Theme.text-body;
+                        wrap: word-wrap;
+                    }
+                }
+                VerticalLayout {
+                    alignment: center;
+                    OutlineButton {
+                        accent: true;
+                        icon: Icons.again;
+                        text: @tr("Check again");
+                        turns: root.turns;
+                        focused: page.focused && page.current == 0;
+                        clicked => {
+                            page.current = 0;
+                            root.activate(0);
+                        }
+                    }
+                }
+            }
+        }
+
+        VerticalLayout {
+            spacing: 12 * Theme.u;
+            HorizontalLayout {
+                padding-left: 4 * Theme.u;
+                SectionLabel {
+                    text: @tr("Your device").to-uppercase();
+                }
+            }
+            GridLayout {
+                spacing: 12 * Theme.u;
+                Row {
+                    Tile {
+                        preferred-width: 0px;
+                        horizontal-stretch: 1;
+                        icon: Icons.controller;
+                        label: @tr("Handheld");
+                        value: root.or-unknown(root.device.handheld);
+                        note: root.or-unknown(root.device.maker);
+                    }
+                    Tile {
+                        preferred-width: 0px;
+                        horizontal-stretch: 1;
+                        icon: Icons.button;
+                        label: @tr("Device button");
+                        value: root.button-value();
+                        note: root.button-note();
+                    }
+                    Tile {
+                        preferred-width: 0px;
+                        horizontal-stretch: 1;
+                        icon: Icons.launcher;
+                        label: @tr("Launcher");
+                        value: root.device.launcher;
+                        note: root.known(@tr("Starts with Xbox mode"));
+                    }
+                }
+                Row {
+                    Tile {
+                        preferred-width: 0px;
+                        horizontal-stretch: 1;
+                        icon: Icons.wifi;
+                        label: @tr("Wi-Fi icon fix");
+                        value: root.wifi-value();
+                        note: root.wifi-note();
+                    }
+                    folder := FocusFrame {
+                        colspan: 2;
+                        preferred-width: 0px;
+                        horizontal-stretch: 2;
+                        border-radius: Theme.radius-tile;
+                        rest: Theme.tile;
+                        focus-fill: Theme.tile;
+                        press-fill: Theme.accent-20;
+                        rest-border: #e9e9ed17;
+                        focus-border: 2px;
+                        focused: page.focused && page.current == 1;
+                        pressed: folder-touch.pressed;
+                        accessible-role: button;
+                        accessible-label: @tr("Settings and log folder");
+                        accessible-description: root.device.folder;
+                        accessible-action-default => {
+                            root.activate(1);
+                        }
+                        HorizontalLayout {
+                            padding-top: 18 * Theme.u;
+                            padding-bottom: 18 * Theme.u;
+                            padding-left: 20 * Theme.u;
+                            padding-right: 20 * Theme.u;
+                            spacing: 18 * Theme.u;
+                            VerticalLayout {
+                                alignment: center;
+                                spacing: 4 * Theme.u;
+                                horizontal-stretch: 1;
+                                TileLabel {
+                                    icon: Icons.folder;
+                                    text: @tr("Settings and log folder");
+                                }
+                                Text {
+                                    text: root.device.folder;
+                                    font-family: Theme.mono;
+                                    font-size: Theme.body;
+                                    color: Theme.text-soft;
+                                    overflow: elide;
+                                }
+                            }
+                            VerticalLayout {
+                                alignment: center;
+                                Rectangle {
+                                    height: 44 * Theme.u;
+                                    border-radius: 9 * Theme.u;
+                                    border-width: 1px;
+                                    border-color: Theme.line-strong;
+                                    HorizontalLayout {
+                                        padding-left: 16 * Theme.u;
+                                        padding-right: 16 * Theme.u;
+                                        spacing: 8 * Theme.u;
+                                        VerticalLayout {
+                                            alignment: center;
+                                            Image {
+                                                width: 18 * Theme.u;
+                                                height: 18 * Theme.u;
+                                                source: Icons.open;
+                                                colorize: Theme.text-soft;
+                                            }
+                                        }
+                                        Text {
+                                            text: @tr("Open");
+                                            font-size: 16 * Theme.u;
+                                            color: Theme.text-soft;
+                                            vertical-alignment: center;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        folder-touch := TouchArea {
+                            clicked => {
+                                page.current = 1;
+                                root.activate(1);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Something the settings reader noticed: a line it ignored, or no profile for
+        // this device. The note itself stays English, like the doctor's findings.
+        if root.note != "": Rectangle {
+            background: #d9a44117;
+            border-width: 1px;
+            border-color: #d9a44159;
+            border-radius: Theme.radius-tile;
+            HorizontalLayout {
+                padding-top: 16 * Theme.u;
+                padding-bottom: 16 * Theme.u;
+                padding-left: 20 * Theme.u;
+                padding-right: 20 * Theme.u;
+                spacing: 14 * Theme.u;
+                VerticalLayout {
+                    alignment: start;
+                    padding-top: 2 * Theme.u;
+                    Image {
+                        width: 22 * Theme.u;
+                        height: 22 * Theme.u;
+                        source: Icons.warning;
+                        colorize: Theme.warning;
+                    }
+                }
+                VerticalLayout {
+                    spacing: 6 * Theme.u;
+                    horizontal-stretch: 1;
+                    Text {
+                        text: @tr("While reading the settings, Mujina noticed:");
+                        font-size: Theme.check-detail;
+                        color: #e4e7f5;
+                        wrap: word-wrap;
+                    }
+                    Text {
+                        text: root.note;
+                        font-family: Theme.mono;
+                        font-size: Theme.description;
+                        color: Theme.warning;
+                        wrap: word-wrap;
+                    }
+                }
+            }
+        }
+
+        VerticalLayout {
+            spacing: 12 * Theme.u;
+            HorizontalLayout {
+                padding-left: 4 * Theme.u;
+                SectionLabel {
+                    text: @tr("What was checked").to-uppercase();
+                }
+            }
+            Card {
+                inset-y: 6 * Theme.u;
+                for check[index] in root.checks: Rectangle {
+                    HorizontalLayout {
+                        padding-top: 13 * Theme.u;
+                        padding-bottom: 13 * Theme.u;
+                        padding-left: 14 * Theme.u;
+                        padding-right: 14 * Theme.u;
+                        spacing: 16 * Theme.u;
+                        VerticalLayout {
+                            alignment: center;
+                            StateIcon {
+                                width: 22 * Theme.u;
+                                height: 22 * Theme.u;
+                                health: check.health;
+                            }
+                        }
+                        // Sized against the German build; the one fixed width.
+                        Text {
+                            width: 250 * Theme.u;
+                            text: check.title;
+                            font-size: Theme.check-topic;
+                            font-weight: 500;
+                            color: Theme.text;
+                            wrap: word-wrap;
+                            vertical-alignment: center;
+                        }
+                        Text {
+                            horizontal-stretch: 1;
+                            text: check.detail;
+                            font-size: Theme.check-detail;
+                            color: Theme.muted;
+                            wrap: word-wrap;
+                            vertical-alignment: center;
+                        }
+                    }
+                    if index < root.checks.length - 1: Rectangle {
+                        y: parent.height - 1px;
+                        height: 1px;
+                        background: Theme.line-soft;
+                    }
+                }
+            }
+        }
+    }
+}

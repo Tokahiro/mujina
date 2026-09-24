@@ -1,0 +1,22 @@
+# OneXPlayer handhelds running OneXConsole.
+#
+# OneXConsole reports the "show desktop" button as a synthesized LWIN+D and keeps doing so in
+# Xbox mode, where Windows itself ignores it.
+id = "onexplayer"
+name = "OneXPlayer (show desktop button)"
+
+# Compared with the system's SMBIOS strings, case-insensitively; `*` matches anything.
+[match]
+manufacturer = "ONE-NETBOOK*"
+product = "*"
+
+# One entry per extra button.
+[[buttons]]
+# A name for logs and the configuration: lower case, digits and _.
+key = "desktop"
+# What the button is called on the device; Mujina Settings shows it.
+label = "Desktop button"
+# The keys it sends: those held, then the one that completes it.
+chord = "LWIN+D"
+# Only when a program sends them, so the same keys on a real keyboard keep working.
+injected_only = true

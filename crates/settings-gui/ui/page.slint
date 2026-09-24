@@ -1,0 +1,194 @@
+// What every page is: its title, what it shows scrolled as a whole with a thumb, and the
+// controller's keys. Up and down move between the rows the controller can land on (and read on
+// past the last one), left, right and A go to the current row, B back to the rail. A page with
+// rows of its own drawing (a button, the log) takes up, down and A on them first, and scrolls
+// them into view itself when they become current.
+
+import { Theme } from "@mujina/theme.slint";
+import { Nav, PageState, PageKey, Focus } from "nav.slint";
+
+export component ScrollPage inherits Rectangle {
+    in property <string> title;
+    // Whether this is the page shown, which its page binds to its own `visible`: every page
+    // exists all the time, and only the one shown may take the controller back or scroll to a
+    // row. Its own `visible` stays true when the page around it is hidden.
+    in property <bool> shown;
+    // Right of the title, e.g. when the checks were done.
+    in property <string> aside;
+    in property <length> spacing: 30 * Theme.u;
+    // Which rows the controller can land on, in order.
+    in property <[bool]> rows;
+    in-out property <int> current;
+    out property <bool> focused: keys.has-focus;
+    out property <PageState> state: {
+        current: root.current,
+        focused: keys.has-focus,
+        key: root.key,
+        presses: root.presses
+    };
+    // Up (-1) or down (1) on the current row, before the page moves: true when the page did
+    // something else with it, such as reading its log on.
+    callback step(int) -> bool;
+    // A on the current row: true when the page acted itself, on a row of its own drawing;
+    // otherwise the row acts.
+    callback activate(int) -> bool;
+    // The current row changed by up or down, for a page to scroll a row of its own drawing into
+    // view.
+    callback moved(int);
+    // B: back to the rail.
+    callback leave();
+
+    // The last key pressed on the current row.
+    property <PageKey> key;
+    property <int> presses;
+
+    public function enter() {
+        root.current = Nav.step(root.rows, -1, 1);
+        flick.content-y = 0;
+        keys.focus();
+    }
+
+    // Back from a text field or the capture overlay, on the same row.
+    public function resume() {
+        keys.focus();
+    }
+
+    // Scrolls by `delta` within the page's bounds.
+    public function scroll-by(delta: length) {
+        flick.content-y = max(min(0px, flick.height - flick.content-height), min(0px, flick.content-y + delta));
+    }
+
+    // Scrolls just far enough to show a row, given in window coordinates; the first row shows
+    // the page from its top.
+    public function reveal(y: length, size: length) {
+        let margin = 24 * Theme.u;
+        let top = y - flick.absolute-position.y;
+        let bottom = top + size;
+        if (root.current == 0) {
+            flick.content-y = 0;
+        } else if (bottom > flick.height - margin) {
+            root.scroll-by(flick.height - margin - bottom);
+        } else if (top < margin) {
+            root.scroll-by(margin - top);
+        }
+    }
+
+    // Where a row lies within the page, for a page that tests whether it is scrolled out of view.
+    public pure function top-of(y: length) -> length {
+        y - flick.absolute-position.y
+    }
+
+    function press(which: PageKey) {
+        root.key = which;
+        root.presses += 1;
+    }
+
+    function move-to(row: int) {
+        root.current = row;
+        if (row == 0) {
+            flick.content-y = 0;
+        }
+        root.moved(row);
+    }
+
+    // A row that became current reports where it is.
+    property <int> rows-shown: Focus.rows-shown;
+    changed rows-shown => {
+        if (root.shown) {
+            root.reveal(Focus.row-y, Focus.row-height);
+        }
+    }
+    // A text field done with editing hands the controller back.
+    property <int> returns: Focus.returns;
+    changed returns => {
+        if (root.shown) {
+            keys.focus();
+        }
+    }
+
+    keys := FocusScope {
+        key-pressed(event) => {
+            // Past the last row, down reads on to the end of the page.
+            if (event.text == Key.DownArrow) {
+                if (!root.step(1)) {
+                    let next = Nav.step(root.rows, root.current, 1);
+                    if (next == root.current) {
+                        root.scroll-by(-160 * Theme.u);
+                    } else {
+                        root.move-to(next);
+                    }
+                }
+                return accept;
+            }
+            if (event.text == Key.UpArrow) {
+                if (!root.step(-1)) {
+                    root.move-to(Nav.step(root.rows, root.current, -1));
+                }
+                return accept;
+            }
+            if (event.text == Key.LeftArrow) {
+                root.press(PageKey.left);
+                return accept;
+            }
+            if (event.text == Key.RightArrow) {
+                root.press(PageKey.right);
+                return accept;
+            }
+            if (event.text == Key.Return || event.text == Key.Space) {
+                if (!root.activate(root.current)) {
+                    root.press(PageKey.activate);
+                }
+                return accept;
+            }
+            if (event.text == Key.Escape) {
+                root.leave();
+                return accept;
+            }
+            reject
+        }
+
+        flick := Flickable {
+            content-width: self.width;
+            content-height: content.preferred-height;
+
+            content := VerticalLayout {
+                width: flick.width;
+                padding-top: 34 * Theme.u;
+                padding-bottom: 40 * Theme.u;
+                padding-left: 40 * Theme.u;
+                padding-right: 40 * Theme.u;
+                spacing: root.spacing;
+
+                HorizontalLayout {
+                    spacing: 20 * Theme.u;
+                    Text {
+                        text: root.title;
+                        font-size: Theme.page-title;
+                        font-weight: 500;
+                        letter-spacing: Theme.page-title * -0.02;
+                        color: Theme.text;
+                        horizontal-stretch: 1;
+                    }
+                    if root.aside != "": Text {
+                        text: root.aside;
+                        font-size: Theme.description;
+                        color: Theme.muted;
+                        vertical-alignment: bottom;
+                    }
+                }
+
+                @children
+            }
+        }
+
+        // Where the page is scrolled to, when there is more of it than fits.
+        if flick.content-height > flick.height: Rectangle {
+            x: flick.width - 8 * Theme.u;
+            width: 5 * Theme.u;
+            height: max(24 * Theme.u, flick.height * (flick.height / flick.content-height));
+            y: (flick.height - self.height) * (-flick.content-y / (flick.content-height - flick.height));
+            border-radius: self.width / 2;
+            background: Theme.divider;
+        }
+    }
+}

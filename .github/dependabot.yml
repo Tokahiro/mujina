@@ -1,0 +1,21 @@
+version: 2
+updates:
+  # Crates: one grouped pull request per week for compatible updates; majors come one by one.
+  # Every build uses --locked, so Cargo.lock only changes through these pull requests (or a
+  # deliberate `cargo update` in a pull request of its own).
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      compatible:
+        update-types: [minor, patch]
+
+  # The workflows pin actions to commit hashes; this keeps the hashes and their comments current.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]

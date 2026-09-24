@@ -1,0 +1,638 @@
+# German texts of Mujina Settings. The context (msgctxt) is the Slint component the text
+# appears in; the texts without one, at the end, are those Rust looks up (mujina-i18n). A text
+# without a translation here stays English; `cargo xtask i18n-check` lists them.
+msgid ""
+msgstr ""
+"Project-Id-Version: Mujina\n"
+"POT-Creation-Date: 2026-09-22 00:00+0200\n"
+"PO-Revision-Date: 2026-09-22 00:00+0200\n"
+"Last-Translator: \n"
+"Language-Team: German\n"
+"Language: de\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+msgctxt "CaptureOverlay"
+msgid "Cancel"
+msgstr "Abbrechen"
+
+msgctxt "CaptureOverlay"
+msgid "Capture did not work"
+msgstr "Aufzeichnen hat nicht geklappt"
+
+msgctxt "CaptureOverlay"
+msgid "Captured {}"
+msgstr "Erfasst: {}"
+
+msgctxt "CaptureOverlay"
+msgid "Close"
+msgstr "Schließen"
+
+msgctxt "CaptureOverlay"
+msgid "No button seen"
+msgstr "Keine Taste erkannt"
+
+msgctxt "CaptureOverlay"
+msgid "Nothing arrived in {} seconds. Mujina recognises buttons that arrive as a key combination: try again, or enter the combination under Advanced."
+msgstr "In {} Sekunden kam nichts an. Mujina erkennt Tasten, die als Tastenkombination ankommen: versuch es noch einmal oder gib die Kombination unter Erweitert ein."
+
+msgctxt "CaptureOverlay"
+msgid "Press the device button now"
+msgstr "Drück jetzt die Taste am Gerät"
+
+msgctxt "CaptureOverlay"
+msgid "The button on the side or back of your handheld. Everything else is ignored while Mujina listens."
+msgstr "Die Taste an der Seite oder Rückseite deines Handhelds. Alles andere wird ignoriert, solange Mujina zuhört."
+
+msgctxt "CaptureOverlay"
+msgid "{} s left"
+msgstr "Noch {} s"
+
+msgctxt "HelpPage"
+msgid "About"
+msgstr "Über Mujina"
+
+msgctxt "HelpPage"
+msgid "Applies at once."
+msgstr "Gilt sofort."
+
+msgctxt "HelpPage"
+msgid "Help"
+msgstr "Hilfe"
+
+msgctxt "HelpPage"
+msgid "Language"
+msgstr "Sprache"
+
+msgctxt "HelpPage"
+msgid "Language of this app"
+msgstr "Sprache dieser App"
+
+msgctxt "HelpPage"
+msgid "Licence: MIT OR Apache-2.0"
+msgstr "Lizenz: MIT OR Apache-2.0"
+
+msgctxt "HelpPage"
+msgid "Log — newest first"
+msgstr "Protokoll — neueste zuerst"
+
+msgctxt "HelpPage"
+msgid "Makes a Windows 11 handheld start like a console: it becomes the home app of Xbox mode and opens your launcher in its place. Named after 狢, a shapeshifter from Japanese folklore."
+msgstr "Lässt ein Windows-11-Handheld wie eine Konsole starten: Mujina wird die Home-App des Xbox-Modus und öffnet an ihrer Stelle deinen Launcher. Benannt nach 狢, einem Gestaltwandler aus der japanischen Sagenwelt."
+
+msgctxt "HelpPage"
+msgid "Open"
+msgstr "Öffnen"
+
+msgctxt "HelpPage"
+msgid "Open the folder with the log"
+msgstr "Ordner mit dem Protokoll öffnen"
+
+msgctxt "HelpPage"
+msgid "Records every event in the log. Turn it on, make the problem happen again, then send the folder. Applies at once in Xbox mode."
+msgstr "Schreibt jedes Ereignis ins Protokoll. Einschalten, das Problem noch einmal auslösen, dann den Ordner schicken. Gilt im Xbox-Modus sofort."
+
+msgctxt "HelpPage"
+msgid "Refresh"
+msgstr "Aktualisieren"
+
+msgctxt "HelpPage"
+msgid "Reporting a problem"
+msgstr "Ein Problem melden"
+
+msgctxt "HelpPage"
+msgid "Same as Windows"
+msgstr "Wie Windows"
+
+msgctxt "HelpPage"
+msgid "The log could not be read: {}"
+msgstr "Das Protokoll ließ sich nicht lesen: {}"
+
+msgctxt "HelpPage"
+msgid "Write down everything"
+msgstr "Alles aufschreiben"
+
+msgctxt "HintBar"
+msgid "Back"
+msgstr "Zurück"
+
+msgctxt "HintBar"
+msgid "Choose"
+msgstr "Auswählen"
+
+msgctxt "HintBar"
+msgid "D-pad"
+msgstr "Steuerkreuz"
+
+msgctxt "HintBar"
+msgid "Open"
+msgstr "Öffnen"
+
+msgctxt "HintBar"
+msgid "Pages"
+msgstr "Seiten"
+
+msgctxt "MainWindow"
+msgid "Mujina Settings"
+msgstr "Mujina-Einstellungen"
+
+msgctxt "Rail"
+msgid "Close"
+msgstr "Schließen"
+
+msgctxt "Rail"
+msgid "Help"
+msgstr "Hilfe"
+
+msgctxt "Rail"
+msgid "Settings"
+msgstr "Einstellungen"
+
+msgctxt "Rail"
+msgid "Setup"
+msgstr "Einrichtung"
+
+msgctxt "Rail"
+msgid "Status"
+msgstr "Status"
+
+msgctxt "Rail"
+msgid "System"
+msgstr "System"
+
+msgctxt "SetupPage"
+msgid "Advanced"
+msgstr "Erweitert"
+
+msgctxt "SetupPage"
+msgid "Always restart"
+msgstr "Immer neu starten"
+
+msgctxt "SetupPage"
+msgid "Applies at once in Xbox mode."
+msgstr "Gilt im Xbox-Modus sofort."
+
+msgctxt "SetupPage"
+msgid "Automatic is right for almost every device."
+msgstr "„Automatisch“ passt für nahezu jedes Gerät."
+
+msgctxt "SetupPage"
+msgid "Between the keys of a shortcut Mujina sends. 20 ms suits almost every game."
+msgstr "Zwischen den Tasten eines Kürzels, das Mujina sendet. 20 ms passen für nahezu jedes Spiel."
+
+msgctxt "SetupPage"
+msgid "Black screen while the launcher starts"
+msgstr "Schwarzer Bildschirm, während der Launcher startet"
+
+msgctxt "SetupPage"
+msgid "Capture"
+msgstr "Aufzeichnen"
+
+msgctxt "SetupPage"
+msgid "Currently {}"
+msgstr "Derzeit {}"
+
+msgctxt "SetupPage"
+msgid "Device button combination"
+msgstr "Tastenkombination der Gerätetaste"
+
+msgctxt "SetupPage"
+msgid "Do nothing"
+msgstr "Nichts tun"
+
+msgctxt "SetupPage"
+msgid "From the button above"
+msgstr "Von der Taste oben"
+
+msgctxt "SetupPage"
+msgid "Games read the keyboard once a frame — too short and they miss it."
+msgstr "Spiele lesen die Tastatur einmal pro Bild – zu kurz, und sie verpassen es."
+
+msgctxt "SetupPage"
+msgid "Instead of Xbox mode's own grey. Takes effect the next time you enter Xbox mode."
+msgstr "Statt des Graus des Xbox-Modus. Wird beim nächsten Wechsel in den Xbox-Modus wirksam."
+
+msgctxt "SetupPage"
+msgid "Keep the starting screen while a game loads"
+msgstr "Startbildschirm halten, während ein Spiel lädt"
+
+msgctxt "SetupPage"
+msgid "Key combinations, timings, window details. Most people never need these."
+msgstr "Tastenkombinationen, Zeiten, Fensterdetails. Die meisten brauchen das nie."
+
+msgctxt "SetupPage"
+msgid "Key held for"
+msgstr "Taste gehalten für"
+
+msgctxt "SetupPage"
+msgid "Menu shortcut"
+msgstr "Menü-Kürzel"
+
+msgctxt "SetupPage"
+msgid "Modifier and key, e.g. LWIN+D. Wins over the button chosen above; empty uses it."
+msgstr "Zusatztaste und Taste, z. B. LWIN+D. Hat Vorrang vor der Taste oben; leer nimmt diese."
+
+msgctxt "SetupPage"
+msgid "Needs “{}”."
+msgstr "Braucht „{}“."
+
+msgctxt "SetupPage"
+msgid "Opens the launcher's menu, or the overlay while a game runs."
+msgstr "Öffnet das Menü des Launchers, im Spiel das Overlay."
+
+msgctxt "SetupPage"
+msgid "Overlay shortcut"
+msgstr "Overlay-Kürzel"
+
+msgctxt "SetupPage"
+msgid "Pause between keys"
+msgstr "Pause zwischen Tasten"
+
+msgctxt "SetupPage"
+msgid "Press Capture, then the button on your handheld."
+msgstr "„Aufzeichnen“ drücken, danach die Taste am Handheld betätigen."
+
+msgctxt "SetupPage"
+msgid "Read from the launcher"
+msgstr "Vom Launcher gelesen"
+
+msgctxt "SetupPage"
+msgid "Restart after a crash"
+msgstr "Nach einem Absturz neu starten"
+
+msgctxt "SetupPage"
+msgid "Sent inside games. Empty means read it from the launcher."
+msgstr "Wird in Spielen gesendet. Leer heißt: vom Launcher lesen."
+
+msgctxt "SetupPage"
+msgid "Sent instead of the launcher's own."
+msgstr "Wird statt des eigenen Kürzels des Launchers gesendet."
+
+msgctxt "SetupPage"
+msgid "Setup"
+msgstr "Einrichtung"
+
+msgctxt "SetupPage"
+msgid "Takes effect the next time you enter Xbox mode."
+msgstr "Wird beim nächsten Wechsel in den Xbox-Modus wirksam."
+
+msgctxt "SetupPage"
+msgid "Teach Mujina your button"
+msgstr "Mujina deine Taste beibringen"
+
+msgctxt "SetupPage"
+msgid "The launcher stays on “game is starting” until the game appears. Applies at once in Xbox mode."
+msgstr "Der Launcher bleibt auf „Spiel wird gestartet“, bis das Spiel erscheint. Gilt im Xbox-Modus sofort."
+
+msgctxt "SetupPage"
+msgid "The launcher's own"
+msgstr "Das des Launchers"
+
+msgctxt "SetupPage"
+msgid "Use the device button"
+msgstr "Gerätetaste verwenden"
+
+msgctxt "SetupPage"
+msgid "What Mujina fixes"
+msgstr "Was Mujina behebt"
+
+msgctxt "SetupPage"
+msgid "What starts in Xbox mode"
+msgstr "Was im Xbox-Modus startet"
+
+msgctxt "SetupPage"
+msgid "When the launcher closes"
+msgstr "Wenn der Launcher geschlossen wird"
+
+msgctxt "SetupPage"
+msgid "Which button your handheld has"
+msgstr "Welche Taste dein Handheld hat"
+
+msgctxt "SetupPage"
+msgid "Your device button"
+msgstr "Die Taste an deinem Gerät"
+
+msgctxt "SetupPage"
+msgid "Your launcher"
+msgstr "Dein Launcher"
+
+msgctxt "StatusPage"
+msgid "All {} checks passed."
+msgstr "Alle {} Prüfungen bestanden."
+
+msgctxt "StatusPage"
+msgid "Check again"
+msgstr "Erneut prüfen"
+
+msgctxt "StatusPage"
+msgid "Checked at {}"
+msgstr "Geprüft um {}"
+
+msgctxt "StatusPage"
+msgid "Checking…"
+msgstr "Wird geprüft…"
+
+msgctxt "StatusPage"
+msgid "Chosen automatically"
+msgstr "Automatisch gewählt"
+
+msgctxt "StatusPage"
+msgid "Chosen by you"
+msgstr "Von dir gewählt"
+
+msgctxt "StatusPage"
+msgid "Device button"
+msgstr "Gerätetaste"
+
+msgctxt "StatusPage"
+msgid "Everything Mujina needs is in order."
+msgstr "Alles, was Mujina braucht, ist in Ordnung."
+
+msgctxt "StatusPage"
+msgid "Handheld"
+msgstr "Handheld"
+
+msgctxt "StatusPage"
+msgid "Launcher"
+msgstr "Launcher"
+
+msgctxt "StatusPage"
+msgid "No profile for this handheld"
+msgstr "Kein Profil für dieses Handheld"
+
+msgctxt "StatusPage"
+msgid "Not mapped"
+msgstr "Nicht belegt"
+
+msgctxt "StatusPage"
+msgid "Not used"
+msgstr "Nicht genutzt"
+
+msgctxt "StatusPage"
+msgid "Off"
+msgstr "Aus"
+
+msgctxt "StatusPage"
+msgid "On"
+msgstr "An"
+
+msgctxt "StatusPage"
+msgid "One thing needs fixing."
+msgid_plural "{n} things need fixing."
+msgstr[0] "Eine Sache muss behoben werden."
+msgstr[1] "{n} Dinge müssen behoben werden."
+
+msgctxt "StatusPage"
+msgid "Only for Steam Big Picture"
+msgstr "Nur für Steam Big Picture"
+
+msgctxt "StatusPage"
+msgid "Open"
+msgstr "Öffnen"
+
+msgctxt "StatusPage"
+msgid "Set to None under Setup"
+msgstr "Unter Einrichtung auf „Keine“ gesetzt"
+
+msgctxt "StatusPage"
+msgid "Settings and log folder"
+msgstr "Ordner für Einstellungen und Protokoll"
+
+msgctxt "StatusPage"
+msgid "Starts with Xbox mode"
+msgstr "Startet mit dem Xbox-Modus"
+
+msgctxt "StatusPage"
+msgid "Status"
+msgstr "Status"
+
+msgctxt "StatusPage"
+msgid "Steam shows its own icon"
+msgstr "Steam zeigt sein eigenes Symbol"
+
+msgctxt "StatusPage"
+msgid "Steam shows the real network"
+msgstr "Steam zeigt das echte Netzwerk"
+
+msgctxt "StatusPage"
+msgid "Switched off"
+msgstr "Ausgeschaltet"
+
+msgctxt "StatusPage"
+msgid "Turned off under Setup"
+msgstr "Unter Einrichtung ausgeschaltet"
+
+msgctxt "StatusPage"
+msgid "Unknown"
+msgstr "Unbekannt"
+
+msgctxt "StatusPage"
+msgid "What was checked"
+msgstr "Was geprüft wurde"
+
+msgctxt "StatusPage"
+msgid "While reading the settings, Mujina noticed:"
+msgstr "Beim Lesen der Einstellungen ist Mujina aufgefallen:"
+
+msgctxt "StatusPage"
+msgid "Wi-Fi icon fix"
+msgstr "WLAN-Symbol-Korrektur"
+
+msgctxt "StatusPage"
+msgid "Working, with one thing to look at."
+msgid_plural "Working, with {n} things to look at."
+msgstr[0] "Läuft – eine Sache solltest du dir ansehen."
+msgstr[1] "Läuft – {n} Dinge solltest du dir ansehen."
+
+msgctxt "StatusPage"
+msgid "Your device"
+msgstr "Dein Gerät"
+
+msgctxt "StatusPage"
+msgid "Your own combination"
+msgstr "Deine eigene Kombination"
+
+msgctxt "StatusPage"
+msgid "{n} check passed"
+msgid_plural "{n} checks passed"
+msgstr[0] "{n} Prüfung bestanden"
+msgstr[1] "{n} Prüfungen bestanden"
+
+msgctxt "StatusPage"
+msgid "{n} problem"
+msgid_plural "{n} problems"
+msgstr[0] "{n} Problem"
+msgstr[1] "{n} Probleme"
+
+msgctxt "StatusPage"
+msgid "{n} warning"
+msgid_plural "{n} warnings"
+msgstr[0] "{n} Warnung"
+msgstr[1] "{n} Warnungen"
+
+msgctxt "SystemPage"
+msgid "Checking…"
+msgstr "Wird geprüft…"
+
+msgctxt "SystemPage"
+msgid "Give it back"
+msgstr "Zurückgeben"
+
+msgctxt "SystemPage"
+msgid "In Steam, add a non-Steam game with the program below. Mujina Settings then appears in your library and opens full screen in Xbox mode."
+msgstr "Füge in Steam ein Nicht-Steam-Spiel mit dem Programm unten hinzu. Dann erscheinen die Mujina-Einstellungen in deiner Bibliothek und öffnen sich im Xbox-Modus im Vollbild."
+
+msgctxt "SystemPage"
+msgid "Make Mujina the home app"
+msgstr "Mujina zur Home-App machen"
+
+msgctxt "SystemPage"
+msgid "Mujina is not your home app."
+msgstr "Mujina ist nicht deine Home-App."
+
+msgctxt "SystemPage"
+msgid "Mujina is your home app."
+msgstr "Mujina ist deine Home-App."
+
+msgctxt "SystemPage"
+msgid "Opening these settings from Steam"
+msgstr "Diese Einstellungen aus Steam öffnen"
+
+msgctxt "SystemPage"
+msgid "Program"
+msgstr "Programm"
+
+msgctxt "SystemPage"
+msgid "Remove"
+msgstr "Entfernen"
+
+msgctxt "SystemPage"
+msgid "Remove Mujina"
+msgstr "Mujina entfernen"
+
+msgctxt "SystemPage"
+msgid "The home app setting goes back first, then Mujina Setup removes Mujina. Mujina Settings closes."
+msgstr "Zuerst wird die Home-App zurückgegeben, dann entfernt Mujina-Setup Mujina. Die Mujina-Einstellungen schließen sich."
+
+msgctxt "SystemPage"
+msgid "Uninstall"
+msgstr "Deinstallieren"
+
+msgctxt "SystemPage"
+msgid "System"
+msgstr "System"
+
+msgctxt "SystemPage"
+msgid "What Windows allows"
+msgstr "Was Windows erlaubt"
+
+msgctxt "SystemPage"
+msgid "Windows starts Mujina whenever you enter Xbox mode, and Mujina starts {}."
+msgstr "Windows startet Mujina bei jedem Wechsel in den Xbox-Modus, und Mujina startet {}."
+
+msgctxt "SystemPage"
+msgid "Windows starts its own home app when you enter Xbox mode."
+msgstr "Windows startet beim Wechsel in den Xbox-Modus seine eigene Home-App."
+
+msgctxt "SystemPage"
+msgid "Windows starts {} when you enter Xbox mode."
+msgstr "Windows startet {}, wenn du in den Xbox-Modus wechselst."
+
+msgctxt "Words"
+msgid "Captured {}. Saved and applied."
+msgstr "Erfasst: {}. Gespeichert und übernommen."
+
+msgctxt "Words"
+msgid "Captured {}. Saved. Takes effect the next time you enter Xbox mode."
+msgstr "Erfasst: {}. Gespeichert. Wird beim nächsten Wechsel in den Xbox-Modus wirksam."
+
+msgctxt "Words"
+msgid "Copied."
+msgstr "Kopiert."
+
+msgctxt "Words"
+msgid "Mujina already is the home app."
+msgstr "Mujina ist schon die Home-App."
+
+msgctxt "Words"
+msgid "Mujina is now the home app. Takes effect the next time you enter Xbox mode."
+msgstr "Mujina ist jetzt die Home-App. Wird beim nächsten Wechsel in den Xbox-Modus wirksam."
+
+msgctxt "Words"
+msgid "Mujina was not the home app; nothing changed."
+msgstr "Mujina war nicht die Home-App; nichts geändert."
+
+msgctxt "Words"
+msgid "Not changed — Enter the launcher's program first."
+msgstr "Nicht geändert — Gib zuerst das Programm des Launchers an."
+
+msgctxt "Words"
+msgid "Not changed — Enter “{}” first."
+msgstr "Nicht geändert — Gib zuerst „{}“ an."
+
+msgctxt "Words"
+msgid "Not changed — \"{}\" is not a complete key combination, e.g. LCTRL+1."
+msgstr "Nicht geändert — „{}“ ist keine vollständige Tastenkombination, z. B. LCTRL+1."
+
+msgctxt "Words"
+msgid "Not changed — the clipboard is busy; try again."
+msgstr "Nicht geändert — die Zwischenablage ist belegt; versuch es noch einmal."
+
+msgctxt "Words"
+msgid "Not changed — {}"
+msgstr "Nicht geändert — {}"
+
+msgctxt "Words"
+msgid "Saved and applied."
+msgstr "Gespeichert und übernommen."
+
+msgctxt "Words"
+msgid "Saved. Takes effect the next time you enter Xbox mode."
+msgstr "Gespeichert. Wird beim nächsten Wechsel in den Xbox-Modus wirksam."
+
+msgctxt "Words"
+msgid "The background agent is starting."
+msgstr "Der Hintergrund-Agent startet."
+
+msgctxt "Words"
+msgid "The home app is {} again. Takes effect the next time you enter Xbox mode."
+msgstr "Die Home-App ist wieder {}. Wird beim nächsten Wechsel in den Xbox-Modus wirksam."
+
+msgctxt "Words"
+msgid "Windows' own home app is back. Takes effect the next time you enter Xbox mode."
+msgstr "Die Home-App von Windows ist zurück. Wird beim nächsten Wechsel in den Xbox-Modus wirksam."
+
+msgid "Automatic"
+msgstr "Automatisch"
+
+msgid "Automatic ({})"
+msgstr "Automatisch ({})"
+
+msgid "None"
+msgstr "Keine"
+
+msgid "Start it"
+msgstr "Starten"
+
+msgid "Windows settings"
+msgstr "Windows-Einstellungen"
+
+msgid "Applies at once in Xbox mode."
+msgstr "Gilt im Xbox-Modus sofort."
+
+msgid "Enter it to switch to this launcher."
+msgstr "Gib es an, um zu diesem Launcher zu wechseln."
+
+msgid "Not set"
+msgstr "Nicht festgelegt"
+
+msgid "Nothing"
+msgstr "Nichts"
+
+msgid "Required."
+msgstr "Erforderlich."
+
+msgid "Takes effect the next time you enter Xbox mode."
+msgstr "Wird beim nächsten Wechsel in den Xbox-Modus wirksam."

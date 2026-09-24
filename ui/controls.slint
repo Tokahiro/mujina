@@ -1,0 +1,127 @@
+// The controls Mujina Settings and Mujina Setup share: a card, the focus frame, the outlined
+// button and the spinner. Sizes are in `Theme.u`: the handheld scale in Settings, 1 px in Setup,
+// which never sets the density. Colours come from the theme.
+
+import { Theme } from "theme.slint";
+import { Icons } from "icons.slint";
+
+// A group of rows.
+export component Card inherits Rectangle {
+    in property <length> inset-x: 8 * Theme.u;
+    in property <length> inset-y: 8 * Theme.u;
+    in property <length> gap;
+    in property <length> radius: Theme.radius-card;
+    background: Theme.card;
+    border-width: 1px;
+    border-color: Theme.line;
+    border-radius: root.radius;
+    VerticalLayout {
+        padding-left: root.inset-x;
+        padding-right: root.inset-x;
+        padding-top: root.inset-y;
+        padding-bottom: root.inset-y;
+        spacing: root.gap;
+        @children
+    }
+}
+
+// What a focusable thing looks like when the controller or the keyboard is on it, pressed, or
+// switched off. `glow` is the design's outer shadow; Slint has no negative spread, so it is a
+// smaller blur. What it is to assistive technology says the control that uses it.
+export component FocusFrame inherits Rectangle {
+    in property <bool> focused;
+    in property <bool> pressed;
+    in property <bool> enabled: true;
+    in property <color> rest: transparent;
+    in property <color> focus-fill: Theme.accent-14;
+    in property <color> press-fill: Theme.accent-24;
+    in property <length> focus-border: 1px;
+    in property <color> rest-border: transparent;
+    in property <length> rest-border-width: 1px;
+    in property <length> glow: 16 * Theme.u;
+    opacity: root.enabled ? 1 : 0.45;
+    border-radius: Theme.radius-row;
+    background: root.pressed ? root.press-fill : root.focused ? root.focus-fill : root.rest;
+    border-width: root.focused ? root.focus-border : root.rest-border-width;
+    border-color: root.focused ? Theme.accent-focus : root.rest-border;
+    drop-shadow-blur: root.focused ? root.glow : 0px;
+    drop-shadow-color: Theme.glow;
+    animate background { duration: 120ms; }
+}
+
+// An outlined button with an icon. `accent` draws the accent outline and text, otherwise a
+// neutral one. `turns` rotates the icon once per increment (Check again).
+export component OutlineButton inherits FocusFrame {
+    in property <image> icon;
+    in property <string> text;
+    in property <bool> accent;
+    in property <length> text-size: 18 * Theme.u;
+    in property <length> icon-size: 19 * Theme.u;
+    in property <int> turns;
+    callback clicked();
+    min-height: 54 * Theme.u;
+    border-radius: Theme.radius-row;
+    rest-border: root.accent ? Theme.accent : Theme.line-strong;
+    rest-border-width: root.accent ? 1.5px : 1px;
+    focus-border: 2px;
+    focus-fill: Theme.accent-18;
+    press-fill: Theme.accent-32;
+    pressed: touch.pressed;
+    accessible-role: button;
+    accessible-label: root.text;
+    accessible-enabled: root.enabled;
+    accessible-action-default => {
+        root.clicked();
+    }
+    HorizontalLayout {
+        padding-left: 20 * Theme.u;
+        padding-right: 20 * Theme.u;
+        spacing: 10 * Theme.u;
+        alignment: center;
+        VerticalLayout {
+            alignment: center;
+            Image {
+                width: root.icon-size;
+                height: root.icon-size;
+                source: root.icon;
+                colorize: label.color;
+                transform-rotation: root.turns * 360deg;
+                animate transform-rotation { duration: 900ms; }
+            }
+        }
+        label := Text {
+            text: root.text;
+            font-size: root.text-size;
+            font-weight: 500;
+            vertical-alignment: center;
+            color: touch.pressed ? Theme.text : root.accent ? Theme.accent-light : Theme.text-soft;
+        }
+    }
+    touch := TouchArea {
+        enabled: root.enabled;
+        clicked => {
+            root.clicked();
+        }
+    }
+}
+
+// A faint ring with a bright quarter turning on it, once every 0.8 s.
+export component Spinner inherits Rectangle {
+    in property <length> size: 17 * Theme.u;
+    in property <color> tint: Theme.accent-focus;
+    width: root.size;
+    height: root.size;
+    accessible-role: progress-indicator;
+    Rectangle {
+        border-radius: root.size / 2;
+        border-width: 2px;
+        border-color: Theme.accent-25;
+    }
+    Image {
+        width: root.size;
+        height: root.size;
+        source: Icons.spinner-arc;
+        colorize: root.tint;
+        transform-rotation: Math.mod(animation-tick() / 1ms, 800) / 800 * 360deg;
+    }
+}

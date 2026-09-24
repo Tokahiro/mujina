@@ -1,0 +1,49 @@
+//! A stand-in for ports whose adapter could not be started.
+
+use mujina_domain::button::ButtonId;
+use mujina_domain::keys::{HoldTiming, KeyChord};
+
+use super::{DeviceButtons, KeySender};
+use crate::device::DeviceSelection;
+
+/// Stands in for a port whose adapter could not be started, so the rest keeps working: nothing
+/// is caught and nothing is sent. Whoever finds the adapter missing says so in the log; this
+/// only keeps quiet.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct Absent;
+
+impl DeviceButtons for Absent {
+    /// Nothing runs that could take a device over.
+    fn reconfigure(&self, _device: &DeviceSelection) -> bool {
+        false
+    }
+
+    fn pass_on(&self, _button: ButtonId) {}
+}
+
+impl KeySender for Absent {
+    fn send_chord(&self, _chord: KeyChord, _timing: HoldTiming) {}
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use mujina_domain::keys::VirtualKey;
+
+    #[test]
+    fn stands_in_for_each_port_and_does_nothing() {
+        let buttons: &dyn DeviceButtons = &Absent;
+        let device = DeviceSelection {
+            id: Some("onexplayer".into()),
+            ..DeviceSelection::none()
+        };
+        assert!(!buttons.reconfigure(&device));
+        buttons.pass_on(ButtonId(0));
+
+        let keys: &dyn KeySender = &Absent;
+        keys.send_chord(
+            KeyChord::pair(VirtualKey::LCONTROL, VirtualKey::DIGIT_1),
+            HoldTiming::default(),
+        );
+    }
+}

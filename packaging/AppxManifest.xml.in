@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Template for the package manifest; `cargo xtask package` fills in @VERSION@ and @PUBLISHER@.
+
+  What makes Windows offer this package as an Xbox mode home app is undocumented and was
+  established by AnyFSE, OmniConsole and FullScreenExperienceShell independently:
+    1. the app extension  windows.gamingApp
+    2. the custom capability  Microsoft.appCategory.gamingHome_8wekyb3d8bbwe
+    3. CustomCapability.SCCD in the package root authorising (2); being unsigned, it is only
+       honoured while Windows Developer Mode is on.
+-->
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:uap3="http://schemas.microsoft.com/appx/manifest/uap/windows10/3"
+  xmlns:uap4="http://schemas.microsoft.com/appx/manifest/uap/windows10/4"
+  xmlns:uap5="http://schemas.microsoft.com/appx/manifest/uap/windows10/5"
+  xmlns:desktop4="http://schemas.microsoft.com/appx/manifest/desktop/windows10/4"
+  xmlns:desktop6="http://schemas.microsoft.com/appx/manifest/desktop/windows10/6"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  IgnorableNamespaces="uap uap3 uap4 uap5 desktop4 desktop6 rescap">
+
+  <Identity
+    Name="Mujina"
+    Publisher="@PUBLISHER@"
+    Version="@VERSION@"
+    ProcessorArchitecture="x64" />
+
+  <Properties>
+    <DisplayName>Mujina</DisplayName>
+    <PublisherDisplayName>Mujina contributors</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+    <!-- Mujina manages real user settings (home app, Steam state), not a private copy. -->
+    <desktop6:RegistryWriteVirtualization>disabled</desktop6:RegistryWriteVirtualization>
+    <desktop6:FileSystemWriteVirtualization>disabled</desktop6:FileSystemWriteVirtualization>
+  </Properties>
+
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.26100.0" MaxVersionTested="10.0.26200.0" />
+  </Dependencies>
+
+  <Resources>
+    <Resource Language="en-us" />
+  </Resources>
+
+  <Applications>
+    <!-- Multi-instance: every activation is a fresh, short-lived process (docs/adr/0001). It is
+         also a precondition for the console-subsystem execution alias below. -->
+    <Application Id="App" Executable="mujina.exe" EntryPoint="Windows.FullTrustApplication"
+                 desktop4:SupportsMultipleInstances="true">
+      <!-- No Start menu entry: started from there, the home role would boot the launcher on the
+           desktop. Windows finds the home app through the windows.gamingApp extension below. -->
+      <uap:VisualElements
+        AppListEntry="none"
+        DisplayName="Mujina"
+        Description="Console home for Windows Xbox mode: boots into Steam Big Picture."
+        BackgroundColor="transparent"
+        Square150x150Logo="Assets\Square150x150Logo.png"
+        Square44x44Logo="Assets\Square44x44Logo.png" />
+      <Extensions>
+        <uap3:Extension Category="windows.appExtension">
+          <uap3:AppExtension
+            Name="windows.gamingApp"
+            Id="App"
+            DisplayName="Mujina"
+            Description="Console home for Windows Xbox mode"
+            PublicFolder="Public" />
+        </uap3:Extension>
+        <uap:Extension Category="windows.protocol">
+          <uap:Protocol Name="mujina" />
+        </uap:Extension>
+        <uap5:Extension Category="windows.appExecutionAlias" Executable="mujinactl.exe" EntryPoint="Windows.FullTrustApplication">
+          <uap5:AppExecutionAlias desktop4:Subsystem="console">
+            <uap5:ExecutionAlias Alias="mujinactl.exe" />
+          </uap5:AppExecutionAlias>
+        </uap5:Extension>
+      </Extensions>
+    </Application>
+    <!-- The settings app: its own Start menu entry. The home app above must keep Id="App",
+         because Windows stores it as "<package family>!App". -->
+    <Application Id="Settings" Executable="mujina-settings.exe" EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements
+        DisplayName="Mujina Settings"
+        Description="Settings, diagnosis and log of Mujina."
+        BackgroundColor="transparent"
+        Square150x150Logo="Assets\Square150x150Logo.png"
+        Square44x44Logo="Assets\Square44x44Logo.png" />
+      <Extensions>
+        <!-- %LOCALAPPDATA%\Microsoft\WindowsApps\mujina-settings.exe starts the app in its
+             package, so Steam can take it as a non-Steam game. -->
+        <uap5:Extension Category="windows.appExecutionAlias" Executable="mujina-settings.exe" EntryPoint="Windows.FullTrustApplication">
+          <uap5:AppExecutionAlias>
+            <uap5:ExecutionAlias Alias="mujina-settings.exe" />
+          </uap5:AppExecutionAlias>
+        </uap5:Extension>
+      </Extensions>
+    </Application>
+  </Applications>
+
+  <Capabilities>
+    <rescap:Capability Name="runFullTrust" />
+    <rescap:Capability Name="unvirtualizedResources" />
+    <uap4:CustomCapability Name="Microsoft.appCategory.gamingHome_8wekyb3d8bbwe" />
+    <!-- For the Wi-Fi icon's signal strength: since 24H2 WlanRegisterNotification refuses the
+         MSM notifications (signal quality) with ERROR_ACCESS_DENIED unless the app has this
+         capability; without it this full-trust package was refused even with the location
+         consent given. Microsoft: "Requesting the wiFiControl device capability will require
+         consent from the user regarding access to location", and apps are to check their
+         location access through this capability (AppCapability.CheckAccess), so it is the
+         consent the connection's details already need
+         (https://learn.microsoft.com/en-us/windows/win32/nativewifi/wi-fi-access-location-changes).
+         Mujina uses it for those notifications only
+         (crates/adapter-steam/src/wlan.rs). DeviceCapability elements come last. -->
+    <DeviceCapability Name="wiFiControl" />
+  </Capabilities>
+</Package>

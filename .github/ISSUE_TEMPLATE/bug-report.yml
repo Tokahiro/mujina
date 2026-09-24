@@ -1,0 +1,65 @@
+name: Bug report
+description: Something in Mujina, Mujina Settings or Mujina Setup does not work as it should.
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For a security problem, do not describe it in an issue: report it privately with
+        *Security and quality* → *Report a vulnerability*, as
+        [SECURITY.md](https://github.com/Tokahiro/mujina/blob/main/SECURITY.md#reporting-a-vulnerability)
+        says.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you saw, and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps
+      description: What you did, one step a line, from a state anyone can get to.
+      placeholder: |
+        1. Enter Xbox mode
+        2. Start a game from Big Picture
+        3. Press the device button
+    validations:
+      required: true
+  - type: textarea
+    id: files
+    attributes:
+      label: Log and doctor
+      description: >-
+        Switch on *Write down everything* (Mujina Settings → Help, or
+        `mujinactl config set logging.level debug`), make it happen again, run `mujinactl doctor`,
+        then drag `mujina.log` (and `mujina.log.1`, if there is one) and `doctor.txt` here.
+        `mujinactl paths` shows their folder. For a problem with Mujina Setup, attach
+        `%LOCALAPPDATA%\Mujina Setup\setup.log` instead, or paste what *Copy details* copied.
+        Neither file names your Wi-Fi network; with *Write down everything* on, the log keeps
+        only its first letter and its length, such as `H…(8)`. Both hold paths with your
+        Windows user name: replace it if you like.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Mujina version
+      description: What `mujinactl version` shows (for Mujina Setup, the version in its file name).
+      placeholder: mujinactl 0.27.0
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Device and Windows build
+      description: The handheld, and what `winver` shows.
+      placeholder: OneXPlayer 3, 24H2 OS build 26100.xxxx
+    validations:
+      required: true
+  - type: input
+    id: launcher
+    attributes:
+      label: Launcher
+      description: Steam, or the program you chose under *Another launcher*, with its version.
+      placeholder: Steam, and the client version its settings show

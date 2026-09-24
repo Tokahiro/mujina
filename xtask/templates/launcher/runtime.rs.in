@@ -1,0 +1,136 @@
+//! The launcher at work: find it, start it, tell whether its full-screen UI is up, and bring it
+//! to the front. The kit's `launch` and `focus_ui` keep the foreground rules; what only the
+//! launcher knows is marked `TODO`.
+
+use mujina_adapter_kit::launcher;
+use mujina_adapter_kit::plugin::{LauncherRuntime, SessionParts};
+use mujina_application::launcher::{LauncherDescriptor, OptionTable};
+use mujina_application::ports::{
+    HomeLauncher, LauncherInstall, LauncherState, PortError, PortResult, SessionLauncher,
+};
+use mujina_winutil::window::WindowHandle;
+use mujina_winutil::{process, window};
+
+use crate::descriptor::{@TYPE@Options, DESCRIPTOR};
+
+/// TODO: the file name of its process, lower case, as Task Manager's Details tab shows it.
+const PROCESS: &str = "@ID@.exe";
+
+/// TODO: the arguments that start it straight into its full-screen UI.
+const FULL_SCREEN: &[&str] = &[];
+
+pub struct @TYPE@Runtime;
+
+pub static RUNTIME: @TYPE@Runtime = @TYPE@Runtime;
+
+impl LauncherRuntime for @TYPE@Runtime {
+    fn home(&self, options: &OptionTable) -> Box<dyn HomeLauncher> {
+        Box::new(@TYPE@Launcher::new(options))
+    }
+
+    fn session(&self, options: &OptionTable) -> SessionParts {
+        SessionParts {
+            launcher: Box::new(@TYPE@Launcher::new(options)),
+            // TODO: a wait source, if the launcher can signal its state (docs/new-launcher.md,
+            // "Waking the agent"). Without one the agent still sees its process come and go.
+            sources: Vec::new(),
+        }
+    }
+
+    // TODO: `checks`, for `mujinactl doctor`: what the launcher needs that can be missing, such
+    // as an extension of Mujina's in it (docs/new-device.md, "A doctor check", shows one).
+}
+
+pub struct @TYPE@Launcher {
+    options: @TYPE@Options,
+}
+
+impl @TYPE@Launcher {
+    pub fn new(options: &OptionTable) -> Self {
+        Self {
+            options: @TYPE@Options::read(options),
+        }
+    }
+}
+
+/// Its window. TODO: its full-screen window precisely, by a `WindowRule` and
+/// `window::find_top_level` (docs/new-launcher.md, "Rules that are easy to get wrong"); any main
+/// window of its process is only a start.
+fn find_window() -> Option<WindowHandle> {
+    let pid = process::pid_of_image(PROCESS)?;
+    window::main_window_of(&[pid])
+}
+
+impl HomeLauncher for @TYPE@Launcher {
+    fn display_name(&self) -> String {
+        DESCRIPTOR.name().to_string()
+    }
+
+    fn locate(&self) -> PortResult<LauncherInstall> {
+        // TODO: where the launcher installs itself (a registry key, say), for when the option is
+        // not set.
+        let executable = self
+            .options
+            .executable
+            .clone()
+            .ok_or_else(|| PortError::NotFound("@NAME@'s program".into()))?;
+        launcher::install_from_executable(executable)
+    }
+
+    fn state(&self) -> LauncherState {
+        if process::pid_of_image(PROCESS).is_none() {
+            LauncherState::NotRunning
+        } else if find_window().is_some() {
+            LauncherState::UiVisible
+        } else {
+            LauncherState::RunningWithoutUi
+        }
+    }
+
+    fn start_ui(&self, install: &LauncherInstall) -> PortResult<()> {
+        launcher::launch(install, FULL_SCREEN)
+    }
+
+    /// TODO: how the running launcher is asked for its full-screen UI; many frontends bring their
+    /// running instance forward when started again.
+    fn switch_to_ui(&self, install: &LauncherInstall) -> PortResult<()> {
+        launcher::launch(install, FULL_SCREEN)
+    }
+
+    fn focus_ui(&self) -> PortResult<()> {
+        let handle = find_window().ok_or_else(|| PortError::NotFound("@NAME@'s window".into()))?;
+        launcher::focus_ui(handle, "@NAME@")
+    }
+}
+
+/// TODO: games, menus and the rest, where the launcher can tell or be asked
+/// (docs/new-launcher.md). Until then the device button leads home everywhere but its UI.
+impl SessionLauncher for @TYPE@Launcher {
+    /// TODO: every process of the launcher whose window may be in front.
+    fn owns_process(&self, process_name: &str) -> bool {
+        PROCESS.eq_ignore_ascii_case(process_name)
+    }
+
+    fn process_id(&self) -> Option<u32> {
+        process::pid_of_image(PROCESS)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn without_its_program_it_is_not_found() {
+        let launcher = @TYPE@Launcher::new(&OptionTable::new());
+        assert!(matches!(launcher.locate(), Err(PortError::NotFound(_))));
+        assert_eq!(launcher.display_name(), "@NAME@");
+    }
+
+    #[test]
+    fn its_process_is_recognised_without_case() {
+        let launcher = @TYPE@Launcher::new(&OptionTable::new());
+        assert!(launcher.owns_process(&PROCESS.to_uppercase()));
+        assert!(!launcher.owns_process("explorer.exe"));
+    }
+}

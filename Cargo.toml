@@ -1,0 +1,64 @@
+[workspace]
+resolver = "3"
+members = ["crates/*", "xtask"]
+
+[workspace.package]
+version = "0.27.0"
+edition = "2024"
+rust-version = "1.98"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/Tokahiro/mujina"
+authors = ["Mujina contributors"]
+publish = false
+
+[workspace.dependencies]
+mujina-domain = { path = "crates/domain" }
+mujina-application = { path = "crates/application" }
+mujina-winutil = { path = "crates/winutil" }
+mujina-i18n = { path = "crates/i18n" }
+mujina-adapter-kit = { path = "crates/adapter-kit" }
+mujina-adapter-keyboard = { path = "crates/adapter-keyboard" }
+mujina-adapter-windows = { path = "crates/adapter-windows" }
+mujina-adapter-config = { path = "crates/adapter-config" }
+mujina-adapter-steam = { path = "crates/adapter-steam" }
+mujina-adapter-generic = { path = "crates/adapter-generic" }
+mujina-app = { path = "crates/app" }
+
+lexopt = "0.3"
+log = "0.4"
+# The .po reader of Slint's build (i-slint-compiler); xtask's i18n-check reads catalogs with it.
+rspolib = "0.1.2"
+serde = "1"
+serde_json = "1"
+# The two apps with a window, Mujina Settings and Mujina Setup (ADR-0011); never linked into
+# mujina.exe.
+slint = "1"
+slint-build = "1"
+# xtask's tests only: the launcher and device skeletons parse as Rust.
+syn = "2"
+thiserror = "2"
+toml = "1.1"
+# Comment-preserving edits of config.toml; of the same release as `toml`, whose parser it shares.
+toml_edit = "0.25"
+tungstenite = { version = "0.30", default-features = false }
+windows-sys = "0.61"
+
+[workspace.lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
+unused_must_use = "deny"
+
+[workspace.lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+undocumented_unsafe_blocks = "deny"
+# Pedantic lints that cost more readability than they buy in this code base.
+doc_markdown = "allow"
+missing_errors_doc = "allow"
+module_name_repetitions = "allow"
+must_use_candidate = "allow"
+
+[profile.release]
+opt-level = "s"
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = true

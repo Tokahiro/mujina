@@ -1,0 +1,303 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  # By hand, on any branch: such a run also signs its package, for testing a pull request on a
+  # device (docs/signing.md).
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A new push to a pull request cancels its older run. Runs on main are never cancelled: each is
+# the verdict a release checks for, and the one that saves the caches.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+# rust-cache puts every CARGO*/RUST* variable into its key. release.yml restores the win-release
+# cache saved here, so this block must stay the same in both workflows.
+env:
+  CARGO_TERM_COLOR: always
+
+# Actions are pinned to a commit (the only immutable reference); Dependabot keeps them current.
+# `rustup toolchain install` without arguments installs what rust-toolchain.toml pins.
+# Caches are saved on main only: a pull request's cache serves no other run, and tags can
+# restore main's but not each other's. The one exception is the portable job's small cache of
+# slint-tr-extractor, which serves the pull request's own later runs.
+# A release requires portable, win-check and win-package to have passed on its commit, and
+# finds them by their names: rename one here and in release.yml together.
+
+jobs:
+  changes:
+    name: what changed
+    runs-on: ubuntu-latest
+    outputs:
+      rust: ${{ steps.diff.outputs.rust }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - id: diff
+        name: Documentation only?
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          BEFORE: ${{ github.event.before }}
+          FORCED: ${{ github.event.forced }}
+        run: |
+          # Documentation alone skips the build jobs. Anything else, and any doubt (a manual run,
+          # a force push, a new branch whose "before" is all zeros), builds.
+          since=''
+          case "$EVENT" in
+            pull_request) since=$BASE ;;
+            push) if [ "$FORCED" != true ]; then since=$BEFORE; fi ;;
+          esac
+          rust=true
+          if [ -n "$since" ] && git cat-file -e "$since^{commit}" 2>/dev/null \
+            && files=$(git -c core.quotepath=off diff --no-renames --name-only "$since" HEAD) \
+            && [ -n "$files" ]; then
+            rust=false
+            while IFS= read -r file; do
+              case "$file" in
+                docs/*|*.md|LICENSE-*|NOTICE|CODE_OF_CONDUCT.md|.github/ISSUE_TEMPLATE/*) ;;
+                *) rust=true; echo "builds because of $file"; break ;;
+              esac
+            done <<< "$files"
+          fi
+          echo "rust=$rust" | tee -a "$GITHUB_OUTPUT"
+
+  fmt:
+    name: rustfmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: rustup toolchain install
+      - run: cargo fmt --all -- --check
+      - name: Offer the fix as a patch
+        if: failure()
+        run: |
+          cargo fmt --all
+          git diff > rustfmt.patch
+      - if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: rustfmt-patch
+          path: rustfmt.patch
+
+  # Every crate builds on Linux: Windows code is behind cfg(windows), and slint-build is a
+  # build-dependency on Windows hosts only. So a new crate is checked here without an edit.
+  portable:
+    name: portable (Linux)
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: rustup toolchain install
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          shared-key: linux
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      # The Translations step's slint-tr-extractor, in a cache of its own keyed by its version
+      # (Slint's in Cargo.lock), outside target/, which rust-cache empties of all but build
+      # output. Inside rust-cache's entry, a new toolchain or an evicted entry cost two minutes of
+      # building it again. The one cache a pull request saves too: one that updates Slint builds
+      # the extractor once, not on every push. No restore-keys: another version's is no use.
+      - name: Slint version
+        id: slint
+        run: |
+          # The first entry only, as i18n-check takes it: a second line would break GITHUB_OUTPUT.
+          version=$(sed -n '/^name = "slint"$/{n;s/^version = "\(.*\)"$/\1/p;q}' Cargo.lock)
+          if [ -z "$version" ]; then echo "::error::Cargo.lock has no slint"; exit 1; fi
+          echo "version=$version" | tee -a "$GITHUB_OUTPUT"
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/mujina-tools
+          key: slint-tr-extractor-${{ runner.os }}-${{ steps.slint.outputs.version }}
+      - run: cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
+      - run: cargo test --locked --workspace --all-features
+      - name: Dependency rule
+        run: cargo xtask arch-check
+      # Every text the two windows show is translated into each of their languages. The check
+      # builds slint-tr-extractor where the cache above had none.
+      - name: Translations
+        run: MUJINA_TOOLS="$HOME/.cache/mujina-tools" cargo xtask i18n-check
+
+  deny:
+    name: cargo-deny (${{ matrix.checks }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        checks: [advisories, bans licenses sources]
+    # A newly published advisory does not fail a pull request that did not cause it. It still
+    # fails main, and release.yml checks again before every release.
+    continue-on-error: ${{ matrix.checks == 'advisories' && github.event_name == 'pull_request' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
+        with:
+          command: check ${{ matrix.checks }}
+          arguments: --all-features --locked
+
+  win-check:
+    name: Windows (clippy, test)
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: rustup toolchain install
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          shared-key: win-debug
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - run: cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
+      - run: cargo test --locked --workspace --all-features
+
+  # Runs beside win-check, not after it: the release build is the longest job.
+  win-package:
+    name: Windows (package)
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: rustup toolchain install
+      # The cache a release restores (release.yml's build job): same key, toolchain and cargo
+      # invocations.
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          shared-key: win-release
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: Package (unsigned)
+        env:
+          # MSIX_PUBLISHER stays unset: CI builds use the development identity, CN=Mujina Dev.
+          # That is another package family, so however high the revision, a CI build never
+          # updates or outranks a release.
+          MSIX_REVISION: ${{ github.run_number }}
+        run: cargo xtask package --timings
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: msix
+          path: target/package/*.msix
+          if-no-files-found: error
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: cargo-timing
+          path: target/cargo-timings/cargo-timing.html
+      # On main, and in runs started by hand, also Mujina Setup in the release profile, without
+      # its package: win-sign attaches the package to it, and a tag is never its first release
+      # build, with its dependencies in the cache a release restores.
+      - name: Mujina Setup (release profile, without its package)
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        run: cargo build --locked --release -p mujina-setup
+      - if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: setup-unsigned
+          path: target/release/mujina-setup.exe
+          if-no-files-found: error
+      # attach-payload.ps1 otherwise runs only where a key is (win-sign, and a release's sign
+      # job): here it runs without one, on the unsigned package and a throwaway certificate made
+      # in memory (no certificate store), so that a change to the script, pwsh or the runner
+      # fails this job and not the next release. Its result is not uploaded.
+      - name: Attach the package to Mujina Setup (dry run, no key)
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        run: |
+          $key = [Security.Cryptography.RSA]::Create(2048)
+          $request = [Security.Cryptography.X509Certificates.CertificateRequest]::new('CN=Mujina Dev', $key, [Security.Cryptography.HashAlgorithmName]::SHA256, [Security.Cryptography.RSASignaturePadding]::Pkcs1)
+          $now = [DateTimeOffset]::UtcNow
+          $certificate = $request.CreateSelfSigned($now, $now.AddDays(1))
+          $cer = Join-Path $env:RUNNER_TEMP dry.cer
+          [IO.File]::WriteAllBytes($cer, $certificate.Export([Security.Cryptography.X509Certificates.X509ContentType]::Cert))
+          $msix = @(Get-ChildItem target/package -Filter *.msix)
+          if ($msix.Count -ne 1) { throw "expected one package, found $($msix.Count)" }
+          ./packaging/attach-payload.ps1 -Setup target/release/mujina-setup.exe -Msix $msix[0].FullName -Certificate $cer -Output (Join-Path $env:RUNNER_TEMP Mujina-Setup-dry.exe) -AllowUnsignedPackage
+
+  # Signs with the development certificate: main, and manual runs, only, and only a commit that
+  # passed clippy and the tests. It signs the package, attaches it to Mujina Setup and signs that
+  # too: Mujina-Setup-dev.exe, for testers' devices. The job runs no cargo and nothing cargo
+  # built, and checks out nothing but the two scripts (docs/signing.md).
+  win-sign:
+    name: Windows (sign, development certificate)
+    needs: [win-package, win-check, portable]
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: windows-latest
+    env:
+      # Whether both secrets are set, not the secrets: `if:` cannot read secrets. Both, as in
+      # release.yml: a key without its password would fail the run instead of skipping.
+      HAS_KEY: ${{ secrets.DEV_SIGNING_PFX_BASE64 != '' && secrets.DEV_SIGNING_PFX_PASSWORD != '' }}
+    steps:
+      - if: env.HAS_KEY != 'true'
+        run: echo "::notice::DEV_SIGNING_PFX_BASE64 and DEV_SIGNING_PFX_PASSWORD are not both set, so the package stays unsigned (docs/signing.md)."
+      - if: env.HAS_KEY == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            packaging/sign.ps1
+            packaging/attach-payload.ps1
+          sparse-checkout-cone-mode: false
+      - if: env.HAS_KEY == 'true'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: msix
+          path: msix
+      - if: env.HAS_KEY == 'true'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: setup-unsigned
+          path: stub
+      - if: env.HAS_KEY == 'true'
+        name: Sign the package
+        env:
+          DEV_SIGNING_PFX_BASE64: ${{ secrets.DEV_SIGNING_PFX_BASE64 }}
+          DEV_SIGNING_PFX_PASSWORD: ${{ secrets.DEV_SIGNING_PFX_PASSWORD }}
+        # The subject is xtask's default publisher, which CI packages carry.
+        run: >-
+          ./packaging/sign.ps1 -Path msix/*.msix
+          -PfxVariable DEV_SIGNING_PFX_BASE64 -PasswordVariable DEV_SIGNING_PFX_PASSWORD
+          -Subject 'CN=Mujina Dev' -Certificate msix/Mujina-Dev.cer
+      - if: env.HAS_KEY == 'true'
+        name: Attach the package to Mujina Setup
+        run: |
+          $msix = @(Get-ChildItem msix -Filter *.msix)
+          if ($msix.Count -ne 1) { throw "expected one package, found $($msix.Count)" }
+          ./packaging/attach-payload.ps1 -Setup stub/mujina-setup.exe -Msix $msix[0].FullName -Certificate msix/Mujina-Dev.cer -Output setup/Mujina-Setup-dev.exe
+      - if: env.HAS_KEY == 'true'
+        name: Sign Mujina Setup
+        env:
+          DEV_SIGNING_PFX_BASE64: ${{ secrets.DEV_SIGNING_PFX_BASE64 }}
+          DEV_SIGNING_PFX_PASSWORD: ${{ secrets.DEV_SIGNING_PFX_PASSWORD }}
+        run: >-
+          ./packaging/sign.ps1 -Path setup/Mujina-Setup-dev.exe
+          -PfxVariable DEV_SIGNING_PFX_BASE64 -PasswordVariable DEV_SIGNING_PFX_PASSWORD
+          -Subject 'CN=Mujina Dev'
+      - if: env.HAS_KEY == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: msix-signed
+          path: msix/
+          if-no-files-found: error
+      # What testers download and run: the dev package inside, trusted with one prompt.
+      - if: env.HAS_KEY == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: setup-dev
+          path: setup/Mujina-Setup-dev.exe
+          if-no-files-found: error

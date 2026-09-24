@@ -1,0 +1,49 @@
+import { Theme } from "theme.slint";
+import { Icons } from "icons.slint";
+
+// The mark: 狢 in the front square of two, the back one offset down-left. `size` is the side of
+// one square. The character's thirteen strokes fill in below about 24 px, so small marks keep
+// the frame alone. Measured in real pixels: the desktop window is smaller, but a 150 % display
+// draws it larger again.
+export component Mark inherits Rectangle {
+    in property <length> size: 44 * Theme.u;
+    // What the front square sits on; it covers the back square's corner.
+    in property <color> ground: #1a1d2b;
+    property <length> glyph: self.size * 26 / 44;
+    property <bool> with-glyph: self.glyph >= 24phx;
+    width: self.size * 58 / 44;
+    height: self.size * 54 / 44;
+
+    Rectangle {
+        x: 0;
+        y: parent.height - root.size;
+        width: root.size;
+        height: root.size;
+        border-radius: root.size * 12 / 44;
+        border-width: 1.4px;
+        border-color: Theme.accent;
+        opacity: 0.45;
+    }
+
+    Rectangle {
+        x: parent.width - root.size;
+        y: 0;
+        width: root.size;
+        height: root.size;
+        border-radius: root.size * 12 / 44;
+        background: root.ground;
+        Rectangle {
+            border-radius: parent.border-radius;
+            border-width: 1.6px;
+            border-color: Theme.accent;
+            background: root.with-glyph ? transparent : Theme.accent-16;
+        }
+
+        if root.with-glyph: Image {
+            width: root.glyph;
+            height: root.glyph;
+            source: Icons.glyph;
+            colorize: Theme.accent-light;
+        }
+    }
+}

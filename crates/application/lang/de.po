@@ -1,0 +1,32 @@
+# German texts of mujina-application that Mujina Settings shows: the titles of the doctor's own
+# checks, and what its check of Xbox mode says on the System page. Compiled in (CATALOGS in
+# src/lib.rs); `cargo xtask i18n-check` lists what is missing.
+msgid ""
+msgstr ""
+"Project-Id-Version: Mujina\n"
+"Language-Team: German\n"
+"Language: de\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+msgid "Available. You are on the desktop now."
+msgstr "Verfügbar. Du bist gerade auf dem Desktop."
+
+msgid "Home app"
+msgstr "Home-App"
+
+msgid "Launcher"
+msgstr "Launcher"
+
+msgid "Mujina's package"
+msgstr "Mujinas Paket"
+
+msgid "On. You are in Xbox mode now."
+msgstr "An. Du bist gerade im Xbox-Modus."
+
+msgid "This Windows has no Xbox mode."
+msgstr "Dieses Windows hat keinen Xbox-Modus."
+
+msgid "Xbox mode"
+msgstr "Xbox-Modus"

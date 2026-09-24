@@ -1,0 +1,49 @@
+// Phosphor icons (MIT, assets/icons/LICENSE), regular and fill weights, bundled as SVG and
+// tinted with `colorize`; also the mark's character, the app icon and the Slint badge. Shared by
+// Mujina Settings and Mujina Setup.
+
+import { Health } from "theme.slint";
+
+export global Icons {
+    out property <image> status: @image-url("assets/icons/pulse.svg");
+    out property <image> setup: @image-url("assets/icons/sliders-horizontal.svg");
+    out property <image> system: @image-url("assets/icons/squares-four.svg");
+    out property <image> help: @image-url("assets/icons/lifebuoy.svg");
+    out property <image> close: @image-url("assets/icons/sign-out.svg");
+    out property <image> again: @image-url("assets/icons/arrows-clockwise.svg");
+    out property <image> controller: @image-url("assets/icons/game-controller.svg");
+    out property <image> button: @image-url("assets/icons/circle-half-tilt.svg");
+    out property <image> launcher: @image-url("assets/icons/rocket-launch.svg");
+    out property <image> wifi: @image-url("assets/icons/wifi-high.svg");
+    out property <image> folder: @image-url("assets/icons/folder-open.svg");
+    out property <image> open: @image-url("assets/icons/arrow-square-out.svg");
+    out property <image> caret-left: @image-url("assets/icons/caret-left.svg");
+    out property <image> caret-right: @image-url("assets/icons/caret-right.svg");
+    out property <image> caret-left-fill: @image-url("assets/icons/caret-left-fill.svg");
+    out property <image> caret-right-fill: @image-url("assets/icons/caret-right-fill.svg");
+    out property <image> caret-down: @image-url("assets/icons/caret-down.svg");
+    out property <image> record: @image-url("assets/icons/record.svg");
+    out property <image> home: @image-url("assets/icons/house-line.svg");
+    out property <image> give-back: @image-url("assets/icons/arrow-u-up-left.svg");
+    out property <image> play: @image-url("assets/icons/play.svg");
+    out property <image> copy: @image-url("assets/icons/copy.svg");
+    out property <image> minus: @image-url("assets/icons/minus.svg");
+    out property <image> plus: @image-url("assets/icons/plus.svg");
+    out property <image> ok: @image-url("assets/icons/check-circle-fill.svg");
+    out property <image> warning: @image-url("assets/icons/warning-fill.svg");
+    out property <image> problem: @image-url("assets/icons/x-circle-fill.svg");
+    out property <image> next-time: @image-url("assets/icons/clock-countdown-fill.svg");
+    out property <image> glyph: @image-url("assets/mark-glyph.svg");
+    out property <image> made-with-slint: @image-url("assets/made-with-slint.svg");
+    out property <image> app: @image-url("assets/app-icon.png");
+    out property <image> admin: @image-url("assets/icons/shield-check.svg");
+    out property <image> info: @image-url("assets/icons/info.svg");
+    out property <image> remove: @image-url("assets/icons/trash.svg");
+    // The bright quarter of a spinner, drawn over a faint ring and turned.
+    out property <image> spinner-arc: @image-url("assets/spinner-arc.svg");
+
+    // The icon of a doctor state.
+    public pure function of-health(health: Health) -> image {
+        return health == Health.problem ? problem : health == Health.warning ? warning : ok;
+    }
+}

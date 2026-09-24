@@ -1,0 +1,135 @@
+//! Devices whose extra buttons arrive as keyboard chords, and the keys Mujina sends.
+//!
+//! Handheld companion software usually reports an extra button as a synthesized key chord (a
+//! OneXPlayer's injected `LWIN`+`D`). Such a device is data: a file in `profiles/devices/`,
+//! built in by `build.rs`, or a button of one's own in `[device.button]`. One runtime serves all
+//! of them, so a switch between them applies at once.
+//!
+//! On Windows the crate keeps together what shares state: the low-level keyboard hook on a
+//! thread of its own ([`hook`]), the thread that sends keys ([`sender`]), and the hook's proof of
+//! life, which is the hook seeing the keys that thread sent. The rules learned on devices
+//! (ADR-0005, superseded by ADR-0013 only in making devices plug-ins) hold:
+//! - The hook callback must be quick and must not allocate, lock or log. Windows silently removes
+//!   a low-level hook whose callback overruns `LowLevelHooksTimeout`, so the hook runs on a
+//!   thread that does nothing else.
+//! - The whole chord is swallowed, held keys included, and nothing another program sends is
+//!   lost: what turns out to be no chord is sent on in order.
+//! - Synthesized chords are held for tens of milliseconds, on a separate thread, because games
+//!   and Steam's overlay sample the keyboard once per frame.
+//! - Mujina's own keystrokes carry a tag so the hook never reinterprets them; seeing them also
+//!   proves the hook is still alive.
+//!
+//! The profiles, the button of one's own and what they come to are built everywhere, so they are
+//! tested on Linux too; the hook and the sender need Windows.
+
+mod custom;
+mod profile;
+
+#[cfg(windows)]
+mod hook;
+#[cfg(windows)]
+pub mod probe;
+#[cfg(windows)]
+mod runtime;
+#[cfg(windows)]
+mod sender;
+
+use mujina_application::device::{ButtonId, DeviceDescriptor, DeviceSelection};
+use mujina_domain::chord::TriggerChord;
+
+pub use custom::{OWN_BUTTON, OWN_ID, OwnButton, own_chord};
+pub use profile::{ChordProfile, builtin, wildcard_match};
+#[cfg(windows)]
+pub use runtime::{KeyboardRuntime, KeyboardSender, RUNTIME, plugins};
+
+/// How many buttons of one device the hook catches: a bit each of the presses it hands the event
+/// loop, and more than any handheld has. A profile with more is refused.
+pub const MAX_BUTTONS: usize = 8;
+
+/// Every device this crate serves: the built-in profiles by file name, then the button of one's
+/// own.
+pub fn descriptors() -> Vec<&'static dyn DeviceDescriptor> {
+    let mut all: Vec<&'static dyn DeviceDescriptor> = builtin()
+        .iter()
+        .map(|profile| profile as &dyn DeviceDescriptor)
+        .collect();
+    all.push(&OWN_BUTTON);
+    all
+}
+
+/// The chords to catch for `device`: none for no device, `None` for one this crate does not
+/// serve. A button of one's own that cannot be used catches nothing.
+pub fn chords_for(device: &DeviceSelection) -> Option<Vec<(ButtonId, TriggerChord)>> {
+    let Some(id) = device.id.as_deref() else {
+        return Some(Vec::new());
+    };
+    if id == OWN_ID {
+        let chord = own_chord(&device.options).ok().flatten();
+        return Some(
+            chord
+                .map(|chord| (ButtonId(0), chord))
+                .into_iter()
+                .collect(),
+        );
+    }
+    builtin()
+        .iter()
+        .find(|profile| profile.id() == id)
+        .map(ChordProfile::chords)
+}
+
+#[cfg(test)]
+mod tests {
+    use mujina_application::launcher::OptionTable;
+    use mujina_application::settings::SettingValue;
+    use mujina_domain::keys::VirtualKey;
+
+    use super::*;
+
+    fn device(id: &str, options: OptionTable) -> DeviceSelection {
+        DeviceSelection {
+            id: Some(id.to_string()),
+            options,
+        }
+    }
+
+    #[test]
+    fn every_device_is_there_once_and_keeps_the_rules() {
+        let all = descriptors();
+        for (index, descriptor) in all.iter().enumerate() {
+            mujina_application::testing::device_conformance(*descriptor);
+            assert!(
+                all[..index]
+                    .iter()
+                    .all(|other| other.id() != descriptor.id()),
+                "{} is there twice",
+                descriptor.id()
+            );
+        }
+        assert_eq!(all.last().map(|last| last.id()), Some(OWN_ID));
+    }
+
+    #[test]
+    fn the_chords_follow_the_device_chosen() {
+        assert_eq!(chords_for(&DeviceSelection::none()), Some(Vec::new()));
+        // An id no profile can have: its file would not be named after it.
+        assert_eq!(
+            chords_for(&device("no such device", OptionTable::new())),
+            None
+        );
+
+        let oxp = chords_for(&device("onexplayer", OptionTable::new())).unwrap();
+        assert_eq!(oxp[0].1.keys.keys(), [VirtualKey::LWIN, VirtualKey::D]);
+
+        let own = OptionTable::from([
+            ("modifier".to_string(), SettingValue::Text("LCTRL".into())),
+            ("key".to_string(), SettingValue::Text("F24".into())),
+        ]);
+        let chords = chords_for(&device(OWN_ID, own)).unwrap();
+        assert_eq!(chords.len(), 1);
+        assert_eq!(chords[0].1.trigger(), VirtualKey(0x87));
+        // Half a button catches nothing, but it is still this crate's to serve.
+        let half = OptionTable::from([("key".to_string(), SettingValue::Text("F24".into()))]);
+        assert_eq!(chords_for(&device(OWN_ID, half)), Some(Vec::new()));
+    }
+}

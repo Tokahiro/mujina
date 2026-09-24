@@ -1,0 +1,38 @@
+[package]
+name = "mujina-settings-gui"
+description = "Mujina Settings: the app for everything config.toml and mujinactl can do."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[package.metadata.mujina]
+# The crate's ring (docs/architecture.md); cargo xtask arch-check checks its dependencies.
+ring = "settings-app"
+
+[[bin]]
+name = "mujina-settings"
+path = "src/main.rs"
+
+[target.'cfg(windows)'.dependencies]
+# The rest of Mujina through mujina-app's tool module only; never an adapter (arch-check).
+mujina-app.workspace = true
+mujina-application.workspace = true
+mujina-domain.workspace = true
+mujina-i18n.workspace = true
+mujina-winutil.workspace = true
+slint.workspace = true
+
+# A launcher and a device made up for the tests that show a new one needs no change here.
+[target.'cfg(windows)'.dev-dependencies]
+mujina-application = { workspace = true, features = ["test-util"] }
+
+# The UI compiler runs only where the app exists; elsewhere build.rs does nothing.
+[target.'cfg(windows)'.build-dependencies]
+slint-build.workspace = true
+
+[lints]
+workspace = true

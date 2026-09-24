@@ -1,0 +1,28 @@
+[package]
+name = "@CRATE@"
+description = "The device adapter for @NAME@, whose buttons are no key chords."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[package.metadata.mujina]
+# The crate's ring (docs/architecture.md); cargo xtask arch-check checks its dependencies.
+ring = "adapter"
+
+[dependencies]
+mujina-adapter-kit.workspace = true
+mujina-application.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+mujina-winutil.workspace = true
+
+[dev-dependencies]
+# The descriptor's conformance test.
+mujina-application = { workspace = true, features = ["test-util"] }
+
+[lints]
+workspace = true

@@ -1,0 +1,246 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+# One run per tag, never cancelled halfway.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+# rust-cache puts every CARGO*/RUST* variable into its key: keep this the same as in ci.yml, whose
+# win-release cache the build job restores.
+env:
+  CARGO_TERM_COLOR: always
+
+# preflight + keys -> build -> sign -> publish
+#
+# build runs cargo and gets no secret. sign gets the key, runs no cargo and nothing cargo built,
+# and checks out only packaging/sign.ps1 and packaging/attach-payload.ps1 (docs/signing.md).
+# The key is a secret of the `release` environment, which admits only v* tags: a job without
+# `environment: release` cannot read it. Only publish may write to the repository, and only it
+# attests what the release publishes.
+
+jobs:
+  preflight:
+    name: preflight
+    runs-on: ubuntu-latest
+    # The wait for CI (up to 45 minutes) and the rest.
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      # To ask whether CI passed on this commit, and which of its jobs ran.
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: rustup toolchain install
+      - name: Tag matches Cargo.toml
+        run: cargo xtask version-check
+      # The release page shows the version's CHANGELOG.md entry. Without one the release fails
+      # here, not after the build.
+      - name: Release notes
+        run: cargo xtask release-notes > NOTES.md
+      - uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
+        with:
+          arguments: --all-features --locked
+      # The release does not test again: CI must have passed on main for exactly this commit, and
+      # built it. A push of documentation alone skips the build jobs and still passes, so its run
+      # vouches for nothing here. A tag pushed together with its commit finds that run still
+      # going and waits up to 45 minutes for it; push the tag once CI is green to skip the wait.
+      - name: CI passed on this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          sha=$(git rev-parse HEAD)
+          api="repos/$GITHUB_REPOSITORY/actions"
+          # The id of a successful run, or else "running" or "missing".
+          run='first(.workflow_runs[] | select(.conclusion == "success") | .id)
+            // (if any(.workflow_runs[]; .status != "completed") then "running" else "missing" end)'
+          # Whether the jobs that build and test passed, by the names ci.yml gives them. Skipped
+          # is not passed. All attempts count: a job that passed and was not re-run belongs to
+          # an earlier one, and one that failed in the last would have failed the run.
+          built='["portable (Linux)", "Windows (clippy, test)", "Windows (package)"]
+            - [.jobs[] | select(.conclusion == "success") | .name] | length == 0'
+          # An API error is no verdict: the question is asked again, as for a run still going.
+          for _ in $(seq 90); do
+            now=$(gh api "$api/workflows/ci.yml/runs?head_sha=$sha&event=push" --jq "$run" || echo error)
+            case "$now" in
+              missing) break ;;
+              running) echo "CI is still running on $sha" ;;
+              [0-9]*)
+                case $(gh api "$api/runs/$now/jobs?filter=all&per_page=100" --jq "$built" || echo error) in
+                  true) echo "CI passed on $sha (run $now)"; exit 0 ;;
+                  false)
+                    echo "::error::CI passed on $sha without running its build jobs (documentation only?). Tag a commit CI built."
+                    exit 1 ;;
+                esac ;;
+            esac
+            sleep 30
+          done
+          if [ "$now" = missing ]; then
+            echo "::error::CI has not passed on main for $sha. Tag a commit that it passed on."
+          else
+            echo "::error::No verdict from CI on $sha after 45 minutes. Re-run this job once CI has finished."
+          fi
+          exit 1
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: notes
+          path: NOTES.md
+          if-no-files-found: error
+
+  # Fails in seconds rather than after the build. Runs nothing but this test. It needs the
+  # environment to see its secrets at all; `deployment: false` because it deploys nothing.
+  keys:
+    name: signing inputs
+    runs-on: ubuntu-latest
+    environment:
+      name: release
+      deployment: false
+    env:
+      # Whether the secrets are set in the environment, not the secrets.
+      HAS_KEY: ${{ secrets.SIGNING_PFX_BASE64 != '' && secrets.SIGNING_PFX_PASSWORD != '' }}
+      MSIX_PUBLISHER: ${{ vars.MSIX_PUBLISHER }}
+    steps:
+      - run: |
+          if [ "$HAS_KEY" != true ] || [ -z "$MSIX_PUBLISHER" ]; then
+            echo "::error::Releases must be signed: set the SIGNING_PFX_BASE64 / SIGNING_PFX_PASSWORD secrets of the release environment and the MSIX_PUBLISHER variable."
+            exit 1
+          fi
+
+  # Everything cargo builds, in one job without a secret: the package, and Mujina Setup without
+  # it. The package is attached to Setup after linking, by the sign job (ADR-0015).
+  build:
+    name: build (unsigned)
+    needs: [preflight, keys]
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: rustup toolchain install
+      # What ci.yml's win-package saved on main, so only Mujina's own crates compile. A tag
+      # saves nothing: no other run could restore it.
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          shared-key: win-release
+          save-if: false
+      - name: Package
+        env:
+          # No MSIX_REVISION: a release is x.y.z.0.
+          MSIX_PUBLISHER: ${{ vars.MSIX_PUBLISHER }}
+        run: cargo xtask package
+      - name: Mujina Setup, without its package
+        run: cargo build --locked --release -p mujina-setup
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: msix-unsigned
+          path: target/package/*.msix
+          if-no-files-found: error
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: setup-unsigned
+          path: target/release/mujina-setup.exe
+          if-no-files-found: error
+
+  # The only job that uses the key (`keys` only tests that it is set). It runs no cargo and
+  # nothing cargo built: it checks out the two
+  # scripts it runs, signs the package, attaches it to Setup (read back as data, not run) and
+  # signs Setup, all timestamped.
+  sign:
+    name: sign and attach
+    needs: build
+    runs-on: windows-latest
+    environment: release
+    env:
+      MSIX_PUBLISHER: ${{ vars.MSIX_PUBLISHER }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            packaging/sign.ps1
+            packaging/attach-payload.ps1
+          sparse-checkout-cone-mode: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: msix-unsigned
+          path: msix
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: setup-unsigned
+          path: stub
+      - name: Sign the package
+        env:
+          SIGNING_PFX_BASE64: ${{ secrets.SIGNING_PFX_BASE64 }}
+          SIGNING_PFX_PASSWORD: ${{ secrets.SIGNING_PFX_PASSWORD }}
+        run: ./packaging/sign.ps1 -Path msix/*.msix -Subject $env:MSIX_PUBLISHER -Certificate msix/Mujina.cer
+      - name: Attach the package to Mujina Setup
+        run: |
+          $msix = @(Get-ChildItem msix -Filter *.msix)
+          if ($msix.Count -ne 1) { throw "expected one package, found $($msix.Count)" }
+          ./packaging/attach-payload.ps1 -Setup stub/mujina-setup.exe -Msix $msix[0].FullName -Certificate msix/Mujina.cer -Output "out/Mujina-Setup-$env:GITHUB_REF_NAME.exe"
+          # Beside Setup, for experts: the bare package, and its certificate while it is
+          # self-signed.
+          Copy-Item $msix[0].FullName, msix/Mujina.cer out/
+      - name: Sign Mujina Setup
+        env:
+          SIGNING_PFX_BASE64: ${{ secrets.SIGNING_PFX_BASE64 }}
+          SIGNING_PFX_PASSWORD: ${{ secrets.SIGNING_PFX_PASSWORD }}
+        run: ./packaging/sign.ps1 -Path "out/Mujina-Setup-$env:GITHUB_REF_NAME.exe" -Subject $env:MSIX_PUBLISHER
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release
+          path: out/
+          if-no-files-found: error
+
+  publish:
+    name: publish
+    needs: [preflight, sign]
+    runs-on: ubuntu-latest
+    permissions:
+      # The release itself. No other job can write to the repository.
+      contents: write
+      # The attestation: a token to get its signing certificate from Sigstore, and the right
+      # to store it with the repository.
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: notes
+          path: notes
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release
+          path: out
+      # Mujina-Setup-vX.Y.Z.exe is the one file users are pointed to; the package and the
+      # certificate sit beside it for experts. No zip, no scripts (ADR-0015).
+      - name: Checksums
+        working-directory: out
+        run: |
+          test -f "Mujina-Setup-$GITHUB_REF_NAME.exe"
+          test "$(ls *.msix | wc -l)" -eq 1
+          sha256sum -- "Mujina-Setup-$GITHUB_REF_NAME.exe" *.msix Mujina.cer > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+      # SLSA build provenance for Setup and the package: which workflow run, from which commit,
+      # made these files. `gh attestation verify <file> --repo Tokahiro/mujina
+      # --signer-workflow Tokahiro/mujina/.github/workflows/release.yml` checks it.
+      - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: |
+            out/Mujina-Setup-${{ github.ref_name }}.exe
+            out/*.msix
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh release create "$GITHUB_REF_NAME" --verify-tag --repo "$GITHUB_REPOSITORY"
+          "out/Mujina-Setup-$GITHUB_REF_NAME.exe" out/*.msix out/Mujina.cer out/SHA256SUMS.txt
+          --title "Mujina $GITHUB_REF_NAME" --notes-file notes/NOTES.md

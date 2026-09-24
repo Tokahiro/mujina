@@ -1,0 +1,31 @@
+Mujina
+Copyright (c) Mujina contributors
+
+This product includes facts derived from the following project:
+
+AnyFSE (https://github.com/ashpynov/AnyFSE), MIT License,
+Copyright (c) Artem Shpynov.
+  The window rule that identifies Steam Big Picture (window class, owning process and window
+  styles) in crates/adapter-steam/src/window_rule.rs follows AnyFSE's Steam launcher profile.
+  No AnyFSE source code is included.
+
+Mujina Settings (mujina-settings.exe) and Mujina Setup (mujina-setup.exe) are built with Slint
+(https://slint.dev), used under the Slint Royalty-free Desktop, Mobile, and Web Applications
+License 2.0. The Slint attribution badge is in README.md and on every release page (the
+licence's condition 2 (b)); Mujina Settings' Help page shows it too.
+mujina.exe and mujinactl.exe do not contain Slint.
+
+Mujina Settings and Mujina Setup bundle these assets under ui/assets/:
+
+Inter (https://rsms.me/inter), SIL Open Font License 1.1, Copyright (c) 2016 The Inter Project
+Authors. Regular, Medium and SemiBold, unmodified; licence in fonts/Inter-LICENSE.txt.
+
+Phosphor Icons (https://phosphoricons.com), MIT License, Copyright (c) 2023 Phosphor Icons.
+Unmodified SVGs; licence in icons/LICENSE.
+
+The mark's character 狢 (mark-glyph.svg, and the icons packaging/icons.ps1 draws from it) is
+the outline of one glyph of Noto Serif JP Medium
+(https://github.com/notofonts/noto-cjk), SIL Open Font License 1.1, Copyright 2017-2022 Adobe
+(http://www.adobe.com/), with Reserved Font Name 'Source'. No font file is included.
+
+The "Made with Slint" badge (made-with-slint.svg) is Slint's own artwork.

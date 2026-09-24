@@ -1,0 +1,617 @@
+// Rows of the settings pages. A page describes its rows as data (`RowData`) and draws them with
+// one component, `RowItem`, so Slint compiles a row once rather than once per row.
+//
+// A row does not hold the keyboard: its page does, and tells it through `page` whether it is
+// current and which key was pressed. Left, right and A are the row's own; up, down and B belong
+// to the page.
+
+import { Theme, Health } from "@mujina/theme.slint";
+import { Icons } from "@mujina/icons.slint";
+import { Switch } from "@mujina/switch.slint";
+import { PageState, PageKey, Focus, Change } from "nav.slint";
+import { FocusFrame, OutlineButton } from "@mujina/controls.slint";
+import { StateIcon } from "controls.slint";
+
+export enum RowKind {
+    // One of `options`, stepped with left and right.
+    choice,
+    // `on`, flipped with A.
+    toggle,
+    // A button: `label` and `icon`; A presses it.
+    button,
+    // A text setting, edited after A.
+    text,
+    // `number` between `minimum` and `maximum`, in `step`s.
+    number,
+    // Something to read, not to change.
+    info,
+    // The header that opens `Advanced`.
+    header,
+    // A value to copy with A, e.g. into Steam.
+    copy,
+    // Something the page draws itself, such as a button of its own: only its place among the
+    // rows, for moving between them.
+    own
+}
+
+export struct RowData {
+    kind: RowKind,
+    // The config key a change goes to, or what a press means to the page.
+    key: string,
+    title: string,
+    description: string,
+    // A value in the description's place, in the code face.
+    code: string,
+    options: [string],
+    selected: int,
+    on: bool,
+    // A text row's value, or the value a copy row copies.
+    value: string,
+    placeholder: string,
+    number: int,
+    step: int,
+    minimum: int,
+    maximum: int,
+    label: string,
+    icon: image,
+    // A neutral button instead of an accent one.
+    plain: bool,
+    // What a number counts, e.g. "ms"; nothing for a plain number.
+    unit: string,
+    // A state icon before the title, where it has one.
+    has-status: bool,
+    health: Health,
+    // Whether the header's section is open.
+    open: bool,
+    disabled: bool,
+    // The smaller title of the Advanced and Windows rows.
+    small: bool,
+}
+
+// A launcher's or a device's own rows, as Rust builds them from its settings, by where the
+// Setup page shows them.
+export struct PluginRows {
+    // With the launcher choice, or the device's button.
+    main: [RowData],
+    // Under What Mujina fixes: what a launcher brings.
+    features: [RowData],
+    // Under Advanced.
+    advanced: [RowData],
+}
+
+// Rows the page shows together, or not at all.
+export struct RowSection {
+    rows: [RowData],
+    hidden: bool,
+}
+
+// Which rows the controller can land on is decided in Rust (`nav::enabled`), from the rows
+// themselves: one switched off, or with nothing to press, is passed over.
+export global Rows {
+    // Each row of `sections`, in order, and whether the controller can land on it.
+    pure callback enabled([RowSection]) -> [bool];
+}
+
+// A caret that steps a choice; 46 px wide for a thumb.
+component Caret inherits Rectangle {
+    in property <bool> right;
+    in property <bool> lit;
+    callback clicked();
+    width: Theme.touch;
+    height: Theme.touch;
+    Image {
+        width: 20 * Theme.u;
+        height: 20 * Theme.u;
+        source: touch.pressed ? (root.right ? Icons.caret-right-fill : Icons.caret-left-fill) : (root.right ? Icons.caret-right : Icons.caret-left);
+        colorize: root.lit || touch.pressed ? Theme.accent-light : Theme.faint;
+    }
+    touch := TouchArea {
+        clicked => {
+            root.clicked();
+        }
+    }
+}
+
+component Choice inherits HorizontalLayout {
+    in property <string> text;
+    in property <bool> lit;
+    // The row's title, for a screen reader.
+    in property <string> label;
+    callback left();
+    callback right();
+    spacing: 2 * Theme.u;
+    VerticalLayout {
+        alignment: center;
+        Caret {
+            lit: root.lit;
+            clicked => {
+                root.left();
+            }
+        }
+    }
+    Text {
+        min-width: 230 * Theme.u;
+        max-width: 300 * Theme.u;
+        text: root.text;
+        font-size: Theme.value;
+        font-weight: 500;
+        color: Theme.text;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+        wrap: word-wrap;
+        accessible-role: spinbox;
+        accessible-label: root.label;
+        accessible-value: root.text;
+        accessible-action-increment => {
+            root.right();
+        }
+        accessible-action-decrement => {
+            root.left();
+        }
+    }
+    VerticalLayout {
+        alignment: center;
+        Caret {
+            right: true;
+            lit: root.lit;
+            clicked => {
+                root.right();
+            }
+        }
+    }
+}
+
+component Toggle inherits VerticalLayout {
+    in property <bool> on;
+    in property <bool> pressed;
+    // The row's title, for a screen reader.
+    in property <string> label;
+    callback toggled();
+    alignment: center;
+    Switch {
+        width: 62 * Theme.u;
+        height: 32 * Theme.u;
+        gap: 3 * Theme.u;
+        on: root.on;
+        pressed: root.pressed;
+        accessible-role: switch;
+        accessible-label: root.label;
+        accessible-checkable: true;
+        accessible-checked: root.on;
+        accessible-action-default => {
+            root.toggled();
+        }
+    }
+}
+
+// A step box of a number.
+component StepBox inherits Rectangle {
+    in property <image> icon;
+    in property <bool> lit;
+    in property <bool> active: true;
+    callback clicked();
+    width: 44 * Theme.u;
+    height: 44 * Theme.u;
+    border-radius: 9 * Theme.u;
+    border-width: 1px;
+    border-color: root.lit ? Theme.accent : Theme.line-strong;
+    background: touch.pressed ? Theme.accent-34 : transparent;
+    opacity: root.active ? 1 : 0.45;
+    Image {
+        width: 20 * Theme.u;
+        height: 20 * Theme.u;
+        source: root.icon;
+        colorize: Theme.text-soft;
+    }
+    touch := TouchArea {
+        enabled: root.active;
+        clicked => {
+            root.clicked();
+        }
+    }
+}
+
+component Number inherits HorizontalLayout {
+    in property <int> value;
+    in property <string> unit;
+    in property <int> minimum;
+    in property <int> maximum;
+    in property <bool> lit;
+    // The row's title, for a screen reader.
+    in property <string> label;
+    callback less();
+    callback more();
+    spacing: 12 * Theme.u;
+    VerticalLayout {
+        alignment: center;
+        StepBox {
+            icon: Icons.minus;
+            lit: root.lit;
+            active: root.value > root.minimum;
+            clicked => {
+                root.less();
+            }
+        }
+    }
+    Text {
+        min-width: 110 * Theme.u;
+        text: root.unit == "" ? root.value : root.value + " " + root.unit;
+        font-size: Theme.row-title;
+        font-weight: 500;
+        color: Theme.text;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+        accessible-role: spinbox;
+        accessible-label: root.label;
+        accessible-value: self.text;
+        accessible-value-minimum: root.minimum;
+        accessible-value-maximum: root.maximum;
+        accessible-action-increment => {
+            root.more();
+        }
+        accessible-action-decrement => {
+            root.less();
+        }
+    }
+    VerticalLayout {
+        alignment: center;
+        StepBox {
+            icon: Icons.plus;
+            lit: root.lit;
+            active: root.value < root.maximum;
+            clicked => {
+                root.more();
+            }
+        }
+    }
+}
+
+// A text setting. Editing starts each time `edits` goes up; Enter (A) stores the text, Escape
+// (B) leaves it as it was. An empty field stands for the default, named by `placeholder`.
+component TextField inherits Rectangle {
+    in property <string> value;
+    in property <string> placeholder;
+    // The row's title, for a screen reader.
+    in property <string> label;
+    in property <int> edits;
+    callback apply(string);
+    callback editing(bool);
+    // A screen reader asks to edit it.
+    callback begin();
+    accessible-role: button;
+    accessible-label: root.label;
+    accessible-value: root.value != "" ? root.value : root.placeholder;
+    accessible-action-default => {
+        root.begin();
+    }
+    changed edits => {
+        input.text = root.value;
+        input.focus();
+        input.select-all();
+    }
+    property <bool> active: input.has-focus;
+    changed active => {
+        root.editing(self.active);
+    }
+
+    function finish() {
+        Focus.returns += 1;
+    }
+
+    min-width: 280 * Theme.u;
+    max-width: 340 * Theme.u;
+    height: Theme.touch;
+    border-radius: 9 * Theme.u;
+    border-width: root.active ? 1.5px : 1px;
+    border-color: root.active ? Theme.accent : #e9e9ed29;
+    background: root.active ? #1b1d2b : Theme.sunken;
+    drop-shadow-blur: root.active ? 16 * Theme.u : 0px;
+    drop-shadow-color: Theme.glow;
+    clip: true;
+    HorizontalLayout {
+        padding-left: 14 * Theme.u;
+        padding-right: 14 * Theme.u;
+        if !root.active: Text {
+            text: root.value != "" ? root.value : root.placeholder;
+            font-family: Theme.mono;
+            font-size: 16 * Theme.u;
+            color: root.value != "" ? Theme.accent-light : Theme.faint;
+            horizontal-alignment: right;
+            vertical-alignment: center;
+            overflow: elide;
+        }
+    }
+    // Escape and up/down stay with the field while it is edited.
+    FocusScope {
+        x: 14 * Theme.u;
+        width: parent.width - 28 * Theme.u;
+        key-pressed(event) => {
+            if (event.text == Key.Escape) {
+                input.text = root.value;
+                root.finish();
+                return accept;
+            }
+            if (event.text == Key.UpArrow || event.text == Key.DownArrow) {
+                return accept;
+            }
+            reject
+        }
+        input := TextInput {
+            visible: self.has-focus;
+            accessible-label: root.label;
+            single-line: true;
+            font-family: Theme.mono;
+            font-size: 16 * Theme.u;
+            color: Theme.accent-light;
+            selection-background-color: Theme.accent-30;
+            horizontal-alignment: right;
+            vertical-alignment: center;
+            accepted => {
+                root.apply(self.text);
+                root.finish();
+            }
+        }
+    }
+}
+
+// The dashed outline of the Advanced header; Slint draws no dashed borders.
+component Dashes inherits Rectangle {
+    property <length> dash: 6 * Theme.u;
+    property <length> gap: 10 * Theme.u;
+    property <length> corner: Theme.radius-tile;
+    for i in floor((root.width - 2 * root.corner) / root.gap): Rectangle {
+        x: root.corner + i * root.gap;
+        y: 0;
+        width: root.dash;
+        height: 1px;
+        background: Theme.line-strong;
+    }
+    for i in floor((root.width - 2 * root.corner) / root.gap): Rectangle {
+        x: root.corner + i * root.gap;
+        y: root.height - 1px;
+        width: root.dash;
+        height: 1px;
+        background: Theme.line-strong;
+    }
+    for i in floor((root.height - 2 * root.corner) / root.gap): Rectangle {
+        x: 0;
+        y: root.corner + i * root.gap;
+        width: 1px;
+        height: root.dash;
+        background: Theme.line-strong;
+    }
+    for i in floor((root.height - 2 * root.corner) / root.gap): Rectangle {
+        x: root.width - 1px;
+        y: root.corner + i * root.gap;
+        width: 1px;
+        height: root.dash;
+        background: Theme.line-strong;
+    }
+}
+
+export component RowItem inherits FocusFrame {
+    in property <RowData> data;
+    in property <int> index;
+    in property <PageState> page;
+    // A button, the header or a copy row was pressed; `data.key` says which.
+    callback press(string);
+
+    out property <bool> current: root.page.focused && root.page.current == root.index;
+    // A text field of the row holds the keyboard.
+    property <bool> holding;
+    property <int> edits;
+    property <bool> header: root.data.kind == RowKind.header;
+
+    enabled: !root.data.disabled;
+    focused: root.current || root.holding;
+    pressed: touch.pressed && root.data.kind != RowKind.info;
+    min-height: root.data.kind == RowKind.copy ? Theme.touch : Theme.row-min;
+    rest: root.data.kind == RowKind.copy ? Theme.sunken : transparent;
+    rest-border: root.data.kind == RowKind.copy ? #e9e9ed1a : root.header ? #e9e9ed12 : transparent;
+    border-radius: root.header ? Theme.radius-tile : Theme.radius-row;
+
+    function left() {
+        if (root.data.kind == RowKind.choice && root.data.selected > 0) {
+            Change.choice(root.data.key, root.data.selected - 1);
+        } else if (root.data.kind == RowKind.toggle && root.data.on) {
+            Change.flag(root.data.key, false);
+        } else if (root.data.kind == RowKind.number && root.data.number > root.data.minimum) {
+            Change.number(root.data.key, max(root.data.minimum, root.data.number - root.data.step));
+        } else if (root.header && root.data.open) {
+            root.press(root.data.key);
+        }
+    }
+
+    function right() {
+        if (root.data.kind == RowKind.choice && root.data.selected + 1 < root.data.options.length) {
+            Change.choice(root.data.key, root.data.selected + 1);
+        } else if (root.data.kind == RowKind.toggle && !root.data.on) {
+            Change.flag(root.data.key, true);
+        } else if (root.data.kind == RowKind.number && root.data.number < root.data.maximum) {
+            Change.number(root.data.key, min(root.data.maximum, root.data.number + root.data.step));
+        } else if (root.header && !root.data.open) {
+            root.press(root.data.key);
+        }
+    }
+
+    function activate() {
+        if (root.data.kind == RowKind.choice) {
+            Change.choice(root.data.key, root.data.selected + 1 >= root.data.options.length ? 0 : root.data.selected + 1);
+        } else if (root.data.kind == RowKind.toggle) {
+            Change.flag(root.data.key, !root.data.on);
+        } else if (root.data.kind == RowKind.text) {
+            root.edits += 1;
+        } else if (root.data.kind == RowKind.button || root.header || root.data.kind == RowKind.copy) {
+            if (root.data.kind != RowKind.button || root.data.label != "") {
+                root.press(root.data.key);
+            }
+        }
+    }
+
+    property <int> presses: root.page.presses;
+    changed presses => {
+        if (root.current && root.enabled) {
+            if (root.page.key == PageKey.left) {
+                root.left();
+            } else if (root.page.key == PageKey.right) {
+                root.right();
+            } else {
+                root.activate();
+            }
+        }
+    }
+    changed current => {
+        if (root.current) {
+            Focus.row-y = self.absolute-position.y;
+            Focus.row-height = self.height;
+            Focus.rows-shown += 1;
+        }
+    }
+
+    touch := TouchArea {
+        enabled: root.enabled && root.data.kind != RowKind.info;
+        clicked => {
+            root.activate();
+        }
+    }
+
+    if root.header && !root.focused: Dashes { }
+
+    HorizontalLayout {
+        padding-top: 16 * Theme.u;
+        padding-bottom: 16 * Theme.u;
+        padding-left: 18 * Theme.u;
+        padding-right: 18 * Theme.u;
+        spacing: 18 * Theme.u;
+        if root.header: VerticalLayout {
+            alignment: center;
+            Image {
+                width: 22 * Theme.u;
+                height: 22 * Theme.u;
+                source: Icons.caret-right;
+                colorize: Theme.muted;
+                transform-rotation: root.data.open ? 90deg : 0deg;
+                animate transform-rotation { duration: 150ms; }
+                accessible-role: button;
+                accessible-label: root.data.title;
+                accessible-expandable: true;
+                accessible-expanded: root.data.open;
+                accessible-action-default => {
+                    root.press(root.data.key);
+                }
+            }
+        }
+        if root.data.has-status: VerticalLayout {
+            alignment: center;
+            StateIcon {
+                width: 24 * Theme.u;
+                height: 24 * Theme.u;
+                health: root.data.health;
+            }
+        }
+        VerticalLayout {
+            alignment: center;
+            spacing: 3 * Theme.u;
+            horizontal-stretch: 1;
+            Text {
+                text: root.data.title;
+                font-size: root.data.kind == RowKind.copy ? Theme.label : root.header ? 19 * Theme.u : root.data.small ? Theme.value : Theme.row-title;
+                font-weight: 500;
+                color: root.data.kind == RowKind.copy ? Theme.faint : root.header ? Theme.text-soft : Theme.text;
+                wrap: word-wrap;
+            }
+            if root.data.description != "": Text {
+                text: root.data.description;
+                font-size: Theme.description;
+                color: Theme.muted;
+                wrap: word-wrap;
+            }
+            if root.data.code != "" || root.data.kind == RowKind.copy: Text {
+                text: root.data.kind == RowKind.copy ? root.data.value : root.data.code;
+                font-family: Theme.mono;
+                font-size: root.data.kind == RowKind.copy ? Theme.body : Theme.description;
+                color: root.data.kind == RowKind.copy ? Theme.accent-light : root.data.kind == RowKind.button && root.data.plain ? Theme.muted : Theme.accent-focus;
+                overflow: elide;
+            }
+        }
+        if root.data.kind == RowKind.choice: Choice {
+            text: root.data.options[root.data.selected];
+            label: root.data.title;
+            lit: root.focused;
+            left => {
+                root.left();
+            }
+            right => {
+                root.right();
+            }
+        }
+        if root.data.kind == RowKind.toggle: Toggle {
+            on: root.data.on;
+            pressed: root.pressed;
+            label: root.data.title;
+            toggled => {
+                root.activate();
+            }
+        }
+        if root.data.kind == RowKind.button && root.data.label != "": VerticalLayout {
+            alignment: center;
+            OutlineButton {
+                accent: !root.data.plain;
+                icon: root.data.icon;
+                text: root.data.label;
+                min-height: root.data.plain || root.data.has-status ? Theme.touch : 48 * Theme.u;
+                text-size: root.data.plain || root.data.has-status ? 16 * Theme.u : 17 * Theme.u;
+                clicked => {
+                    root.press(root.data.key);
+                }
+            }
+        }
+        if root.data.kind == RowKind.text: VerticalLayout {
+            alignment: center;
+            TextField {
+                value: root.data.value;
+                placeholder: root.data.placeholder;
+                label: root.data.title;
+                edits: root.edits;
+                begin => {
+                    root.activate();
+                }
+                apply(text) => {
+                    Change.text(root.data.key, text);
+                }
+                editing(on) => {
+                    root.holding = on;
+                }
+            }
+        }
+        if root.data.kind == RowKind.number: Number {
+            value: root.data.number;
+            unit: root.data.unit;
+            label: root.data.title;
+            minimum: root.data.minimum;
+            maximum: root.data.maximum;
+            lit: root.focused;
+            less => {
+                root.left();
+            }
+            more => {
+                root.right();
+            }
+        }
+        if root.data.kind == RowKind.copy: VerticalLayout {
+            alignment: center;
+            Image {
+                width: 20 * Theme.u;
+                height: 20 * Theme.u;
+                source: Icons.copy;
+                colorize: Theme.muted;
+                accessible-role: button;
+                accessible-label: root.data.title;
+                accessible-description: root.data.value;
+                accessible-action-default => {
+                    root.press(root.data.key);
+                }
+            }
+        }
+    }
+}

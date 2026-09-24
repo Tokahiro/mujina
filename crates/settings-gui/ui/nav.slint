@@ -1,0 +1,44 @@
+// Moving between a page's rows is decided in Rust (`nav::step`): skip rows that are switched
+// off, stop at both ends.
+export global Nav {
+    // The row `delta` steps away from `current` among those `enabled`; `current` if there is none.
+    pure callback step([bool], int, int) -> int;
+}
+
+// A key a page hands its current row.
+export enum PageKey {
+    none,
+    left,
+    right,
+    // A, Return or Space.
+    activate
+}
+
+// What a page tells its rows: which one is current, whether the page has the controller, and
+// the last key pressed on it. `presses` counts the presses, so the current row acts once per
+// press.
+export struct PageState {
+    current: int,
+    focused: bool,
+    key: PageKey,
+    presses: int,
+}
+
+// Rows report here; the page shown listens.
+export global Focus {
+    // The row that just became current, in window coordinates, so its page can scroll to it.
+    in-out property <length> row-y;
+    in-out property <length> row-height;
+    in-out property <int> rows-shown;
+    // A text field done with editing hands the controller back to its page.
+    in-out property <int> returns;
+}
+
+// A row's change goes straight to Rust, which stores it and answers with a toast. The key is
+// the config key.
+export global Change {
+    callback choice(string, int);
+    callback flag(string, bool);
+    callback number(string, int);
+    callback text(string, string);
+}

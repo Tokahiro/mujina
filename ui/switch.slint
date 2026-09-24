@@ -1,0 +1,23 @@
+// The on/off switch of Mujina Settings and Mujina Setup. Each gives its own size: the knob
+// fills the track's height less `gap` on both sides, and pressed grows a little.
+
+import { Theme } from "theme.slint";
+
+export component Switch inherits Rectangle {
+    in property <bool> on;
+    in property <bool> pressed;
+    in property <length> gap: 3px;
+    border-radius: self.height / 2;
+    background: root.pressed ? Theme.accent-pressed-track : root.on ? Theme.accent-fill : Theme.divider;
+    animate background { duration: Theme.slide; }
+    Rectangle {
+        property <length> knob: root.height - 2 * root.gap + (root.pressed ? root.gap * 2 / 3 : 0px);
+        x: root.on ? parent.width - self.width - root.gap : root.gap;
+        y: (parent.height - self.height) / 2;
+        width: self.knob;
+        height: self.knob;
+        border-radius: self.knob / 2;
+        background: root.on ? Theme.accent-knob : Theme.muted;
+        animate x, background { duration: Theme.slide; }
+    }
+}

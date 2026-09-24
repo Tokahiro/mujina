@@ -1,0 +1,4 @@
+/target
+*.pfx
+*.msix
+*.log

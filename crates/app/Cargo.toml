@@ -1,0 +1,46 @@
+[package]
+name = "mujina-app"
+description = "Composition root of Mujina: wires adapters into use cases and ships the executables."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[package.metadata.mujina]
+# The crate's ring (docs/architecture.md); cargo xtask arch-check checks its dependencies.
+ring = "root"
+
+[[bin]]
+name = "mujina"
+path = "src/bin/mujina.rs"
+
+[[bin]]
+name = "mujinactl"
+path = "src/bin/mujinactl.rs"
+
+[dependencies]
+mujina-application.workspace = true
+mujina-domain.workspace = true
+mujina-winutil.workspace = true
+mujina-adapter-kit.workspace = true
+mujina-adapter-config.workspace = true
+mujina-adapter-windows.workspace = true
+# The launchers, one line each; src/registry.rs lists them.
+mujina-adapter-steam.workspace = true
+mujina-adapter-generic.workspace = true
+# The devices: every key-chord device (profiles/devices/*.toml), then one line per device crate
+# with a mechanism of its own; src/registry.rs lists them.
+mujina-adapter-keyboard.workspace = true
+lexopt.workspace = true
+log.workspace = true
+
+[dev-dependencies]
+# The conformance tests of the launchers and devices in src/registry.rs, and the fake device of
+# src/fake_hid.rs.
+mujina-application = { workspace = true, features = ["test-util"] }
+
+[lints]
+workspace = true

@@ -1,0 +1,246 @@
+// System: whether Mujina is the home app, what Windows allows it (as the doctor finds it), and how
+// to open these settings from Steam.
+
+import { Theme } from "@mujina/theme.slint";
+import { Icons } from "@mujina/icons.slint";
+import { Card, OutlineButton } from "@mujina/controls.slint";
+import { Group } from "../controls.slint";
+import { ScrollPage } from "../page.slint";
+import { RowItem, RowData, RowKind, RowSection, Rows } from "../rows.slint";
+
+// Which app Windows starts in Xbox mode.
+export enum HomeApp {
+    windows,
+    other,
+    mujina
+}
+
+// What the page shows, as found. `known` once found the first time.
+export struct SystemInfo {
+    known: bool,
+    home: HomeApp,
+    // The home app is being read again; the card says so.
+    home-checking: bool,
+    // The home app Windows starts instead of Mujina, for `other`.
+    other-home: string,
+    launcher: string,
+    // The execution alias Steam starts, in full; empty when Mujina runs unpackaged.
+    steam-target: string,
+    // The copy of Mujina Setup that removes Mujina is there (an installation by Mujina Setup).
+    can-remove: bool,
+}
+
+export component SystemPage inherits Rectangle {
+    in property <SystemInfo> info;
+    // What Windows allows, as the doctor finds it; Rust says what a row's button does.
+    in property <[RowData]> checks;
+    callback register-home();
+    callback unregister-home();
+    // The button of the row of the check `id` was pressed.
+    callback act(string);
+    callback copy(string);
+    // Remove Mujina: Mujina Setup takes over, and this app closes.
+    callback remove-mujina();
+    callback leave();
+
+    property <bool> registered: root.info.home == HomeApp.mujina;
+
+    pure function home-title() -> string {
+        if (root.info.home-checking) {
+            return @tr("Checking…");
+        }
+        root.registered ? @tr("Mujina is your home app.") : @tr("Mujina is not your home app.")
+    }
+
+    pure function home-body() -> string {
+        if (root.info.home-checking) {
+            return "";
+        }
+        if (root.registered) {
+            return @tr("Windows starts Mujina whenever you enter Xbox mode, and Mujina starts {}.", root.info.launcher);
+        }
+        root.info.home == HomeApp.other ? @tr("Windows starts {} when you enter Xbox mode.", root.info.other-home) : @tr("Windows starts its own home app when you enter Xbox mode.")
+    }
+
+    // Copies its value, which is also its key.
+    property <[RowData]> copy-rows: [
+        {
+            kind: RowKind.copy,
+            key: root.info.steam-target,
+            title: @tr("Program"),
+            value: root.info.steam-target
+        }
+    ];
+    // Starts the kept Mujina Setup, which gives the home app back first and then removes the
+    // package; its key is what a press means.
+    property <[RowData]> remove-rows: [
+        {
+            kind: RowKind.button,
+            key: "remove",
+            title: @tr("Remove Mujina"),
+            description: @tr("The home app setting goes back first, then Mujina Setup removes Mujina. Mujina Settings closes."),
+            label: @tr("Remove"),
+            icon: Icons.remove,
+            plain: true
+        }
+    ];
+    // The home app button, what Windows allows, the program to copy, removing.
+    property <[RowData]> home-rows: [{ kind: RowKind.own }];
+    property <int> checks-at: root.home-rows.length;
+    property <int> copy-at: root.checks-at + root.checks.length;
+    // A hidden section keeps its place among the rows.
+    property <int> remove-at: root.copy-at + root.copy-rows.length;
+    property <[bool]> rows: Rows.enabled([
+        { rows: root.home-rows },
+        { rows: root.checks },
+        { rows: root.copy-rows, hidden: root.info.steam-target == "" },
+        { rows: root.remove-rows, hidden: !root.info.can-remove }
+    ]);
+
+    public function enter() {
+        page.enter();
+    }
+
+    function home() {
+        if (root.registered) {
+            root.unregister-home();
+        } else {
+            root.register-home();
+        }
+    }
+
+    page := ScrollPage {
+        shown: root.visible;
+        title: @tr("System");
+        rows: root.rows;
+        // The home app button is the page's own.
+        activate(row) => {
+            if (row == 0) {
+                root.home();
+                return true;
+            }
+            false
+        }
+        leave => {
+            root.leave();
+        }
+
+        // Whether Windows starts Mujina in Xbox mode.
+        Rectangle {
+            border-radius: Theme.radius-card;
+            border-width: 1px;
+            border-color: #9184d947;
+            background: @linear-gradient(180deg, #9184d91f 0%, #9184d905 100%);
+            HorizontalLayout {
+                padding-top: 26 * Theme.u;
+                padding-bottom: 26 * Theme.u;
+                padding-left: 28 * Theme.u;
+                padding-right: 28 * Theme.u;
+                spacing: 24 * Theme.u;
+                VerticalLayout {
+                    alignment: center;
+                    Rectangle {
+                        width: 64 * Theme.u;
+                        height: 64 * Theme.u;
+                        border-radius: 16 * Theme.u;
+                        background: Theme.accent-16;
+                        Image {
+                            width: 32 * Theme.u;
+                            height: 32 * Theme.u;
+                            source: Icons.home;
+                            colorize: Theme.accent-light;
+                        }
+                    }
+                }
+                VerticalLayout {
+                    alignment: center;
+                    spacing: 5 * Theme.u;
+                    horizontal-stretch: 1;
+                    Text {
+                        text: root.home-title();
+                        font-size: Theme.statement;
+                        font-weight: 500;
+                        letter-spacing: Theme.statement * -0.015;
+                        color: Theme.text;
+                        wrap: word-wrap;
+                    }
+                    Text {
+                        text: root.home-body();
+                        font-size: Theme.body;
+                        color: Theme.text-body;
+                        wrap: word-wrap;
+                    }
+                }
+                VerticalLayout {
+                    alignment: center;
+                    OutlineButton {
+                        accent: !root.registered;
+                        icon: root.registered ? Icons.give-back : Icons.home;
+                        text: root.registered ? @tr("Give it back") : @tr("Make Mujina the home app");
+                        text-size: Theme.body;
+                        focused: page.focused && page.current == 0;
+                        clicked => {
+                            page.current = 0;
+                            root.home();
+                        }
+                    }
+                }
+            }
+        }
+
+        // Once the checks behind it are back.
+        if root.checks.length > 0: Group {
+            label: @tr("What Windows allows");
+            Card {
+                for row[i] in root.checks: RowItem {
+                    data: row;
+                    index: root.checks-at + i;
+                    page: page.state;
+                    press(key) => {
+                        root.act(key);
+                    }
+                }
+            }
+        }
+
+        if root.info.steam-target != "": Group {
+            label: @tr("Opening these settings from Steam");
+            Card {
+                inset-x: 24 * Theme.u;
+                inset-y: 22 * Theme.u;
+                gap: 16 * Theme.u;
+                Text {
+                    max-width: 760 * Theme.u;
+                    text: @tr("In Steam, add a non-Steam game with the program below. Mujina Settings then appears in your library and opens full screen in Xbox mode.");
+                    font-size: Theme.body;
+                    color: Theme.text-body;
+                    wrap: word-wrap;
+                }
+                for row[i] in root.copy-rows: RowItem {
+                    data: row;
+                    index: root.copy-at + i;
+                    page: page.state;
+                    press(key) => {
+                        root.copy(key);
+                    }
+                }
+            }
+        }
+
+        // Only where Mujina Setup kept its copy: an installation some other way has none, and
+        // Settings → Apps is the way out then.
+        if root.info.can-remove: Group {
+            label: @tr("Uninstall");
+            Card {
+                for row[i] in root.remove-rows: RowItem {
+                    data: row;
+                    index: root.remove-at + i;
+                    page: page.state;
+                    press(key) => {
+                        root.remove-mujina();
+                    }
+                }
+            }
+        }
+    }
+}
