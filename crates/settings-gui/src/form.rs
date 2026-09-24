@@ -119,6 +119,7 @@ pub fn as_text(value: Option<SettingValue>) -> String {
 
 /// Splits a launcher's arguments by the Microsoft C runtime's rules, which Rust programs follow
 /// too. Arguments only: the program name's rules do not apply.
+/// `CommandLineToArgvW` differs only on `""` inside quotes, which [`join_arguments`] never writes.
 pub fn split_arguments(text: &str) -> Vec<String> {
     let mut arguments = Vec::new();
     let mut current = String::new();
