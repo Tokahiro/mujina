@@ -1,11 +1,6 @@
-//! Steam adapter: everything Mujina knows about Steam lives in this crate.
-//!
-//! Steam's window class, registry layout and command line are not a public API. When Valve
-//! changes one of them, this crate is the only place that has to follow.
-//!
-//! [`DESCRIPTOR`] says what Steam is to the configuration and [`library`] where Steam installed a
-//! game; both are built everywhere, so their rules are tested on Linux too. The rest needs
-//! Windows.
+//! Steam adapter: everything Mujina knows about Steam (window class, registry layout, command
+//! line, none of them a public API) lives in this crate. [`DESCRIPTOR`] and [`library`] are
+//! portable and tested on Linux too; the rest needs Windows.
 
 mod descriptor;
 pub mod library;

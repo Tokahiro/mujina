@@ -1,31 +1,6 @@
-//! Wi-Fi state from the WLAN service, with change notifications instead of polling, fed to the
-//! Steam UI worker that corrects Big Picture's Wi-Fi icon.
-//!
-//! Everything that talks to the WLAN service happens on a thread of its own, never on the
-//! agent's main thread nor on the Steam UI worker. Since Windows 11 24H2 the name and signal of
-//! the current network are guarded by the location permission, and the first query makes
-//! Windows show its consent prompt and blocks until the user answers. A main thread blocked like
-//! that cannot service the keyboard hook, and Windows removes low-level hooks that do not answer;
-//! a Steam UI worker blocked like that would miss the moment to hook Steam's UI early.
-//!
-//! The thread is blocked in the kernel unless the WLAN service reports a change that can alter
-//! what the icon shows: connect, disconnect, or a signal quality that moved into another bar
-//! bucket. Drivers report signal quality every few seconds; reacting to each report would
-//! defeat the purpose. It hands what the icon is to show straight to the Steam UI worker; the
-//! agent's event loop is not woken for it.
-//!
-//! Connecting and disconnecting are the service's ACM notifications, the signal quality its MSM
-//! ones. Windows refuses a registration for MSM (ERROR_ACCESS_DENIED) unless the app has the
-//! wiFiControl device capability, which the package declares (`packaging/AppxManifest.xml.in`)
-//! and which "will require consent from the user regarding access to location" (Microsoft, on
-//! WlanRegisterNotification). So the first query, which may ask for that consent, comes before
-//! the registration, and a refused MSM leaves ACM alone: the icon then follows connecting and
-//! disconnecting, and keeps the bars read at the last of them. That query asks only when Wi-Fi
-//! is connected; a refusal that came before any reading with the connection's details is tried
-//! again once, at the first such reading, when the consent has been given (`SignalRetry`).
-//!
-//! The calls to the service themselves are in `mujina_winutil::wlan`. Opened only while Steam's
-//! Wi-Fi fix is on, so that no other launcher's user is asked for the location permission.
+//! Wi-Fi state from the WLAN service, by change notification, fed straight to the Steam UI worker
+//! (ADR-0014). It runs on a thread of its own: since Windows 11 24H2 the first query may block on
+//! the location consent prompt, which must stall neither the agent's main thread nor that worker.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU8, Ordering};
@@ -73,7 +48,8 @@ pub fn follow(icon: SteamWifiIndicator) -> bool {
         .is_ok()
 }
 
-/// Decides which notifications wake the worker.
+/// Decides which notifications wake the worker. Drivers report signal quality every few seconds,
+/// so only a change of bars counts.
 struct Relevance {
     /// Bars of the last signal quality that woke the worker; 255 = none yet.
     last_bars: AtomicU8,
@@ -116,8 +92,7 @@ struct Worker {
 
 impl Worker {
     fn run(self) {
-        // Opened here: the client is used on this thread only, and it lives as long as the
-        // thread, which the agent never ends.
+        // Opened here: the client is used on this thread only and lives as long as the thread.
         let mut client = match WlanClient::open() {
             Ok(client) => client,
             Err(error) => {
@@ -128,9 +103,8 @@ impl Worker {
             }
         };
         let mut icon = Icon::new(self.icon);
-        // May block on the location consent prompt the first time; that is why it is on this
-        // thread. Before the registration, so that a consent given at the prompt counts for the
-        // signal strength's notifications too.
+        // May block on the location consent prompt. Before the registration, which Windows
+        // refuses for the signal strength until that consent is given.
         let detailed = icon.refresh(&client);
         let consent = location::consent();
         let followed = follow_changes(&mut client, &self.wake);
@@ -164,8 +138,7 @@ impl Worker {
 fn follow_changes(client: &mut WlanClient, wake: &Arc<Event>) -> Followed<Win32Error> {
     register_changes(
         |changes| {
-            // A fresh one for each registration: at worst the first signal after it wakes the
-            // worker for bars the icon shows already, and the query finds nothing to change.
+            // Fresh per registration: at worst one needless wake-up for bars already shown.
             let relevance = Relevance::new();
             let wake = Arc::clone(wake);
             client.notify(sources(changes), move |notification| {
@@ -178,9 +151,8 @@ fn follow_changes(client: &mut WlanClient, wake: &Arc<Event>) -> Followed<Win32E
     )
 }
 
-/// Whether the outcome of registering again is worth a line. A refusal again was said already,
-/// unless the permission was given since: then it points at the package, which the first line
-/// did not say.
+/// Whether registering again is worth a log line. A repeated refusal is not, unless the
+/// permission was given since: it then points at the package.
 fn news(followed: &Followed<Win32Error>, then: LocationConsent, now: LocationConsent) -> bool {
     match followed {
         Followed::ConnectionOnly { .. } => {
@@ -190,9 +162,8 @@ fn news(followed: &Followed<Win32Error>, then: LocationConsent, now: LocationCon
     }
 }
 
-/// Says which changes are followed. `consent` is the location permission as Windows' settings
-/// have it at the registration: with it, a refusal points at the package; without it, a refusal
-/// is expected and costs nothing.
+/// Logs which changes are followed. With the location permission granted, a refusal points at
+/// the package; without it, a refusal is expected.
 fn say_followed(followed: &Followed<Win32Error>, consent: LocationConsent) {
     match followed {
         Followed::All => {
@@ -204,8 +175,7 @@ fn say_followed(followed: &Followed<Win32Error>, consent: LocationConsent) {
                  signal strength changes ({refusal}) although location is allowed for Mujina: \
                  the package's wiFiControl capability is missing or not honoured"
             ),
-            // Only at info: the reading is then the generic one, whose quality is fixed, so the
-            // signal's changes could not move the icon, and its warning is logged already.
+            // Info only: the generic reading has a fixed quality, and its warning is logged.
             LocationConsent::DeniedForApp | LocationConsent::DeniedEverywhere => log::info!(
                 "Wi-Fi changes followed: connecting and disconnecting; without the location \
                  permission Windows refuses signal strength changes ({refusal}), which the \
@@ -235,7 +205,6 @@ fn refused(error: &Win32Error) -> bool {
     error.code == ERROR_ACCESS_DENIED
 }
 
-/// The WLAN service's notification sources for `changes`.
 fn sources(changes: WifiChanges) -> u32 {
     match changes {
         WifiChanges::Connection => WLAN_NOTIFICATION_SOURCE_ACM,

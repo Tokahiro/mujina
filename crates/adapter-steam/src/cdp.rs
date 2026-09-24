@@ -337,7 +337,6 @@ mod tests {
     fn a_reply_is_found_behind_any_number_of_events() {
         let port = fake_endpoint(|socket| {
             let id = request_id(socket);
-            // More than the 200 the client used to put up with.
             for _ in 0..500 {
                 let event = json!({ "method": "Page.frameNavigated", "params": {} });
                 socket.send(Message::text(event.to_string())).unwrap();
@@ -375,8 +374,7 @@ mod tests {
         );
     }
 
-    /// Steam closed a session that was kept open (its web helper restarted, say): a call over it
-    /// fails at once, and as a broken link, not as a call that may have got through.
+    /// A call over it fails at once, as a broken link, not a timeout: it cannot have got through.
     #[test]
     fn a_session_closed_at_the_other_end_is_a_broken_link() {
         let port = fake_endpoint(|_| {});

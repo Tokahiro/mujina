@@ -1,10 +1,6 @@
-//! Where Steam installed a game. Steam's libraries are listed in `libraryfolders.vdf` (their
-//! `path` values); each keeps a manifest `steamapps\appmanifest_<app id>.acf` per game it holds,
-//! whose `installdir` names the game's folder in `<library>\steamapps\common`.
-//!
-//! These are Steam's own files, in Valve's KeyValues text format, and no public API: as with the
-//! registry layout, this module is the one place that reads them. Plain file reading, so the
-//! rules are tested on Linux too.
+//! Where Steam installed a game: `libraryfolders.vdf` lists the libraries (`path`), each with a
+//! manifest `steamapps\appmanifest_<app id>.acf` per game, whose `installdir` names the game's
+//! folder in `<library>\steamapps\common`. Valve's KeyValues text files, no public API.
 
 use std::fs;
 use std::path::{Path, PathBuf};

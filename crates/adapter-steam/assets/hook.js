@@ -1,12 +1,7 @@
-// Injected into Steam's SharedJSContext via the CEF debug port.
-// Steam's Windows backend reports the WLAN device with an empty access-point list,
-// so the Big Picture header draws a grey Wi-Fi icon. This appends an active AP (SSID + signal)
-// to the connected wireless device in every device update that reaches Steam's UI: by wrapping
-// the UI's subscription when it is early enough, else by subscribing itself and feeding the
-// UI's network store (see adopt()).
-// A function of its version, which indicator.rs sets: it runs this as (<this file>)(version) and
-// checks window.__steamWifiHooked for the same number. What stopped its last attempt is kept in
-// window.__steamWifiError for the agent to report.
+// Injected into Steam's SharedJSContext via the CEF debug port. Steam's Windows backend reports
+// the WLAN device with an empty access-point list, so Big Picture draws a grey Wi-Fi icon. This
+// appends an active AP (SSID + signal) to every device update that reaches Steam's UI.
+// indicator.rs runs it as (<this file>)(version); window.__steamWifiError holds the last error.
 (function (version) {
   // Versioned: a context may still carry the hook of an older Mujina, which cannot adopt. Set
   // only once hook() has succeeded, so that a failed hook is tried again.
@@ -81,10 +76,9 @@
   window.__steamWifiRefire = function () {
     if (window.__steamWifiCb && window.__steamWifiLast) { try { window.__steamWifiCb(patch(window.__steamWifiLast)); } catch (e) {} }
   };
-  // When Steam was running before this script arrived, its UI has subscribed already and its
-  // callback can no longer be captured. That callback is a method of the UI's network store,
-  // though: subscribe ourselves and hand the store the patched data right after Steam handed it
-  // the unpatched. This is what makes reloading Steam's UI unnecessary.
+  // A UI that subscribed before this script arrived cannot have its callback captured, but the
+  // callback is a method of the UI's network store: subscribe too and hand the store the patched
+  // data right after Steam handed it the unpatched. This avoids reloading Steam's UI.
   function adopt() {
     if (window.__steamWifiCb || window.__steamWifiSubscribed) return true;
     const S = window.SystemNetworkStore;
@@ -98,10 +92,9 @@
     window.__steamWifiAdopted = true;
     return true;
   }
-  // SteamClient appears shortly after the document, the store a little later; give up after
-  // ~30 s instead of spinning forever. A step that throws is tried again on the next tick. The
-  // error kept is that of the last attempt only: one thrown early, while Steam was still setting
-  // up, must not make a run that then merely waited look failed.
+  // SteamClient appears shortly after the document, the store a little later: retry every tick
+  // for ~30 s. Only the last attempt's error is kept, so an early one does not make a run that
+  // merely waited look failed.
   let hooked = false;
   function settle() {
     window.__steamWifiError = null;
