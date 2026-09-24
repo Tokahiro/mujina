@@ -11,9 +11,9 @@ certificate, later with a CA-chained one of its own (ADR-0015).
 | | |
 |---|---|
 | Subject | `CN=Mujina` (the repository variable `MSIX_PUBLISHER`) |
-| Thumbprint (SHA-1) | *set with the 0.28.0 release* |
-| SHA-256 | *set with the 0.28.0 release* |
-| Valid | *set with the 0.28.0 release* |
+| Thumbprint (SHA-1) | `3602B663B634E9E0D145F002C7D162C673752CBB` |
+| SHA-256 | `9B9D9ACFC67AEA225F62C204F83BE7B8863C74DEAC4A29EF612F3B0549A6C233` |
+| Valid | 2026-09-24 to **2036-09-24** |
 | Key | RSA 3072, code signing only (EKU `1.3.6.1.5.5.7.3.3`), not a CA |
 | Private key | the secrets `SIGNING_PFX_BASE64` and `SIGNING_PFX_PASSWORD` of the `release` environment, used only by the release workflow's `sign` job ([how GitHub keeps them there](#gating-the-release-key)), and one encrypted backup the maintainer keeps offline |
 
@@ -135,8 +135,9 @@ release and never updates or outranks it, whatever its revision.
 | | |
 |---|---|
 | Subject | `CN=Mujina Dev` |
-| Thumbprint (SHA-1) | *set with the 0.28.0 release* |
-| Valid | *set with the 0.28.0 release* |
+| Thumbprint (SHA-1) | `CECCE0A92E87156BF0C1CA913270BA21AF03A25D` |
+| SHA-256 | `853F0C8E3962FA461AC16BF44AAC1F666CA7CFB69B594B8C79A61EA28EF4B55C` |
+| Valid | 2026-09-24 to 2036-09-24 |
 | Package family | `Mujina_zexajcypj3ggw` |
 | Private key | the repository secrets `DEV_SIGNING_PFX_BASE64` and `DEV_SIGNING_PFX_PASSWORD`, and nowhere else |
 
