@@ -81,9 +81,9 @@ impl WindowShape {
     /// Games in full screen, borderless or exclusive, have this shape. A desktop app that goes
     /// full screen itself (a video, F11) is the one case this cannot tell from a game.
     ///
-    /// Doubts count against a game: a wrong match only gets a shortcut that does nothing visible,
-    /// a miss leads to the launcher, which shows the game. Except: a process that cannot be opened
-    /// counts as not packaged, since a game's protected process may refuse to be opened.
+    /// Doubts count against a game: a wrong match sends a shortcut that does nothing visible,
+    /// while a miss leads to the launcher, which shows the game. The exception: a process that
+    /// cannot be opened counts as not packaged: a game's protected process may refuse to be opened.
     pub const fn looks_like_full_screen_game(self) -> bool {
         !self.framed
             && self.fills_monitor
@@ -97,9 +97,10 @@ impl WindowShape {
 /// The decision table of the "home" style button.
 ///
 /// The foreground wins over a running game: with the launcher UI in front, its menu is what the
-/// user is looking at. On the desktop, outside a game, the button keeps its own meaning: nothing
-/// is sent into a window not known to be the game. A missing menu or overlay never falls back to
-/// the button's own meaning (a device shortcut such as Show Desktop would leave the launcher).
+/// user is looking at. On the desktop, with another window in front, the button keeps its own
+/// meaning, a game running or not: nothing is sent into a window not known to be the game. A
+/// missing menu or overlay never falls back to the button's own meaning (a device shortcut such
+/// as Show Desktop would leave the launcher).
 pub const fn decide(
     foreground: ForegroundRole,
     game_running: bool,

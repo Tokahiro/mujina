@@ -303,8 +303,7 @@ impl<const N: usize> ChordSetMatcher<N> {
         self.settle();
     }
 
-    /// Stops waiting for events sent on: they did not come back, because another program's hook
-    /// took them before this one saw them.
+    /// Stops waiting for events sent on, for when they cannot come back through this hook.
     pub fn forget_in_flight(&mut self) {
         self.in_flight = 0;
         self.settle();
