@@ -1,10 +1,7 @@
-//! Asking the shell to open something.
+//! Asking the shell to open or run something.
 //!
-//! ShellExecute may hand its work to shell extensions that COM loads, so every call here runs
-//! with COM initialised as Microsoft asks (see [`com::Apartment`]). On a thread already in an
-//! STA that only counts one more use of it; on a thread in the multithreaded apartment the call
-//! goes ahead as it is, and `run_elevated` then launches within that apartment (it has to wait
-//! for the launch, without a message loop of its own).
+//! Every call runs in a COM STA, as Microsoft asks (see [`com::Apartment`]); on a thread in the
+//! multithreaded apartment it goes ahead in that one.
 
 use std::path::Path;
 use std::ptr::{null, null_mut};
@@ -55,8 +52,8 @@ pub fn run_elevated(
     // SAFETY: SHELLEXECUTEINFOW is plain data for which all-zero is a valid value.
     let mut info: SHELLEXECUTEINFOW = unsafe { std::mem::zeroed() };
     info.cbSize = u32::try_from(size_of::<SHELLEXECUTEINFOW>()).unwrap_or(0);
-    // This thread waits below instead of pumping messages, so the shell has to finish the
-    // launch before it returns: Microsoft asks for NOASYNC on a thread without a message loop.
+    // NOASYNC, as Microsoft asks for a thread without a message loop: the shell finishes the
+    // launch before it returns.
     info.fMask = SEE_MASK_NOCLOSEPROCESS | SEE_MASK_NOASYNC;
     info.hwnd = owner.map_or(null_mut(), WindowHandle::raw);
     info.lpVerb = verb.as_ptr();
@@ -75,8 +72,7 @@ pub fn run_elevated(
         return Err(ElevationError::from_code(error));
     }
     if info.hProcess.is_null() {
-        // Started, but through something that gave no process back (DDE, say): not the case for
-        // an executable, so say so rather than wait for nothing.
+        // Started through something without a process (DDE, say): nothing to wait for.
         return Err(ElevationError::Failed(Win32Error {
             call: "ShellExecuteExW",
             code: 0,

@@ -1,8 +1,7 @@
-//! Auto-reset kernel events: the way other threads and OS callbacks wake the main loop.
+//! Kernel events: how other threads and OS callbacks wake the main loop.
 //!
-//! Whoever hands an event to an OS callback owns it for as long as the callback may run, and
-//! gives the callback a pointer to the [`Event`], never its raw handle: a closed handle's value
-//! is reused, so a stale one could signal an unrelated object.
+//! An OS callback gets a pointer to an [`Event`] kept alive while the callback may run, never
+//! its raw handle: a closed handle's value is reused and could signal an unrelated object.
 
 use std::ffi::c_void;
 use std::os::windows::io::{AsHandle, AsRawHandle, BorrowedHandle, FromRawHandle, OwnedHandle};
@@ -106,7 +105,6 @@ mod tests {
         }
     }
 
-    /// A name no other test run uses at the same time.
     fn unique_name() -> String {
         static COUNT: AtomicU32 = AtomicU32::new(0);
         format!(

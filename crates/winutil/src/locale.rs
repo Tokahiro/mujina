@@ -1,5 +1,4 @@
-//! The languages Windows shows its user interface in, and the one an app of a few languages
-//! shows of them.
+//! Windows' display languages, and which of its own languages an app shows.
 
 use std::ptr::null_mut;
 
@@ -7,7 +6,7 @@ use windows_sys::Win32::Globalization::{GetUserPreferredUILanguages, MUI_LANGUAG
 
 /// The language an app shows, of those it has (`available`, the one its texts are written in
 /// first): `chosen` where the app has it, else the first of the Windows display languages it
-/// has, else the first. Both of Mujina's windows decide the same way.
+/// has, else the first.
 pub fn language(chosen: &str, available: &[&'static str]) -> &'static str {
     pick(chosen, &ui_languages(), available)
 }

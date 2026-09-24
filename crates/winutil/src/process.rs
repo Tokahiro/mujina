@@ -64,7 +64,6 @@ pub fn is_elevated() -> bool {
     ok != 0 && elevation.TokenIsElevated != 0
 }
 
-/// Whether a process with this id exists and has not exited.
 pub fn is_running(pid: u32) -> bool {
     let Some(process) = open(pid, PROCESS_QUERY_LIMITED_INFORMATION) else {
         return false;
@@ -94,9 +93,8 @@ pub fn image_name(pid: u32) -> Option<String> {
     image_name_of(&open(pid, PROCESS_QUERY_LIMITED_INFORMATION)?)
 }
 
-/// Full path of the process image, e.g. `C:\Program Files (x86)\Steam\steam.exe`. Read from
-/// what Windows keeps about the process (`PROCESS_QUERY_LIMITED_INFORMATION`), not from the
-/// process's memory.
+/// Full path of the process image, e.g. `C:\Program Files (x86)\Steam\steam.exe`. Needs only
+/// `PROCESS_QUERY_LIMITED_INFORMATION`, not access to the process's memory.
 pub fn image_path(pid: u32) -> Option<String> {
     image_path_of(&open(pid, PROCESS_QUERY_LIMITED_INFORMATION)?)
 }
@@ -113,15 +111,12 @@ pub fn running_from(mut matches: impl FnMut(&str) -> bool) -> Vec<u32> {
     ids
 }
 
-/// File name of the image of the process that `process` is a handle on, which needs
-/// `PROCESS_QUERY_LIMITED_INFORMATION` or more (QueryFullProcessImageNameW).
 fn image_name_of(process: &OwnedHandle) -> Option<String> {
     let path = image_path_of(process)?;
     path.rsplit(['\\', '/']).next().map(str::to_string)
 }
 
-/// Full path of the image of the process that `process` is a handle on; as for
-/// [`image_name_of`].
+/// `process` needs `PROCESS_QUERY_LIMITED_INFORMATION` or more.
 fn image_path_of(process: &OwnedHandle) -> Option<String> {
     let mut buffer = [0u16; 1024];
     let mut length = u32::try_from(buffer.len()).ok()?;
@@ -140,8 +135,8 @@ fn image_path_of(process: &OwnedHandle) -> Option<String> {
     Some(from_wide(&buffer[..length as usize]))
 }
 
-/// Shows `visit` the processes running right now, one by one, until it breaks. Shows none if
-/// Windows takes no snapshot of them.
+/// Calls `visit` for each running process until it breaks; for none if Windows takes no
+/// snapshot.
 fn walk_processes(mut visit: impl FnMut(&PROCESSENTRY32W) -> ControlFlow<()>) {
     // SAFETY: plain call; failure is reported as INVALID_HANDLE_VALUE.
     let snapshot = unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) };
@@ -218,14 +213,12 @@ impl ProcessWatch {
         self.since.elapsed()
     }
 
-    /// File name of the process image, e.g. `steam.exe`. Asked through the watch's own handle,
-    /// which keeps the process object, and with it the id, from being reused: the name is that of
-    /// the process watched, even if it has ended since.
+    /// File name of the process image, e.g. `steam.exe`. The watch's handle keeps the id from
+    /// being reused, so this is the watched process's name even after it has ended.
     pub fn image_name(&self) -> Option<String> {
         image_name_of(&self.handle)
     }
 
-    /// The exit code, once the process has exited.
     pub fn exit_code(&self) -> Option<u32> {
         let mut code: u32 = 0;
         // SAFETY: valid process handle with query access; `code` is writable.
@@ -240,23 +233,19 @@ impl AsHandle for ProcessWatch {
     }
 }
 
-/// `PROCESS_CREATION_DESKTOP_APP_BREAKAWAY_ENABLE_PROCESS_TREE`: "The process being created will
-/// create any child processes outside of the desktop app runtime environment" (Microsoft's
-/// UpdateProcThreadAttribute reference). Defined here rather than taken from the windows-sys
-/// feature that carries it.
+/// `PROCESS_CREATION_DESKTOP_APP_BREAKAWAY_ENABLE_PROCESS_TREE`: the child's own children start
+/// outside the desktop app runtime (see UpdateProcThreadAttribute). Defined here rather than
+/// taken from the windows-sys feature that carries it.
 const DESKTOP_APP_BREAKAWAY_ENABLE_PROCESS_TREE: u32 = 0x01;
 
-/// Starts `program` with `arguments` and does not wait for it, in a way that keeps what it
-/// starts in turn out of this process's package: a program that may remove the package it was
-/// started from (Mujina Setup, started by Mujina Settings) must not be one of that package's
-/// processes, which the removal stops.
+/// Starts `program` with `arguments` without waiting, so that what it starts in turn is outside
+/// this process's package: a program that may remove that package (Mujina Setup, started by
+/// Mujina Settings) must not be stopped by the removal.
 ///
-/// When this process runs from a package, the child is created with the desktop app policy
-/// `BREAKAWAY_ENABLE_PROCESS_TREE`, which puts the child's own children outside the package. The
-/// child itself should check [`crate::package::family_name`] and start itself once more if it
-/// still has the package's identity. `arguments` are plain words such as `--uninstall`: anything
-/// with a space or a quote is refused, so no quoting rules are involved. The child starts in the
-/// system directory, not in a folder it might want to delete.
+/// From a package, only the child's children break away; the child should check
+/// [`crate::package::family_name`] and start itself once more if it still has the package's
+/// identity. `arguments` must be plain words such as `--uninstall` (no space or quote), so no
+/// quoting is needed. The child starts in the system directory, not in a folder it might delete.
 pub fn spawn_outside_package(program: &Path, arguments: &[&str]) -> Result<(), Win32Error> {
     const INVALID_PARAMETER: Win32Error = Win32Error {
         call: "CreateProcessW",

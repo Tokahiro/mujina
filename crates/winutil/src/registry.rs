@@ -33,7 +33,6 @@ impl Hive {
     }
 }
 
-/// The error of a registry call: the call and the code it returned.
 pub type RegistryError = Win32Error;
 
 /// Reads a `REG_SZ` value. A missing key or value is `Ok(None)`.
@@ -254,7 +253,7 @@ impl Drop for OpenKey {
 /// [`RegistryWatch::rearm`] after every signal.
 #[derive(Debug)]
 pub struct RegistryWatch {
-    // Closed before the event, which it may still signal as it goes.
+    // Declared first, so that it is closed before the event it may still signal.
     key: OpenKey,
     event: Event,
 }
@@ -300,8 +299,7 @@ mod tests {
 
     const KEY: &str = r"Software\MujinaTests\registry";
 
-    /// A key of this test's own. Test runs of several checkouts may run at once, and on a shared
-    /// key one run's writes and deletes would reach the other's reads and watches.
+    /// A key of this test's own: test runs of several checkouts may run at once.
     fn unique_key(purpose: &str) -> String {
         static COUNT: AtomicU32 = AtomicU32::new(0);
         format!(

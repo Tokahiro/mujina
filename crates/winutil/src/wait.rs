@@ -1,9 +1,5 @@
 //! One thread's event loop, blocked in the kernel until a source's handle is signalled, the
-//! thread's message queue has input, or its one deadline passes.
-//!
-//! Whoever needs to be woken adds a [`WaitSource`]; the loop knows nothing of what the handles
-//! mean. There is no polling, no thread and no timer other than the deadline set with
-//! [`EventLoop::wake_at`].
+//! thread's message queue has input, or its one deadline passes. No polling, no extra thread.
 
 use std::fmt;
 use std::os::windows::io::{AsRawHandle, BorrowedHandle};
@@ -19,24 +15,21 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{
 
 /// How many sources one loop takes: MsgWaitForMultipleObjectsEx waits for at most
 /// MAXIMUM_WAIT_OBJECTS minus one handles.
-pub const MAX_WAIT_HANDLES: usize = 63; // MAXIMUM_WAIT_OBJECTS - 1
+pub const MAX_WAIT_HANDLES: usize = 63;
 
 /// Something an [`EventLoop`] waits for, and what it means when it happens.
 ///
-/// Waiting consumes the signal of an auto-reset event or a semaphore, and a mutex whose owner
-/// died is handed over like any other. It does not reset a manual-reset event, a process that
-/// has ended or a change notification: such a source resets, re-arms or withdraws its handle in
-/// [`signalled`](Self::signalled), or it is dispatched again in every round, and the sources
-/// after it in the list may never be.
+/// A wait consumes the signal of an auto-reset event or a semaphore, but not that of a
+/// manual-reset event, an ended process or a change notification. Such a source must reset,
+/// re-arm or withdraw its handle in [`signalled`](Self::signalled), or it is dispatched in every
+/// round and the sources after it may never be.
 pub trait WaitSource<E> {
     /// A short name, for logs and errors.
     fn name(&self) -> &'static str;
 
-    /// The handle to wait for, asked for again before every wait; `None` when there is nothing
-    /// to wait for right now. `&mut`, so that a source can open or replace what it waits for
-    /// here, say once another source's event has made it stale; like `signalled`, it must not
-    /// block. The handle needs SYNCHRONIZE access, must not also be another source's handle,
-    /// and must stay open while it is borrowed: closing it during a wait is undefined.
+    /// The handle to wait for, asked for before every wait; `None` for nothing right now. It may
+    /// open or replace the handle (hence `&mut`) but must not block. The handle needs SYNCHRONIZE
+    /// access, must not be another source's, and must stay open while it is borrowed.
     fn handle(&mut self) -> Option<BorrowedHandle<'_>>;
 
     /// The handle was signalled: consume or re-arm it, and add what it means to `out`. Must not
@@ -54,7 +47,6 @@ pub enum Flow {
 /// [`EventLoop::add`] was refused: the loop already holds [`MAX_WAIT_HANDLES`] sources.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct LoopFull {
-    /// The name of the source that was refused.
     pub rejected: &'static str,
 }
 
@@ -111,12 +103,10 @@ impl<'a, E> EventLoop<'a, E> {
 
     /// Runs until `handle` returns [`Flow::Exit`], or until waiting fails.
     ///
-    /// `pump` is called whenever the thread's message queue has input, and after every
-    /// signalled source too, so that a source signalled round after round cannot hold up the
-    /// queue: Windows documents which of several signalled handles it reports, but not where
-    /// the queue's input comes in that order. `pump` drains the queue, which is when hooks and
-    /// window procedures run, and adds what they noted; it may find nothing to do. Events reach
-    /// `handle` in the order they were added; the ones after an [`Flow::Exit`] are dropped.
+    /// `pump` drains the thread's message queue, where hooks and window procedures run, and adds
+    /// what they noted. It is called when the queue has input and also after every signalled
+    /// source, because Windows does not document where queue input ranks among signalled
+    /// handles. Events reach `handle` in order; those after a [`Flow::Exit`] are dropped.
     pub fn run(
         &mut self,
         pump: &mut dyn FnMut(&mut Vec<E>),
@@ -183,10 +173,8 @@ impl<'a, E> EventLoop<'a, E> {
         let count = u32::try_from(handles.len())
             .map_err(|_| format!("{} handles to wait for", handles.len()))?;
 
-        // SAFETY: `handles` holds `count` handles, each lent by a source that this loop owns
-        // and does not call again until the call returns. Safe code can lend only a handle the
-        // source keeps open until it is next used, so none of them is closed during the wait;
-        // the queue's input and the timeout need no memory.
+        // SAFETY: `handles` holds `count` handles, each borrowed from a source this loop owns and
+        // does not call again until the call returns, so none of them is closed during the wait.
         let woken = unsafe {
             MsgWaitForMultipleObjectsEx(
                 count,
@@ -245,7 +233,6 @@ impl<'a, E> EventLoop<'a, E> {
 enum Woken {
     /// The source at this index in the loop's list.
     Source(usize),
-    /// The thread's message queue has input.
     Input,
     Timeout,
 }
@@ -391,7 +378,6 @@ mod tests {
         unsafe { PeekMessageW(&raw mut message, null_mut(), WM_USER, WM_USER, PM_NOREMOVE) };
     }
 
-    /// Posts [`WM_TEST`] to this thread's queue.
     fn post() {
         // SAFETY: a null window posts to this thread's own queue; the message carries no
         // pointers.
@@ -442,9 +428,8 @@ mod tests {
         assert!(!is_signalled(&kept), "the wait took the auto-reset signal");
     }
 
-    /// Of two sources signalled together, the one added first goes first. The agent relies on
-    /// this: the launcher's own state source comes before its process, so a restart the launcher
-    /// reports is taken in before the old process's end.
+    /// The agent relies on this: it adds a launcher's state source before its process, so that
+    /// a restart is seen before the old process's end.
     #[test]
     fn sources_signalled_together_go_in_the_order_they_were_added() {
         let mut events = with_watchdog();
@@ -483,7 +468,7 @@ mod tests {
     #[test]
     fn the_last_deadline_set_fires_once_and_not_early() {
         let mut events = EventLoop::new();
-        // A waitable timer rather than the deadline, which is what is under test here.
+        // The watchdog is a waitable timer here, as the deadline is under test.
         // SAFETY: null attributes and a null name are valid; failure is a null handle.
         let raw = unsafe { CreateWaitableTimerW(null(), 1, null()) };
         assert!(!raw.is_null(), "{}", std::io::Error::last_os_error());
@@ -676,7 +661,7 @@ mod tests {
     }
 
     /// A source that opens its object again once told it is stale, as one that follows a
-    /// process does when another source reports that the process was started again.
+    /// restarted process does.
     struct Reopening {
         object: OwnedHandle,
         stale: Rc<Cell<bool>>,
