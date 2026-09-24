@@ -29,7 +29,8 @@ pub trait WaitSource<E> {
 
     /// The handle to wait for, asked for before every wait; `None` for nothing right now. It may
     /// open or replace the handle (hence `&mut`) but must not block. The handle needs SYNCHRONIZE
-    /// access, must not be another source's, and must stay open while it is borrowed.
+    /// access, must not be another source's, and must stay open while it is borrowed: closing it
+    /// during a wait is undefined.
     fn handle(&mut self) -> Option<BorrowedHandle<'_>>;
 
     /// The handle was signalled: consume or re-arm it, and add what it means to `out`. Must not
@@ -104,9 +105,10 @@ impl<'a, E> EventLoop<'a, E> {
     /// Runs until `handle` returns [`Flow::Exit`], or until waiting fails.
     ///
     /// `pump` drains the thread's message queue, where hooks and window procedures run, and adds
-    /// what they noted. It is called when the queue has input and also after every signalled
-    /// source, because Windows does not document where queue input ranks among signalled
-    /// handles. Events reach `handle` in order; those after a [`Flow::Exit`] are dropped.
+    /// what they noted; it may find nothing to do. It is called when the queue has input and also
+    /// after every signalled source, because Windows does not document where queue input ranks
+    /// among signalled handles. Events reach `handle` in order; those after a [`Flow::Exit`] are
+    /// dropped.
     pub fn run(
         &mut self,
         pump: &mut dyn FnMut(&mut Vec<E>),
