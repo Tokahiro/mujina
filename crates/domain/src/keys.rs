@@ -2,8 +2,7 @@
 
 use core::fmt;
 
-/// A virtual-key code. The numeric values follow the Windows `VK_*` table so adapters can pass
-/// them through unchanged, but nothing in the domain depends on Windows.
+/// A virtual-key code, numbered as the Windows `VK_*` table so adapters pass it through unchanged.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct VirtualKey(pub u16);
 
@@ -99,10 +98,8 @@ impl fmt::Display for VirtualKey {
 
 pub const MAX_CHORD_KEYS: usize = 4;
 
-/// Keys pressed in order and released in reverse order, e.g. `LCTRL+1`.
-///
-/// Only left-hand modifiers are nameable: games and Steam's overlay sample keyboard state per
-/// frame, and several of them only look at the left-hand variants.
+/// Keys pressed in order and released in reverse order, e.g. `LCTRL+1`. Only left-hand modifiers
+/// are nameable: several games and Steam's overlay only look at those.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct KeyChord {
     keys: [VirtualKey; MAX_CHORD_KEYS],
@@ -191,9 +188,7 @@ impl fmt::Display for KeyChord {
 /// How long synthesized chords are held. Too short and frame-sampled input misses them.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct HoldTiming {
-    /// Pause after each modifier press.
     pub modifier_gap_ms: u16,
-    /// How long the final key stays down.
     pub key_hold_ms: u16,
 }
 

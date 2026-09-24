@@ -1,6 +1,5 @@
-//! Writing `config.toml`: edits that keep the user's comments and layout, checked by the same
-//! parser that reads the file, so nothing is stored that would be ignored when read. One writer
-//! at a time, and the file is replaced whole.
+//! Writing `config.toml`: edits keep the user's comments and layout, and what the reader would
+//! ignore is refused. One writer at a time; the file is replaced whole.
 
 use std::fs::{File, OpenOptions, TryLockError};
 use std::io::{self, Write as _};
@@ -16,14 +15,12 @@ use toml_edit::{Array, DocumentMut, Item, Table, Value};
 
 use crate::{ConfigFile, file, template};
 
-/// How long a change waits for another one to be stored. Mujina Settings stores on its window's
-/// thread, which a stuck writer must not hold up for good.
+/// Mujina Settings stores on its window's thread, which a stuck writer must not hold up for good.
 const LOCK_WAIT: Duration = Duration::from_secs(2);
 
 impl SettingsStore for ConfigFile {
     fn apply(&self, changes: &[SettingChange]) -> PortResult<()> {
-        // Held from the read to the rename, so Mujina Settings and mujinactl never work on the
-        // file at once and neither loses the other's change. Dropping the handle releases it.
+        // Held from read to rename, so neither Mujina Settings nor mujinactl loses a change.
         let _lock = lock(&self.path, LOCK_WAIT)?;
         let before = match std::fs::read_to_string(&self.path) {
             Ok(text) => text,
@@ -48,8 +45,7 @@ impl SettingsStore for ConfigFile {
 /// `config.toml` as stored at one moment, read and parsed once however many keys are asked.
 #[derive(Debug)]
 pub struct StoredSnapshot {
-    /// `None` without a file, or with one that is no TOML: then every key relies on its
-    /// default.
+    /// `None` without a file or with one that is no TOML: every key then has its default.
     document: Option<DocumentMut>,
 }
 
@@ -282,13 +278,12 @@ fn notes_of(
     notes
 }
 
-/// `config.toml.lock` beside the file. Not the file itself: every write replaces that.
+/// Not the file itself: every write replaces that.
 fn lock_path(path: &Path) -> PathBuf {
     path.with_extension("toml.lock")
 }
 
-/// Opens the lock file, which stays empty. With write access, since std leaves open whether a
-/// handle without it can be locked.
+/// With write access: std leaves open whether a handle without it can be locked.
 pub(crate) fn lock_file(path: &Path) -> io::Result<File> {
     OpenOptions::new()
         .read(true)
@@ -459,11 +454,8 @@ fn assignment<'a>(line: &'a str, leaf: &str) -> Option<&'a str> {
         .and_then(|rest| rest.strip_prefix('='))
 }
 
-/// Replaces the first line of the section named by `tables` for which `replace` has an answer.
-/// `replace` sees the line without its indentation and line ending, which are kept.
-///
-/// A commented-out header (the template's non-default launchers) ends the section above it; a
-/// change to that commented section adds the real one at the end of the file instead.
+/// Replaces the first line in section `tables` that `replace` answers; it sees the line trimmed.
+/// A commented-out header, as the template's other launchers have, ends the section above it.
 fn replace_line(
     text: &str,
     tables: &[&str],
@@ -516,7 +508,6 @@ mod tests {
     use mujina_application::launcher::OptionTable;
     use mujina_application::settings::{Settings, SettingsSource};
 
-    /// The template with the test's launchers.
     static TEMPLATE: LazyLock<String> = LazyLock::new(|| template(&LAUNCHERS));
 
     fn onexplayer() -> SystemIdentity {
@@ -548,7 +539,6 @@ mod tests {
         )
     }
 
-    /// Names in `dir` besides `config.toml` and its lock file.
     fn leftovers(dir: &Path) -> Vec<String> {
         std::fs::read_dir(dir)
             .unwrap()
@@ -571,7 +561,6 @@ mod tests {
         assert!(line.starts_with("launch_screen = true"), "{line}");
         assert!(line.contains("# black screen"), "{line}");
         assert!(!text.contains("# launch_screen"), "{text}");
-        // Everything else is untouched.
         assert!(text.contains("# button_remap = true"));
         assert_eq!(text.lines().count(), TEMPLATE.lines().count());
     }
@@ -623,12 +612,10 @@ mod tests {
         assert!(line_of(&unset, "game_start_screen").is_none(), "{unset}");
         let line = line_of(&unset, "# game_start_screen").unwrap();
         assert!(line.contains("# keep the launcher on its"), "{line}");
-        // The neighbours and their comments are still there.
         assert!(unset.contains("# button_remap = true"), "{unset}");
         assert_eq!(unset.lines().count(), TEMPLATE.lines().count());
         assert!(settings_of(&unset).game_start_screen);
 
-        // Set again after unset: uncommented once more, not added twice.
         let again = edit(
             &unset,
             &[SettingChange::set(
@@ -828,7 +815,6 @@ mod tests {
             let loaded = config.load();
             assert_eq!(loaded.settings.launcher.id, "steam", "{back:?}");
             assert!(loaded.notes.is_empty(), "{back:?}: {:?}", loaded.notes);
-            // And away again, and back once more.
             config.apply(&[to("generic")]).unwrap();
             assert_eq!(config.load().settings.launcher.id, "generic");
             config.apply(&[to("steam")]).unwrap();
@@ -856,7 +842,6 @@ mod tests {
             stored.stored("launcher.menu"),
             Some(SettingValue::Text("F1".into()))
         );
-        // Commented out in the template: the default applies, nothing is stored.
         assert_eq!(stored.stored("features.button_remap"), None);
         assert_eq!(stored.stored("device.button.key"), None);
         assert_eq!(
@@ -868,7 +853,6 @@ mod tests {
     #[test]
     fn a_snapshot_answers_as_stored_does_with_one_read() {
         let (config, dir) = temp_config("snapshot");
-        // Without a file, every key relies on its default.
         assert_eq!(config.snapshot().stored("timing.key_hold_ms"), None);
         config
             .apply(&[
@@ -898,7 +882,6 @@ mod tests {
             Some(SettingValue::TextList(vec!["--a".into(), "b c".into()]))
         );
 
-        // It keeps what it read; a later change is for the next one.
         config
             .apply(&[SettingChange::set(
                 "timing.key_hold_ms",
@@ -1011,10 +994,8 @@ mod tests {
         let loaded = config.load();
         assert!(loaded.notes.is_empty(), "{:?}", loaded.notes);
         assert_eq!(config.stored("device.button.injected_only"), None);
-        // The profile's button again.
         assert_eq!(loaded.settings.device.id.as_deref(), Some("onexplayer"));
 
-        // Written by hand, it blocks no other change and is not set again.
         std::fs::write(config.path(), "[device.button]\ninjected_only = false\n").unwrap();
         config
             .apply(&[SettingChange::set(
@@ -1069,7 +1050,6 @@ mod tests {
                 SettingValue::Integer(70),
             )])
             .unwrap();
-        // Only the writer's own leftovers go.
         assert_eq!(leftovers(&dir), ["notes.new"]);
         std::fs::remove_dir_all(dir).unwrap();
     }
@@ -1094,7 +1074,6 @@ mod tests {
         let held = lock_file(config.path()).unwrap();
         held.lock().unwrap();
 
-        // While the lock is held, the template is left to the writer holding it.
         config.ensure_template();
         assert!(!config.path().exists());
 

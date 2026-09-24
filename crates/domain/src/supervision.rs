@@ -1,12 +1,10 @@
 //! What to do when the launcher goes away while the console experience is still on.
 
-/// User-selectable reaction to the launcher exiting.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ExitPolicy {
     #[default]
     RelaunchOnCrash,
     RelaunchAlways,
-    /// Leave it to the user.
     Nothing,
 }
 
@@ -21,8 +19,7 @@ impl ExitPolicy {
     }
 }
 
-/// A launcher that dies sooner than this after watching began is not relaunched: it would only
-/// loop.
+/// A launcher that dies sooner after watching began is not relaunched: it would only loop.
 pub const MIN_UPTIME_SECS: u64 = 30;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

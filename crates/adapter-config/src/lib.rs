@@ -1,5 +1,4 @@
-//! Settings from `config.toml`. Launcher and device sections are read against their descriptors;
-//! this crate names no launcher or device itself.
+//! Settings from `config.toml`, whose launcher and device sections are read against descriptors.
 
 #[cfg(test)]
 mod fakes;
@@ -18,7 +17,6 @@ pub use store::{StoredSnapshot, parse_value};
 
 const FILE_NAME: &str = "config.toml";
 
-/// The template up to the launchers' own sections, which follow `[launcher]`.
 const TEMPLATE_HEAD: &str = r#"# Mujina configuration. Everything is optional; remove the leading '#' to change a value,
 # or use `mujinactl config set section.name value`, which checks the value first and applies
 # it at once. Changes made here by hand take effect the next time Xbox mode is entered.
@@ -35,7 +33,6 @@ const TEMPLATE_HEAD: &str = r#"# Mujina configuration. Everything is optional; r
 # overlay = "LSHIFT+TAB"          # default: read from the launcher's settings
 "#;
 
-/// The template after the launchers' own sections.
 const TEMPLATE_TAIL: &str = r#"
 [device]
 # profile = "auto"          # "auto", "none", or the id of a device Mujina has
@@ -57,8 +54,7 @@ const TEMPLATE_TAIL: &str = r#"
 # language = "auto"         # of Mujina Settings: "auto" follows Windows, or "en", "de"
 "#;
 
-/// The commented template of `config.toml`: Mujina's own settings, with each launcher's
-/// section after `[launcher]`.
+/// The commented-out template of `config.toml`, with each launcher's section after `[launcher]`.
 pub fn template(launchers: &Launchers) -> String {
     let mut text = TEMPLATE_HEAD.to_string();
     for launcher in launchers.all {
@@ -72,9 +68,7 @@ pub fn template(launchers: &Launchers) -> String {
 pub struct ConfigFile {
     path: PathBuf,
     system: SystemIdentity,
-    /// The launchers compiled in, whose sections the file may hold.
     launchers: Launchers,
-    /// The devices compiled in, which `[device]` chooses among and whose sections it may hold.
     devices: Devices,
 }
 
@@ -96,16 +90,14 @@ impl ConfigFile {
 
     /// Writes a commented template unless a configuration already exists.
     pub fn ensure_template(&self) {
-        // A change holding the lock writes the file anyway. Holding it here keeps a change from
-        // reading a half-written template.
+        // Keeps a change from reading a half-written template; one holding the lock writes anyway.
         let lock = store::lock_file(&self.path);
         if let Ok(lock) = &lock
             && matches!(lock.try_lock(), Err(TryLockError::WouldBlock))
         {
             return;
         }
-        // `create_new` never replaces a file another process has just written. Errors are
-        // ignored: without a template the defaults still apply.
+        // Errors are ignored: without a template the defaults still apply.
         if let Ok(mut file) = OpenOptions::new()
             .write(true)
             .create_new(true)
@@ -124,8 +116,7 @@ impl ConfigFile {
     }
 
     /// The file read once, for asking many keys; each
-    /// [`SettingsStore::stored`](mujina_application::settings::SettingsStore::stored) reads it
-    /// again.
+    /// [`SettingsStore::stored`](mujina_application::settings::SettingsStore::stored) rereads it.
     pub fn snapshot(&self) -> StoredSnapshot {
         StoredSnapshot::read(&self.path)
     }
@@ -135,7 +126,6 @@ impl SettingsSource for ConfigFile {
     fn load(&self) -> LoadedSettings {
         let mut notes = Vec::new();
         let parsed = match std::fs::read_to_string(&self.path) {
-            // A key that is wrong costs that key alone; text that is no TOML costs the file.
             Ok(text) => {
                 file::parse(&text, &self.launchers, &self.devices).unwrap_or_else(|error| {
                     notes.push(format!(

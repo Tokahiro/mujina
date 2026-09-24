@@ -1,5 +1,4 @@
-//! The innermost ring of Mujina: plain data and pure decision logic. `no_std`, no `unsafe` and no
-//! dependencies, so it cannot do I/O or call the OS. Outer rings depend on it, never the reverse.
+//! The innermost ring of Mujina: plain data and pure decision logic, no I/O, no dependencies.
 
 #![no_std]
 #![forbid(unsafe_code)]
