@@ -7,6 +7,12 @@ All notable changes are listed here. The format follows
 Mujina is published in a new repository, whose history starts during the development of 0.28.0.
 The versions before 0.28.0 are described here but not published any more.
 
+## [Unreleased]
+
+### Fixed
+
+- Mujina Settings, Status: long texts in the tiles wrap instead of being cut off.
+
 ## [0.28.0] - 2026-09-24
 
 ### Breaking

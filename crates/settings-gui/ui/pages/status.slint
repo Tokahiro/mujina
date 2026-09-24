@@ -70,7 +70,7 @@ component TileLabel inherits HorizontalLayout {
         text: root.text;
         font-size: 14 * Theme.u;
         color: Theme.muted;
-        overflow: elide;
+        wrap: word-wrap;
     }
 }
 
@@ -98,13 +98,13 @@ component Tile inherits Rectangle {
             font-size: Theme.row-title;
             font-weight: 500;
             color: Theme.text;
-            overflow: elide;
+            wrap: word-wrap;
         }
         Text {
             text: root.note;
             font-size: 14 * Theme.u;
             color: Theme.muted;
-            overflow: elide;
+            wrap: word-wrap;
         }
     }
 }
@@ -371,7 +371,7 @@ export component StatusPage inherits Rectangle {
                                     font-family: Theme.mono;
                                     font-size: Theme.body;
                                     color: Theme.text-soft;
-                                    overflow: elide;
+                                    wrap: char-wrap;
                                 }
                             }
                             VerticalLayout {
