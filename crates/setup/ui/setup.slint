@@ -1,0 +1,715 @@
+// Mujina Setup: says what it found and what it is going to do, does it step by step, and says how
+// it went. After design_handoff_mujina_settings/SETUP.md, with the colours, icons, mark and
+// switch of Mujina Settings (ui/ at the top of the repository).
+//
+// The window shows at once and says it is checking the device; Rust sends what it found. Rust
+// passes states and data, never sentences: every text is worded here.
+//
+// Tab moves between the home-app row and the main button (when done: Open Mujina Settings and
+// Close; when stopped: Try again, Copy details, Open log if there is one, and Close); Enter or
+// Space presses.
+// Slint's own Tab order does not reach elements inside `if`, so each focusable element passes Tab
+// on itself.
+
+import { Theme } from "@mujina/theme.slint";
+import { Icons } from "@mujina/icons.slint";
+import { Mark } from "@mujina/mark.slint";
+import { Switch } from "@mujina/switch.slint";
+import { Card, FocusFrame, Spinner } from "@mujina/controls.slint";
+
+import "@mujina/assets/fonts/Inter-Regular.ttf";
+import "@mujina/assets/fonts/Inter-Medium.ttf";
+
+// What a step does. Preparing the machine is one step with one prompt, named after what it still
+// has to do; putting the package on the device is named after what that is.
+export enum StepKind {
+    check-device,
+    prepare,
+    trust-certificate,
+    turn-on-developer-mode,
+    install-package,
+    update-package,
+    reinstall-package,
+    replace-package,
+    make-home-app,
+    arrange-cleanup,
+    give-home-app-back,
+    remove-package,
+    forget-created-files,
+    remove-cleanup
+}
+
+// How far a step is.
+export enum StepState {
+    todo,
+    running,
+    done,
+    failed
+}
+
+export struct StepRow {
+    kind: StepKind,
+    state: StepState,
+}
+
+// Where the whole run is: finding out about the device, before the run, under way, or how it
+// ended.
+export enum SetupPhase {
+    checking,
+    ready,
+    running,
+    done,
+    failed
+}
+
+// What installing here is, as found: the package goes on new, over an older, the same or a newer
+// version; or it cannot (a build without a package, or Windows too old).
+export enum Situation {
+    install,
+    update,
+    reinstall,
+    downgrade,
+    no-package,
+    windows-too-old
+}
+
+// Why a step failed. `code` is the code Windows or the administrator part gave ("" for none), and
+// `detail` what was said, in English: both for a bug report, below the sentence.
+export enum FailureKind {
+    declined,
+    elevation-failed,
+    elevated-arguments,
+    developer-mode,
+    certificate,
+    preparing,
+    no-package,
+    windows-too-old,
+    newer-installed,
+    same-version-differs,
+    not-trusted,
+    sideloading-off,
+    blocked-by-policy,
+    in-use,
+    disk-full,
+    conflict,
+    damaged,
+    deployment-failed,
+    not-installed,
+    home-app,
+    sign-in-check,
+    files,
+    other
+}
+
+export struct Failure {
+    kind: FailureKind,
+    code: string,
+    detail: string,
+}
+
+// The window's buttons: outlined, 40 px high. `busy` shows a spinner and takes no presses.
+component SetupButton inherits FocusFrame {
+    in property <string> text;
+    in property <image> icon;
+    in property <bool> busy;
+    in property <color> outline: Theme.accent;
+    in property <length> outline-width: 1.5px;
+    in property <color> ink: Theme.accent-focus;
+    in property <color> hover-fill: Theme.accent-12;
+    // Raised by one to take the focus, for a button inside an `if`.
+    in property <int> focus-request;
+    callback clicked();
+    // Tab or Shift+Tab on this button.
+    callback tab();
+    forward-focus: keys;
+    height: 40px;
+    min-width: 96px;
+    border-radius: 9px;
+    opacity: !root.enabled ? 0.45 : root.busy ? 0.55 : 1;
+    focused: keys.has-focus;
+    pressed: touch.pressed;
+    rest: touch.has-hover && root.active ? root.hover-fill : transparent;
+    // Only the outline and the glow show the focus.
+    focus-fill: root.rest;
+    press-fill: Theme.accent-28;
+    focus-border: 2px;
+    rest-border: root.outline;
+    rest-border-width: root.outline-width;
+    glow: 24px;
+    accessible-role: button;
+    accessible-label: root.text;
+    accessible-enabled: root.active;
+    accessible-action-default => {
+        root.clicked();
+    }
+    property <bool> active: root.enabled && !root.busy;
+
+    changed focus-request => {
+        keys.focus();
+    }
+
+    HorizontalLayout {
+        padding-left: 20px;
+        padding-right: 20px;
+        spacing: 9px;
+        alignment: center;
+        if root.busy: VerticalLayout {
+            alignment: center;
+            Spinner {
+                size: 15px;
+                tint: root.ink;
+            }
+        }
+        if !root.busy && root.icon.width > 0: VerticalLayout {
+            alignment: center;
+            Image {
+                width: 17px;
+                height: 17px;
+                source: root.icon;
+                colorize: root.ink;
+            }
+        }
+        Text {
+            text: root.text;
+            font-size: 15px;
+            font-weight: 500;
+            color: root.ink;
+            vertical-alignment: center;
+        }
+    }
+    touch := TouchArea {
+        enabled: root.active;
+        clicked => {
+            root.clicked();
+        }
+    }
+    keys := FocusScope {
+        key-pressed(event) => {
+            if (event.text == Key.Return || event.text == Key.Space) {
+                if (root.active) {
+                    root.clicked();
+                }
+                return accept;
+            }
+            if (event.text == Key.Tab || event.text == Key.Backtab) {
+                root.tab();
+                return accept;
+            }
+            reject
+        }
+    }
+}
+
+// The home-app choice: the whole row is the target and takes the focus.
+component SwitchRow inherits FocusFrame {
+    in property <string> text;
+    in property <bool> on;
+    in property <int> focus-request;
+    callback toggled();
+    callback tab();
+    forward-focus: keys;
+    focused: keys.has-focus;
+    pressed: touch.pressed;
+    rest: Theme.card;
+    focus-fill: Theme.card;
+    press-fill: Theme.card-pressed;
+    focus-border: 2px;
+    rest-border: Theme.line;
+    glow: 22px;
+    accessible-role: switch;
+    accessible-label: root.text;
+    accessible-checkable: true;
+    accessible-checked: root.on;
+    accessible-action-default => {
+        root.toggled();
+    }
+
+    changed focus-request => {
+        keys.focus();
+    }
+
+    HorizontalLayout {
+        padding-top: 12px;
+        padding-bottom: 12px;
+        padding-left: 14px;
+        padding-right: 14px;
+        spacing: 14px;
+        VerticalLayout {
+            alignment: center;
+            Image {
+                width: 20px;
+                height: 20px;
+                source: Icons.home;
+                colorize: Theme.muted;
+            }
+        }
+        Text {
+            horizontal-stretch: 1;
+            text: root.text;
+            font-size: 15px;
+            font-weight: 500;
+            color: Theme.text;
+            vertical-alignment: center;
+            wrap: word-wrap;
+        }
+        VerticalLayout {
+            alignment: center;
+            Switch {
+                width: 46px;
+                height: 26px;
+                on: root.on;
+            }
+        }
+    }
+    touch := TouchArea {
+        clicked => {
+            keys.focus();
+            root.toggled();
+        }
+    }
+    keys := FocusScope {
+        key-pressed(event) => {
+            if (event.text == Key.Return || event.text == Key.Space) {
+                root.toggled();
+                return accept;
+            }
+            if (event.text == Key.Tab || event.text == Key.Backtab) {
+                root.tab();
+                return accept;
+            }
+            reject
+        }
+    }
+}
+
+// One step and how far it is.
+
+// One step and how far it is.
+component StepItem inherits Rectangle {
+    in property <StepRow> step;
+    property <StepKind> kind: root.step.kind;
+    property <string> label: root.kind == StepKind.check-device ? @tr("Check that this device can run Mujina") : root.kind == StepKind.prepare ? @tr("Turn on Developer Mode and trust Mujina's certificate (one prompt)") : root.kind == StepKind.trust-certificate ? @tr("Trust Mujina's certificate (one prompt)") : root.kind == StepKind.turn-on-developer-mode ? @tr("Turn on Developer Mode (one prompt)") : root.kind == StepKind.install-package ? @tr("Install Mujina") : root.kind == StepKind.update-package ? @tr("Update Mujina") : root.kind == StepKind.reinstall-package ? @tr("Install Mujina again") : root.kind == StepKind.replace-package ? @tr("Replace the newer Mujina with this version") : root.kind == StepKind.make-home-app ? @tr("Make Mujina the home app of Xbox mode") : root.kind == StepKind.arrange-cleanup ? @tr("Arrange for the home app setting to be given back if Mujina is ever removed") : root.kind == StepKind.give-home-app-back ? @tr("Give the home app setting back") : root.kind == StepKind.remove-package ? @tr("Remove Mujina") : root.kind == StepKind.forget-created-files ? @tr("Remove the files Mujina placed in other programs' folders") : @tr("Remove what the installer left");
+    border-radius: 8px;
+    background: root.step.state == StepState.running ? #9184d91a : root.step.state == StepState.failed ? #de6a6014 : transparent;
+    animate background { duration: 200ms; }
+    HorizontalLayout {
+        padding-top: 7px;
+        padding-bottom: 7px;
+        padding-left: 12px;
+        padding-right: 12px;
+        spacing: 12px;
+        Rectangle {
+            width: 22px;
+            min-height: 21px;
+            if root.step.state == StepState.todo: Rectangle {
+                width: 15px;
+                height: 15px;
+                border-radius: 7.5px;
+                border-width: 1.5px;
+                border-color: #4a4d5c;
+            }
+            if root.step.state == StepState.running: Spinner { }
+            if root.step.state == StepState.done || root.step.state == StepState.failed: Image {
+                width: 21px;
+                height: 21px;
+                source: root.step.state == StepState.done ? Icons.ok : Icons.problem;
+                colorize: root.step.state == StepState.done ? Theme.ok : Theme.problem;
+            }
+        }
+        Text {
+            horizontal-stretch: 1;
+            text: root.label;
+            font-size: 14.5px;
+            font-weight: root.step.state == StepState.running ? 500 : 400;
+            color: root.step.state == StepState.todo ? Theme.muted : Theme.text;
+            vertical-alignment: center;
+            wrap: word-wrap;
+        }
+    }
+}
+
+// How it went, under the steps. Fades in and rises 6 px. A failure has a heading, and below its
+// sentence what Windows said, for a report.
+component Result inherits Rectangle {
+    in property <bool> failed;
+    in property <string> heading;
+    in property <string> text;
+    in property <string> detail;
+    property <bool> shown;
+    init => {
+        self.shown = true;
+    }
+    border-radius: 10px;
+    border-width: 1px;
+    background: root.failed ? #2c2222 : #1f2a26;
+    border-color: root.failed ? #de6a6073 : #52c08d66;
+    opacity: root.shown ? 1 : 0;
+    animate opacity { duration: Theme.fade; }
+    VerticalLayout {
+        padding-top: root.shown ? 13px : 19px;
+        padding-bottom: root.shown ? 13px : 7px;
+        padding-left: 16px;
+        padding-right: 16px;
+        animate padding-top, padding-bottom { duration: Theme.fade; }
+        HorizontalLayout {
+            spacing: 12px;
+            VerticalLayout {
+                alignment: root.failed ? start : center;
+                Image {
+                    width: 22px;
+                    height: 22px;
+                    source: root.failed ? Icons.problem : Icons.ok;
+                    colorize: root.failed ? Theme.problem : Theme.ok;
+                }
+            }
+            VerticalLayout {
+                horizontal-stretch: 1;
+                spacing: 3px;
+                alignment: center;
+                if root.failed: Text {
+                    text: root.heading;
+                    font-size: 15px;
+                    font-weight: 500;
+                    color: Theme.text;
+                    wrap: word-wrap;
+                }
+                Text {
+                    text: root.text;
+                    font-size: root.failed ? 14px : 15px;
+                    font-weight: root.failed ? 400 : 500;
+                    color: root.failed ? #e4c9c6 : Theme.text;
+                    wrap: word-wrap;
+                }
+                if root.failed && root.detail != "": Text {
+                    text: root.detail;
+                    font-size: 12.5px;
+                    color: Theme.muted;
+                    wrap: word-wrap;
+                }
+            }
+        }
+    }
+}
+
+// A line of fine print before the steps: an icon and a sentence.
+component Note inherits HorizontalLayout {
+    in property <image> icon;
+    in property <string> text;
+    spacing: 12px;
+    VerticalLayout {
+        alignment: start;
+        padding-top: 1px;
+        Image {
+            width: 18px;
+            height: 18px;
+            source: root.icon;
+            colorize: Theme.muted;
+        }
+    }
+    Text {
+        horizontal-stretch: 1;
+        text: root.text;
+        font-size: 13.5px;
+        color: Theme.muted;
+        wrap: word-wrap;
+    }
+}
+
+// The secondary buttons: a neutral outline.
+component PlainButton inherits SetupButton {
+    outline: #e9e9ed38;
+    outline-width: 1px;
+    ink: Theme.text-soft;
+    hover-fill: #e9e9ed12;
+    press-fill: #e9e9ed1f;
+}
+
+export component SetupWindow inherits Window {
+    title: @tr("Mujina Setup");
+    icon: Icons.app;
+    default-font-family: "Inter";
+    background: #131521;
+    preferred-width: 640px;
+    // Room for the longest plan (five steps) in German without scrolling.
+    preferred-height: 620px;
+    min-width: 520px;
+    min-height: 460px;
+    forward-focus: action;
+
+    // The version of the package carried, as the heading shows it.
+    in property <string> version;
+    in property <bool> uninstall;
+    in property <SetupPhase> phase: SetupPhase.checking;
+    in property <Situation> situation;
+    // The version installed now, for an update or a newer one.
+    in property <string> installed-version;
+    // Windows' build number, for a Windows too old.
+    in property <string> os-build;
+    // Developer Mode is on and the certificate trusted: installing asks for no administrator
+    // rights, so the window does not say it will.
+    in property <bool> prepared;
+    // Mujina's agent runs now, and installing stops it.
+    in property <bool> stops-agent;
+    in property <[StepRow]> steps;
+    // Why the step that failed failed.
+    in property <Failure> failure;
+    in property <bool> make-home-app: true;
+    // Setup writes a log (not when it runs as administrator without --log).
+    in property <bool> has-log: true;
+
+    callback begin();
+    callback toggle-home-app();
+    callback open-settings();
+    callback try-again();
+    callback copy-details();
+    callback open-log();
+    callback quit();
+
+    property <bool> ready: root.phase == SetupPhase.ready;
+    // Whether the button would do anything now.
+    property <bool> can-begin: root.uninstall || (root.situation != Situation.no-package && root.situation != Situation.windows-too-old);
+    property <int> row-focus;
+    property <int> settings-focus;
+    property <int> again-focus;
+    property <int> copy-focus;
+    property <int> log-focus;
+    // How it went, once it has; on failure the reason, as a sentence.
+    property <string> outcome: root.phase == SetupPhase.done ? root.done-text() : root.phase == SetupPhase.failed ? root.failure-text() : "";
+
+    pure function heading-text() -> string {
+        if (root.uninstall) {
+            return @tr("Remove Mujina from this device.");
+        }
+        if (root.phase == SetupPhase.checking) {
+            return @tr("Checking this device…");
+        }
+        root.situation == Situation.update ? @tr("Update Mujina {} to this version.", root.installed-version) : root.situation == Situation.reinstall ? @tr("This version is installed already. Install it again?") : root.situation == Situation.downgrade ? @tr("A newer Mujina ({}) is installed. Replace it with this version?", root.installed-version) : root.situation == Situation.no-package ? @tr("This build of Mujina Setup carries no package.") : root.situation == Situation.windows-too-old ? @tr("Mujina needs Windows 11 24H2 (build 26100) or later. This device has build {}.", root.os-build) : @tr("Make Mujina the console home of Xbox mode.")
+    }
+
+    pure function action-text() -> string {
+        if (root.phase == SetupPhase.running) {
+            return root.uninstall ? @tr("Removing…") : root.situation == Situation.update ? @tr("Updating…") : @tr("Installing…");
+        }
+        if (!root.ready && root.phase != SetupPhase.checking) {
+            return @tr("Close");
+        }
+        root.uninstall ? @tr("Remove") : root.situation == Situation.update ? @tr("Update") : root.situation == Situation.reinstall ? @tr("Reinstall") : root.situation == Situation.downgrade ? @tr("Replace") : @tr("Install")
+    }
+
+    pure function done-text() -> string {
+        if (root.uninstall) {
+            return @tr("Mujina is removed.");
+        }
+        // Not the home app: Xbox mode still starts what it did before.
+        root.make-home-app ? @tr("Done. Enter Xbox mode to start with Mujina.") : @tr("Mujina is installed.")
+    }
+
+    pure function failure-text() -> string {
+        let kind = root.failure.kind;
+        kind == FailureKind.declined ? @tr("The administrator prompt was declined.") : kind == FailureKind.elevation-failed ? @tr("Windows did not start the administrator part of Setup.") : kind == FailureKind.elevated-arguments ? @tr("The administrator part of Setup refused its arguments.") : kind == FailureKind.developer-mode ? @tr("Developer Mode could not be turned on.") : kind == FailureKind.certificate ? @tr("Mujina's certificate could not be added to the trusted people of this device.") : kind == FailureKind.preparing ? @tr("Preparing the machine failed.") : kind == FailureKind.no-package ? @tr("This build of Mujina Setup carries no package.") : kind == FailureKind.windows-too-old ? @tr("Mujina needs Windows 11 24H2 (build 26100) or later.") : kind == FailureKind.newer-installed ? @tr("A newer version of Mujina is installed.") : kind == FailureKind.same-version-differs ? @tr("This version of Mujina is installed already, from a different build. Remove Mujina first, then install it again.") : kind == FailureKind.not-trusted ? @tr("Windows does not trust the signature of Mujina's package.") : kind == FailureKind.sideloading-off ? @tr("Windows installs no apps from outside the Store on this device. Turn on Developer Mode and try again.") : kind == FailureKind.blocked-by-policy ? @tr("A policy of this device does not allow installing apps.") : kind == FailureKind.in-use ? @tr("Mujina is in use and could not be replaced. Leave Xbox mode and try again.") : kind == FailureKind.disk-full ? @tr("There is not enough space on the drive.") : kind == FailureKind.conflict ? @tr("Windows found a conflict with an app that is installed.") : kind == FailureKind.damaged ? @tr("The package this installer carries is damaged. Download Mujina Setup again.") : kind == FailureKind.deployment-failed ? @tr("Windows could not install the package.") : kind == FailureKind.not-installed ? @tr("This Mujina is not installed.") : kind == FailureKind.home-app ? @tr("The home app setting could not be changed.") : kind == FailureKind.sign-in-check ? @tr("The check at sign-in could not be arranged or removed.") : kind == FailureKind.files ? @tr("Files Mujina placed in other programs' folders could not be removed. Setup tries again at your next sign-in.") : @tr("Something went wrong.")
+    }
+
+    // The code and what Windows said, for a report; English, as Windows and PowerShell say it.
+    pure function failure-detail() -> string {
+        if (root.failure.code == "") {
+            return root.failure.detail;
+        }
+        root.failure.detail == "" ? @tr("Code {}", root.failure.code) : @tr("Code {}: {}", root.failure.code, root.failure.detail)
+    }
+
+    // The row or button that had the focus may be gone.
+    changed phase => {
+        action.focus();
+    }
+
+    // The design's lift in the top left: a radial gradient centred off the window's edge.
+    Rectangle {
+        x: root.width * 0.1 - self.width / 2;
+        y: 0 - self.height / 2;
+        width: root.width * 1.9;
+        height: self.width;
+        background: @radial-gradient(circle, #1c1f30 0%, #161826 60%, #131521 100%);
+    }
+
+    VerticalLayout {
+        padding-top: 26px;
+        padding-bottom: 24px;
+        spacing: 16px;
+
+        flick := Flickable {
+            vertical-stretch: 1;
+            content-width: self.width;
+            content-height: content.preferred-height;
+
+            content := VerticalLayout {
+                width: flick.width;
+                padding-left: 28px;
+                padding-right: 28px;
+                spacing: 14px;
+
+                HorizontalLayout {
+                    spacing: 18px;
+                    VerticalLayout {
+                        alignment: center;
+                        Mark {
+                            size: 44px;
+                        }
+                    }
+                    VerticalLayout {
+                        alignment: center;
+                        spacing: 4px;
+                        horizontal-stretch: 1;
+                        Text {
+                            text: "Mujina " + root.version;
+                            font-size: 26px;
+                            font-weight: 500;
+                            letter-spacing: 26px * -0.015;
+                            color: Theme.text;
+                        }
+                        HorizontalLayout {
+                            spacing: 8px;
+                            if root.phase == SetupPhase.checking && !root.uninstall: VerticalLayout {
+                                alignment: center;
+                                Spinner {
+                                    size: 14px;
+                                }
+                            }
+                            Text {
+                                horizontal-stretch: 1;
+                                text: root.heading-text();
+                                font-size: 15px;
+                                color: root.ready && !root.can-begin ? #f0b3ad : Theme.text-body;
+                                wrap: word-wrap;
+                            }
+                        }
+                    }
+                }
+
+                if root.ready && root.uninstall: Note {
+                    icon: Icons.info;
+                    text: @tr("The home app setting goes back to what it was before Mujina, then the package is removed, and with it the files Mujina placed in other programs' folders. Developer Mode and the certificate stay: removing them would need administrator rights again.");
+                }
+
+                if root.ready && !root.uninstall && root.can-begin && !root.prepared: Note {
+                    icon: Icons.admin;
+                    text: @tr("Mujina is installed as a Windows package. If this PC is not prepared yet, Windows asks once for administrator rights: to turn on Developer Mode, which home apps other than Microsoft's need, and to trust Mujina's own certificate, with which it is signed. That is also why Windows may warn about this installer.");
+                }
+
+                if root.ready && !root.uninstall && root.can-begin && root.stops-agent: Note {
+                    icon: Icons.info;
+                    text: @tr("Mujina is running in Xbox mode now. Installing stops it; it starts again the next time you enter Xbox mode.");
+                }
+
+                if root.ready && !root.uninstall && root.can-begin: SwitchRow {
+                    text: @tr("Make Mujina the home app of Xbox mode");
+                    on: root.make-home-app;
+                    focus-request: root.row-focus;
+                    toggled => {
+                        root.toggle-home-app();
+                    }
+                    tab => {
+                        action.focus();
+                    }
+                }
+
+                if root.steps.length > 0: Card {
+                    radius: 12px;
+                    inset-x: 6px;
+                    inset-y: 6px;
+                    gap: 2px;
+                    for step in root.steps: StepItem {
+                        step: step;
+                    }
+                }
+
+                if root.outcome != "": Result {
+                    failed: root.phase == SetupPhase.failed;
+                    heading: @tr("Setup stopped");
+                    text: root.outcome;
+                    detail: root.failure-detail();
+                }
+            }
+        }
+
+        HorizontalLayout {
+            padding-left: 28px;
+            padding-right: 28px;
+            spacing: 10px;
+            alignment: end;
+            if root.phase == SetupPhase.done && !root.uninstall: PlainButton {
+                text: @tr("Open Mujina Settings");
+                icon: Icons.setup;
+                focus-request: root.settings-focus;
+                clicked => {
+                    root.open-settings();
+                }
+                tab => {
+                    action.focus();
+                }
+            }
+            if root.phase == SetupPhase.failed: PlainButton {
+                text: @tr("Copy details");
+                icon: Icons.copy;
+                focus-request: root.copy-focus;
+                clicked => {
+                    root.copy-details();
+                }
+                tab => {
+                    if (root.has-log) {
+                        root.log-focus += 1;
+                    } else {
+                        action.focus();
+                    }
+                }
+            }
+            if root.phase == SetupPhase.failed && root.has-log: PlainButton {
+                text: @tr("Open log");
+                icon: Icons.open;
+                focus-request: root.log-focus;
+                clicked => {
+                    root.open-log();
+                }
+                tab => {
+                    action.focus();
+                }
+            }
+            if root.phase == SetupPhase.failed: PlainButton {
+                text: @tr("Try again");
+                icon: Icons.again;
+                focus-request: root.again-focus;
+                clicked => {
+                    root.try-again();
+                }
+                tab => {
+                    root.copy-focus += 1;
+                }
+            }
+            action := SetupButton {
+                property <bool> remove: root.ready && root.uninstall;
+                text: root.action-text();
+                busy: root.phase == SetupPhase.running || root.phase == SetupPhase.checking;
+                enabled: !root.ready || root.can-begin;
+                outline: self.remove ? Theme.problem : Theme.accent;
+                ink: self.remove ? #f0b3ad : Theme.accent-focus;
+                hover-fill: self.remove ? #de6a601f : Theme.accent-12;
+                press-fill: self.remove ? #de6a6047 : Theme.accent-28;
+                clicked => {
+                    if (root.ready) {
+                        root.begin();
+                    } else {
+                        root.quit();
+                    }
+                }
+                tab => {
+                    if (root.ready && !root.uninstall && root.can-begin) {
+                        root.row-focus += 1;
+                    } else if (root.phase == SetupPhase.done && !root.uninstall) {
+                        root.settings-focus += 1;
+                    } else if (root.phase == SetupPhase.failed) {
+                        root.again-focus += 1;
+                    }
+                }
+            }
+        }
+    }
+}

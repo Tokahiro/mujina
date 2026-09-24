@@ -1,0 +1,50 @@
+# German texts of mujina-adapter-steam that Mujina Settings shows: Steam's name, its options and
+# the titles of its checks. Compiled in (the descriptor's catalogs); `cargo xtask i18n-check`
+# lists what is missing.
+msgid ""
+msgstr ""
+"Project-Id-Version: Mujina\n"
+"Language-Team: German\n"
+"Language: de\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+msgid "Allowed. Steam can show the name of the Wi-Fi network."
+msgstr "Erlaubt. Steam kann den Namen des WLANs zeigen."
+
+msgid "Correct the Wi-Fi icon in Steam"
+msgstr "WLAN-Symbol in Steam korrigieren"
+
+msgid "Declined for Mujina. Steam shows a connection without the network's name."
+msgstr "Für Mujina abgelehnt. Steam zeigt eine Verbindung ohne den Namen des Netzwerks."
+
+msgid "For Home and Library, the “game is starting” screen and the Wi-Fi icon. The port has no password: any program you run can control Steam through it (SECURITY.md)."
+msgstr "Für Startseite und Bibliothek, den Bildschirm „Spiel wird gestartet“ und das WLAN-Symbol. Der Port hat kein Passwort: Jedes Programm, das du ausführst, kann Steam darüber steuern (SECURITY.md)."
+
+msgid "Location is off in Windows. Steam shows a connection without the network's name."
+msgstr "Standort ist in Windows aus. Steam zeigt eine Verbindung ohne den Namen des Netzwerks."
+
+msgid "Location permission"
+msgstr "Standortberechtigung"
+
+msgid "Not asked yet. Windows asks the first time you enter Xbox mode."
+msgstr "Noch nicht gefragt. Windows fragt beim ersten Wechsel in den Xbox-Modus."
+
+msgid "Not needed: Mujina runs unpackaged."
+msgstr "Nicht nötig: Mujina läuft ohne Paket."
+
+msgid "Overlay shortcut"
+msgstr "Overlay-Kürzel"
+
+msgid "Steam Big Picture"
+msgstr "Steam Big Picture"
+
+msgid "Steam otherwise shows the Wi-Fi as disconnected. Also lets the device button open Steam's menus directly. Needs the debugging port."
+msgstr "Sonst zeigt Steam das WLAN als getrennt. Lässt außerdem die Gerätetaste Steams Menüs direkt öffnen. Braucht den Debugging-Port."
+
+msgid "Steam's debugging port"
+msgstr "Steams Debugging-Port"
+
+msgid "Use Steam's debugging port"
+msgstr "Steams Debugging-Port nutzen"

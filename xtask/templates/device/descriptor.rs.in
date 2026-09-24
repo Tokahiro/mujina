@@ -1,0 +1,79 @@
+//! @NAME@ as the configuration and the tools see it: which machines it is,
+//! its buttons and its options under `[device.@ID@]`. Portable, so its rules are tested on
+//! every system.
+
+use mujina_application::Msg;
+use mujina_application::device::{
+    ButtonId, ButtonSpec, DeviceDescriptor, Suppression, SystemIdentity,
+};
+use mujina_application::settings::schema::SettingSpec;
+
+pub struct @TYPE@Descriptor;
+
+pub static DESCRIPTOR: @TYPE@Descriptor = @TYPE@Descriptor;
+
+/// TODO: the two strings `mujinactl doctor` prints on the device, after "device:". Until then no
+/// machine is this device, so `profile = "auto"` never takes it; naming its id does.
+const MANUFACTURER: &str = "TODO manufacturer";
+const PRODUCT: &str = "TODO product";
+
+/// The one button so far, as the runtime reports its presses. TODO: one per extra button, each
+/// with an id of its own.
+pub const BUTTON: ButtonId = ButtonId(0);
+
+impl DeviceDescriptor for @TYPE@Descriptor {
+    fn id(&self) -> &'static str {
+        "@ID@"
+    }
+
+    fn name(&self) -> String {
+        Msg::new("@NAME@").english().to_string()
+    }
+
+    /// Exactly the machines this crate knows: `auto` asks the device crates before the profiles,
+    /// so a pattern wider than that would hide a profile of another machine.
+    fn matches(&self, identity: &SystemIdentity) -> bool {
+        identity.manufacturer.eq_ignore_ascii_case(MANUFACTURER)
+            && identity.product.eq_ignore_ascii_case(PRODUCT)
+    }
+
+    /// TODO: its buttons. `Observed` while the device's own software sees the press too, which a
+    /// program without a driver cannot prevent; `Swallowed` only if Mujina can hold it back.
+    fn buttons(&self) -> Vec<ButtonSpec> {
+        vec![ButtonSpec {
+            id: BUTTON,
+            key: "extra".to_string(),
+            label: Msg::new("Extra button").english().to_string(),
+            suppression: Suppression::Observed,
+        }]
+    }
+
+    /// TODO: its options, if it needs any; most devices have none.
+    fn settings(&self) -> &[SettingSpec] {
+        &[]
+    }
+
+    fn catalogs(&self) -> &'static [(&'static str, &'static str)] {
+        &[("de", include_str!("../lang/de.po"))]
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_descriptor_keeps_the_rules() {
+        mujina_application::testing::device_conformance(&DESCRIPTOR);
+    }
+
+    #[test]
+    fn it_is_its_machines_only() {
+        let machine = |manufacturer: &str, product: &str| SystemIdentity {
+            manufacturer: manufacturer.to_string(),
+            product: product.to_string(),
+        };
+        assert!(DESCRIPTOR.matches(&machine(MANUFACTURER, PRODUCT)));
+        assert!(!DESCRIPTOR.matches(&machine("ONE-NETBOOK", "ONEXPLAYER 3")));
+    }
+}

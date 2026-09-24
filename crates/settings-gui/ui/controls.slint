@@ -1,0 +1,240 @@
+// The building blocks of Mujina Settings' pages besides the shared ones in ui/ (cards, focus
+// frames, buttons): section labels, groups, the toast and the hint bar. Focus is not Slint's own
+// here: a page knows which of its rows is current and tells the row, which only draws it.
+
+import { Theme, Health } from "@mujina/theme.slint";
+import { Icons } from "@mujina/icons.slint";
+
+// The small upper-case heading above a group.
+export component SectionLabel inherits Text {
+    font-size: Theme.label;
+    font-weight: 600;
+    letter-spacing: Theme.label * 0.12;
+    color: Theme.muted;
+}
+
+// Rows under their label.
+export component Group inherits VerticalLayout {
+    in property <string> label;
+    spacing: 12 * Theme.u;
+    HorizontalLayout {
+        padding-left: 4 * Theme.u;
+        SectionLabel {
+            text: root.label.to-uppercase();
+        }
+    }
+    @children
+}
+
+// A doctor state as a filled icon.
+export component StateIcon inherits Image {
+    in property <Health> health;
+    source: Icons.of-health(root.health);
+    colorize: Theme.state-color(root.health);
+}
+
+// How a toast looks: done now, done the next time Xbox mode is entered, or refused.
+export enum ToastKind {
+    now,
+    next-time,
+    refused
+}
+
+// What a toast or the capture overlay says; `detail` goes into some of it.
+export enum Said {
+    applied,
+    applies-next-time,
+    // `detail`: why, in English, from the same checks as `mujinactl config set`.
+    refused,
+    // `detail`: the text as typed.
+    not-a-combination,
+    // A launcher's program, left empty while the launcher requires it.
+    program-required,
+    // `detail`: what else it requires, by its title.
+    value-required,
+    clipboard-busy,
+    copied,
+    agent-starting,
+    now-home,
+    already-home,
+    // `detail`: the home app that is back.
+    home-restored,
+    home-cleared,
+    home-not-ours,
+    // `detail`, for both: the key combination captured.
+    captured-applied,
+    captured-applies-next-time
+}
+
+export struct Notice {
+    kind: ToastKind,
+    said: Said,
+    detail: string,
+}
+
+// The words of a notice, in the app's language.
+export global Words {
+    public pure function notice(notice: Notice) -> string {
+        if (notice.said == Said.applied) {
+            return @tr("Saved and applied.");
+        }
+        if (notice.said == Said.applies-next-time) {
+            return @tr("Saved. Takes effect the next time you enter Xbox mode.");
+        }
+        if (notice.said == Said.refused) {
+            return @tr("Not changed — {}", notice.detail);
+        }
+        if (notice.said == Said.not-a-combination) {
+            return @tr("Not changed — \"{}\" is not a complete key combination, e.g. LCTRL+1.", notice.detail);
+        }
+        if (notice.said == Said.program-required) {
+            return @tr("Not changed — Enter the launcher's program first.");
+        }
+        if (notice.said == Said.value-required) {
+            return @tr("Not changed — Enter “{}” first.", notice.detail);
+        }
+        if (notice.said == Said.clipboard-busy) {
+            return @tr("Not changed — the clipboard is busy; try again.");
+        }
+        if (notice.said == Said.copied) {
+            return @tr("Copied.");
+        }
+        if (notice.said == Said.agent-starting) {
+            return @tr("The background agent is starting.");
+        }
+        if (notice.said == Said.now-home) {
+            return @tr("Mujina is now the home app. Takes effect the next time you enter Xbox mode.");
+        }
+        if (notice.said == Said.already-home) {
+            return @tr("Mujina already is the home app.");
+        }
+        if (notice.said == Said.home-restored) {
+            return @tr("The home app is {} again. Takes effect the next time you enter Xbox mode.", notice.detail);
+        }
+        if (notice.said == Said.home-cleared) {
+            return @tr("Windows' own home app is back. Takes effect the next time you enter Xbox mode.");
+        }
+        if (notice.said == Said.home-not-ours) {
+            return @tr("Mujina was not the home app; nothing changed.");
+        }
+        if (notice.said == Said.captured-applied) {
+            return @tr("Captured {}. Saved and applied.", notice.detail);
+        }
+        @tr("Captured {}. Saved. Takes effect the next time you enter Xbox mode.", notice.detail)
+    }
+}
+
+// What came of a change, above the hint bar for a few seconds.
+export component Toast inherits Rectangle {
+    in property <Notice> notice;
+    in property <bool> shown;
+    property <ToastKind> kind: root.notice.kind;
+    property <color> tone: root.kind == ToastKind.refused ? Theme.problem : root.kind == ToastKind.next-time ? Theme.warning : Theme.ok;
+    visible: self.opacity > 0;
+    opacity: root.shown ? 1 : 0;
+    animate opacity { duration: 180ms; easing: ease-out; }
+    border-radius: 12 * Theme.u;
+    background: root.kind == ToastKind.refused ? #2c2222 : root.kind == ToastKind.next-time ? #2b2a22 : #212b26;
+    border-width: 1px;
+    border-color: root.kind == ToastKind.refused ? #de6a6073 : root.kind == ToastKind.next-time ? #d9a44173 : #52c08d73;
+    drop-shadow-offset-y: 14 * Theme.u;
+    drop-shadow-blur: 40 * Theme.u;
+    drop-shadow-color: #00000099;
+    HorizontalLayout {
+        padding-top: 16 * Theme.u;
+        padding-bottom: 16 * Theme.u;
+        padding-left: 26 * Theme.u;
+        padding-right: 26 * Theme.u;
+        spacing: 14 * Theme.u;
+        VerticalLayout {
+            alignment: center;
+            Image {
+                width: 24 * Theme.u;
+                height: 24 * Theme.u;
+                source: root.kind == ToastKind.refused ? Icons.problem : root.kind == ToastKind.next-time ? Icons.next-time : Icons.ok;
+                colorize: root.tone;
+            }
+        }
+        Text {
+            text: Words.notice(root.notice);
+            font-size: 18 * Theme.u;
+            font-weight: 500;
+            color: Theme.text;
+            wrap: word-wrap;
+            vertical-alignment: center;
+        }
+    }
+}
+
+// How a hint shows its button: a rounded badge, or A's green and B's red circle.
+enum ChipShape {
+    badge,
+    accept,
+    back
+}
+
+component HintChip inherits HorizontalLayout {
+    in property <string> glyph;
+    in property <string> text;
+    in property <ChipShape> shape;
+    spacing: 9 * Theme.u;
+    VerticalLayout {
+        alignment: center;
+        Rectangle {
+            height: 28 * Theme.u;
+            width: root.shape == ChipShape.badge ? max(34 * Theme.u, badge.preferred-width + 14 * Theme.u) : 28 * Theme.u;
+            border-radius: root.shape == ChipShape.badge ? 7 * Theme.u : 14 * Theme.u;
+            border-width: 1px;
+            border-color: root.shape == ChipShape.accept ? #52c08d99 : root.shape == ChipShape.back ? #de6a6099 : #e9e9ed38;
+            badge := Text {
+                text: root.glyph;
+                font-size: 13 * Theme.u;
+                font-weight: root.shape == ChipShape.badge ? 600 : 700;
+                color: root.shape == ChipShape.accept ? Theme.ok : root.shape == ChipShape.back ? Theme.problem : Theme.text-soft;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+        }
+    }
+    Text {
+        text: root.text;
+        font-size: 15 * Theme.u;
+        color: Theme.muted;
+        vertical-alignment: center;
+    }
+}
+
+// The controller's buttons and what they do; full screen only.
+export component HintBar inherits Rectangle {
+    height: 62 * Theme.u;
+    background: #0d0e16b3;
+    Rectangle {
+        y: 0;
+        height: 1px;
+        background: Theme.line;
+    }
+    HorizontalLayout {
+        padding-left: 24 * Theme.u;
+        padding-right: 24 * Theme.u;
+        spacing: 26 * Theme.u;
+        alignment: start;
+        HintChip {
+            glyph: @tr("D-pad");
+            text: @tr("Choose");
+        }
+        HintChip {
+            glyph: "A";
+            shape: ChipShape.accept;
+            text: @tr("Open");
+        }
+        HintChip {
+            glyph: "B";
+            shape: ChipShape.back;
+            text: @tr("Back");
+        }
+        HintChip {
+            glyph: "LB/RB";
+            text: @tr("Pages");
+        }
+    }
+}

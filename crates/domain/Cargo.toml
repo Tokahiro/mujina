@@ -1,0 +1,17 @@
+[package]
+name = "mujina-domain"
+description = "Pure domain model of Mujina: no I/O, no OS, no dependencies."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[package.metadata.mujina]
+# The crate's ring (docs/architecture.md); cargo xtask arch-check checks its dependencies.
+ring = "domain"
+
+[lints]
+workspace = true

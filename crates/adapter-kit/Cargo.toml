@@ -1,0 +1,24 @@
+[package]
+name = "mujina-adapter-kit"
+description = "What Mujina's launcher adapters share: locating, starting and focusing a launcher."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[package.metadata.mujina]
+ring = "adapter-support"
+
+[dependencies]
+mujina-application.workspace = true
+mujina-domain.workspace = true
+log.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+mujina-winutil.workspace = true
+
+[lints]
+workspace = true

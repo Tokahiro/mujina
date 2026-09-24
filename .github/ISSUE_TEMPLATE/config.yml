@@ -1,0 +1,7 @@
+blank_issues_enabled: false
+contact_links:
+  - name: A security vulnerability
+    url: https://github.com/Tokahiro/mujina/blob/main/SECURITY.md#reporting-a-vulnerability
+    about: >-
+      Do not describe it in an issue. Report it privately: Security and quality → Report a
+      vulnerability, as SECURITY.md says.

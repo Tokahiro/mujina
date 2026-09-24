@@ -1,0 +1,77 @@
+name: Device report
+description: A handheld whose extra button Mujina does not know yet, or does not handle right.
+title: "Device: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping Mujina learn a device. What to run is in
+        [docs/new-device.md](https://github.com/Tokahiro/mujina/blob/main/docs/new-device.md).
+        If the button sends a key combination, *Capture* in Mujina Settings may already be all
+        you need; this report makes it work for everyone with the device.
+  - type: input
+    id: model
+    attributes:
+      label: Device
+      description: Maker and model, as sold.
+      placeholder: OneXPlayer 3
+    validations:
+      required: true
+  - type: textarea
+    id: firmware
+    attributes:
+      label: Firmware strings
+      description: The `device:` line of `mujinactl doctor`, which a profile is matched against.
+      placeholder: 'device:   "ONE-NETBOOK" / "ONEXPLAYER 3"'
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: probe
+    attributes:
+      label: What the button sends
+      description: >-
+        Run `mujinactl probe`, press the button a few times within 30 seconds, and paste
+        everything it printed (also in `probe.txt`, see `mujinactl paths`). If it shows no key
+        at all, say so: the button then needs a device crate.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: buttons
+    attributes:
+      label: Buttons
+      description: >-
+        Which extra buttons the device has, what each is called on the device, and what each
+        does without Mujina.
+    validations:
+      required: true
+  - type: input
+    id: companion
+    attributes:
+      label: Companion software
+      description: The maker's app that handles the buttons, and its version (or "none").
+      placeholder: OneXConsole, and the version its About page shows
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows build
+      description: What `winver` shows.
+      placeholder: 24H2, OS build 26100.xxxx
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Mujina version
+      description: What `mujinactl version` shows, if Mujina is installed.
+      placeholder: mujinactl 0.27.0
+  - type: textarea
+    id: notes
+    attributes:
+      label: Anything else
+      description: >-
+        Whether the maker's software also reacts to the button, whether it behaves differently
+        in Xbox mode, and anything you tried.

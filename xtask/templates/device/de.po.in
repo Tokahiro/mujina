@@ -1,0 +1,17 @@
+# German texts of @CRATE@ that Mujina Settings shows:
+# the device's name, its buttons' labels, its options and the titles of its checks. Compiled in
+# (the descriptor's catalogs); `cargo xtask i18n-check` lists what is missing.
+msgid ""
+msgstr ""
+"Project-Id-Version: Mujina\n"
+"Language-Team: German\n"
+"Language: de\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+msgid "@NAME@"
+msgstr "@NAME@"
+
+msgid "Extra button"
+msgstr "Zusatztaste"

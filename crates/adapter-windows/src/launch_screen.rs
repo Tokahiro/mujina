@@ -1,0 +1,301 @@
+//! The home app's own window while the launcher starts: see-through by default, a plain black
+//! backdrop on request.
+//!
+//! It is an ordinary (not topmost) full-screen window: it hides the desktop, but whatever the
+//! launcher shows, including its update progress, appears in front of it. Waiting for the
+//! console UI is event-driven: two WinEvent hooks report windows being shown or coming to the
+//! front, and only then is the (comparatively expensive) readiness check run.
+
+use std::cell::Cell;
+use std::ptr::{null, null_mut};
+use std::time::{Duration, Instant};
+
+use mujina_application::ports::LaunchScreen;
+use mujina_winutil::wide::to_wide;
+use mujina_winutil::window::OWN_INPUT_TAG;
+use windows_sys::Win32::Foundation::{HWND, WAIT_FAILED};
+use windows_sys::Win32::Graphics::Gdi::{BLACK_BRUSH, GetStockObject};
+use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
+use windows_sys::Win32::UI::Accessibility::{HWINEVENTHOOK, SetWinEventHook, UnhookWinEvent};
+use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
+    INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT, KEYEVENTF_KEYUP, MAPVK_VK_TO_VSC, MapVirtualKeyW,
+    SendInput, VK_LMENU,
+};
+use windows_sys::Win32::UI::WindowsAndMessaging::{
+    CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, EVENT_OBJECT_SHOW,
+    EVENT_SYSTEM_FOREGROUND, GetForegroundWindow, GetSystemMetrics, HWND_TOPMOST, IDC_ARROW,
+    LWA_ALPHA, LoadCursorW, MSG, MWMO_INPUTAVAILABLE, MsgWaitForMultipleObjectsEx, PM_REMOVE,
+    PeekMessageW, QS_ALLINPUT, RegisterClassW, SM_CXSCREEN, SM_CYSCREEN, SW_SHOW, SWP_NOACTIVATE,
+    SWP_NOMOVE, SWP_NOSIZE, SetForegroundWindow, SetLayeredWindowAttributes, SetWindowPos,
+    ShowWindow, WINEVENT_OUTOFCONTEXT, WINEVENT_SKIPOWNPROCESS, WNDCLASSW, WS_EX_APPWINDOW,
+    WS_EX_LAYERED, WS_POPUP,
+};
+
+/// `OBJID_WINDOW`: the event concerns a window itself, not a part of one.
+const OBJID_WINDOW: i32 = 0;
+
+thread_local! {
+    /// Set by the WinEvent hooks, which run on this thread while it pumps messages.
+    static SOMETHING_APPEARED: Cell<bool> = const { Cell::new(false) };
+}
+
+unsafe extern "system" fn on_window_event(
+    _hook: HWINEVENTHOOK,
+    event: u32,
+    _hwnd: HWND,
+    object: i32,
+    child: i32,
+    _thread: u32,
+    _time: u32,
+) {
+    // "Shown" fires for every tooltip, caret and list item; only whole windows matter.
+    if event == EVENT_SYSTEM_FOREGROUND || (object == OBJID_WINDOW && child == 0) {
+        SOMETHING_APPEARED.with(|flag| flag.set(true));
+    }
+}
+
+fn hook(event: u32) -> HWINEVENTHOOK {
+    // SAFETY: `on_window_event` matches WINEVENTPROC; out-of-context hooks need no module.
+    unsafe {
+        SetWinEventHook(
+            event,
+            event,
+            null_mut(),
+            Some(on_window_event),
+            0,
+            0,
+            WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS,
+        )
+    }
+}
+
+/// One press or release of the left Alt key, tagged as ours so that the agent's keyboard hook
+/// lets it be.
+fn alt(up: bool) -> INPUT {
+    // SAFETY: plain call; it only looks the scan code up.
+    let scan = unsafe { MapVirtualKeyW(u32::from(VK_LMENU), MAPVK_VK_TO_VSC) };
+    INPUT {
+        r#type: INPUT_KEYBOARD,
+        Anonymous: INPUT_0 {
+            ki: KEYBDINPUT {
+                wVk: VK_LMENU,
+                // Some input stacks read the scan code rather than the virtual key.
+                wScan: u16::try_from(scan).unwrap_or(0),
+                dwFlags: if up { KEYEVENTF_KEYUP } else { 0 },
+                time: 0,
+                dwExtraInfo: OWN_INPUT_TAG,
+            },
+        },
+    }
+}
+
+/// Takes the foreground although Windows did not grant it.
+///
+/// When Windows activates the home role (home button, boot into Xbox mode) the process normally
+/// owns the foreground right and this is not needed. It is needed when the *agent* asks for the home
+/// role after the launcher crashed: no sanctioned API lets a background process bring anything
+/// to the front, so the launcher would come up behind whatever took over when it died. Windows
+/// lifts the restriction for the process that produced the last input, hence one synthetic tap
+/// of the Alt key, tagged as ours so the agent's hook ignores it.
+fn claim_foreground(window: HWND) {
+    let tap = [alt(false), alt(true)];
+    let size = i32::try_from(size_of::<INPUT>()).unwrap_or(0);
+    // SAFETY: two valid INPUT structures of the stated size.
+    unsafe { SendInput(2, tap.as_ptr(), size) };
+    // The tap is processed asynchronously; give it a few moments to register as our input.
+    let in_front = (0..10).any(|_| {
+        std::thread::sleep(Duration::from_millis(10));
+        // Being in front already counts: behind the lock screen the request keeps being refused
+        // although the window has become the foreground window.
+        // SAFETY: valid window handle owned by this thread.
+        unsafe { GetForegroundWindow() == window || SetForegroundWindow(window) != 0 }
+    });
+    if in_front {
+        log::info!("the launch screen is in front (after a synthetic key tap)");
+    } else {
+        // Normal while the lock screen is up (booting into Xbox mode): nothing may take the
+        // foreground then, and the launcher comes forward by itself after the unlock.
+        log::info!("Windows did not grant the foreground (expected behind the lock screen)");
+    }
+}
+
+fn pump_messages() {
+    // SAFETY: MSG is plain data for which all-zero is a valid value.
+    let mut message: MSG = unsafe { std::mem::zeroed() };
+    // SAFETY: `message` is writable; a null window means "any message of this thread".
+    while unsafe { PeekMessageW(&raw mut message, null_mut(), 0, 0, PM_REMOVE) } != 0 {
+        // SAFETY: `message` was filled in by PeekMessageW.
+        unsafe { DispatchMessageW(&raw const message) };
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct WindowsLaunchScreen {
+    window: Cell<isize>,
+    /// A window for Windows to see, not for the user: see [`WindowsLaunchScreen::invisible`].
+    invisible: bool,
+}
+
+impl WindowsLaunchScreen {
+    /// The black backdrop.
+    pub fn black() -> Self {
+        Self::default()
+    }
+
+    /// The same window, but see-through. Windows takes the home app to have come up once it has
+    /// a window; without one it keeps its welcome screen up on a boot and activates the home
+    /// app again and again. The console experience has a backdrop of its own, though, and a
+    /// black window in front of it only adds a hand-over to get wrong (seen on a device as a
+    /// flash). So the window is there, and what the user sees is what Windows put behind it.
+    pub fn invisible() -> Self {
+        Self {
+            window: Cell::new(0),
+            invisible: true,
+        }
+    }
+}
+
+impl Drop for WindowsLaunchScreen {
+    fn drop(&mut self) {
+        LaunchScreen::close(self);
+    }
+}
+
+impl LaunchScreen for WindowsLaunchScreen {
+    fn show(&self) {
+        if self.window.get() != 0 {
+            return;
+        }
+        let class_name = to_wide("MujinaLaunchScreen");
+        let title = to_wide("Mujina");
+        // SAFETY: plain calls; the class structure and both strings outlive the calls that use
+        // them; DefWindowProcW is a valid window procedure; a failed registration makes
+        // CreateWindowExW fail, which is handled below.
+        let window = unsafe {
+            let instance = GetModuleHandleW(null());
+            let class = WNDCLASSW {
+                style: 0,
+                lpfnWndProc: Some(DefWindowProcW),
+                cbClsExtra: 0,
+                cbWndExtra: 0,
+                hInstance: instance,
+                hIcon: null_mut(),
+                hCursor: LoadCursorW(null_mut(), IDC_ARROW),
+                hbrBackground: GetStockObject(BLACK_BRUSH),
+                lpszMenuName: null(),
+                lpszClassName: class_name.as_ptr(),
+            };
+            RegisterClassW(&raw const class);
+            CreateWindowExW(
+                // A real application window: Windows keeps its welcome screen up until the home
+                // app has one, and activates the home app again and again while it has none.
+                if self.invisible {
+                    WS_EX_APPWINDOW | WS_EX_LAYERED
+                } else {
+                    WS_EX_APPWINDOW
+                },
+                class_name.as_ptr(),
+                title.as_ptr(),
+                WS_POPUP,
+                0,
+                0,
+                GetSystemMetrics(SM_CXSCREEN),
+                GetSystemMetrics(SM_CYSCREEN),
+                null_mut(),
+                null_mut(),
+                instance,
+                null(),
+            )
+        };
+        if window.is_null() {
+            log::warn!("launch screen could not be created");
+            return;
+        }
+        if self.invisible {
+            // Not zero: a window nobody could see at all may not count as one. One step of 255
+            // over a backdrop is nothing an eye can make out.
+            // SAFETY: valid window handle owned by this thread; the colour key is not used.
+            unsafe { SetLayeredWindowAttributes(window, 0, 1, LWA_ALPHA) };
+        }
+        // SAFETY: valid window handle owned by this thread.
+        let in_front = unsafe {
+            ShowWindow(window, SW_SHOW);
+            SetForegroundWindow(window) != 0
+        };
+        // Showing a first window usually brings it to the front even when the explicit request
+        // is reported as refused, so look before resorting to the workaround.
+        // SAFETY: plain call without arguments.
+        if !in_front && unsafe { GetForegroundWindow() } != window {
+            claim_foreground(window);
+        }
+        self.window.set(window as isize);
+        pump_messages();
+    }
+
+    fn hold_until(&self, ready: &dyn Fn() -> bool, timeout: Duration) -> bool {
+        let hooks = [hook(EVENT_SYSTEM_FOREGROUND), hook(EVENT_OBJECT_SHOW)];
+        let deadline = Instant::now() + timeout;
+
+        let mut is_ready = ready();
+        while !is_ready {
+            let left = deadline.saturating_duration_since(Instant::now());
+            if left.is_zero() {
+                break;
+            }
+            let milliseconds = u32::try_from(left.as_millis()).unwrap_or(u32::MAX - 1);
+            // SAFETY: no handles are passed; the call only waits for messages or the timeout.
+            let woken = unsafe {
+                MsgWaitForMultipleObjectsEx(
+                    0,
+                    null(),
+                    milliseconds,
+                    QS_ALLINPUT,
+                    MWMO_INPUTAVAILABLE,
+                )
+            };
+            if woken == WAIT_FAILED {
+                break;
+            }
+            pump_messages();
+            if SOMETHING_APPEARED.with(|flag| flag.replace(false)) {
+                is_ready = ready();
+            }
+        }
+
+        for hook in hooks {
+            if !hook.is_null() {
+                // SAFETY: the hook was installed by this thread and is removed exactly once.
+                unsafe { UnhookWinEvent(hook) };
+            }
+        }
+        is_ready
+    }
+
+    fn raise(&self) {
+        let window = self.window.get();
+        if window == 0 {
+            return;
+        }
+        // SAFETY: the window was created by this thread; position and size are left alone, and
+        // the window keeps whatever activation it has.
+        unsafe {
+            SetWindowPos(
+                window as HWND,
+                HWND_TOPMOST,
+                0,
+                0,
+                0,
+                0,
+                SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
+            );
+        }
+    }
+
+    fn close(&self) {
+        let window = self.window.replace(0);
+        if window != 0 {
+            // SAFETY: the window was created by this thread and is destroyed exactly once.
+            unsafe { DestroyWindow(window as HWND) };
+        }
+    }
+}

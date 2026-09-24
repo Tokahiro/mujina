@@ -1,0 +1,107 @@
+//! The device's buttons at work: what wakes the agent on a press, and what the agent asks of the
+//! device in return. How the buttons reach Windows is marked `TODO`.
+
+use std::os::windows::io::{AsHandle, BorrowedHandle};
+
+use mujina_adapter_kit::plugin::{DeviceParts, DeviceRuntime};
+use mujina_application::agent::AgentEvent;
+use mujina_application::device::{ButtonId, DeviceDescriptor, DeviceSelection};
+use mujina_application::ports::{DeviceButtons, PortError, PortResult};
+use mujina_winutil::event::Event;
+use mujina_winutil::wait::WaitSource;
+
+use crate::descriptor::{BUTTON, DESCRIPTOR};
+
+pub struct @TYPE@Runtime;
+
+pub static RUNTIME: @TYPE@Runtime = @TYPE@Runtime;
+
+impl DeviceRuntime for @TYPE@Runtime {
+    /// Starts with the button switched off as well (no id), as every runtime must: a change may
+    /// switch it on later. Another device is not this runtime's to start.
+    fn start(&self, device: &DeviceSelection) -> PortResult<DeviceParts> {
+        if let Some(id) = device.id.as_deref()
+            && id != DESCRIPTOR.id()
+        {
+            return Err(PortError::Failed(format!("{id} is not @NAME@")));
+        }
+        // TODO: open what reports the buttons and have a press signal this event: the event of an
+        // overlapped `ReadFile` on the vendor's HID collection, say, or one a thread of this
+        // crate's signals while it is otherwise blocked in the kernel. Nothing signals it yet.
+        let press = Event::new().map_err(|error| PortError::Failed(error.to_string()))?;
+        Ok(DeviceParts {
+            buttons: Box::new(@TYPE@Buttons),
+            sources: vec![Box::new(PressSource { press })],
+        })
+    }
+
+    // TODO: `checks`, naming the device's own software that reacts to the same press
+    // (docs/new-device.md, "A doctor check"), and `prepare`, if the device has to be put into a
+    // mode first.
+}
+
+struct @TYPE@Buttons;
+
+impl DeviceButtons for @TYPE@Buttons {
+    /// No button, or this device with other options, at once; another device next session.
+    fn reconfigure(&self, device: &DeviceSelection) -> bool {
+        device.id.as_deref().is_none_or(|id| id == DESCRIPTOR.id())
+    }
+
+    /// Nothing to send on: an `Observed` press reached the rest of the system anyway.
+    fn pass_on(&self, _button: ButtonId) {}
+}
+
+/// Wakes the agent's event loop when the device reports a press, and says which button it was.
+struct PressSource {
+    press: Event,
+}
+
+impl WaitSource<AgentEvent> for PressSource {
+    fn name(&self) -> &'static str {
+        "@NAME@ buttons"
+    }
+
+    fn handle(&mut self) -> Option<BorrowedHandle<'_>> {
+        Some(self.press.as_handle())
+    }
+
+    /// TODO: read which button the report was, and arm the next read.
+    fn signalled(&mut self, out: &mut Vec<AgentEvent>) {
+        out.push(AgentEvent::ButtonPressed(BUTTON));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use mujina_adapter_kit::plugin::runtime_conformance;
+
+    use super::*;
+
+    fn this_device() -> DeviceSelection {
+        DeviceSelection {
+            id: Some(DESCRIPTOR.id().to_string()),
+            ..DeviceSelection::none()
+        }
+    }
+
+    #[test]
+    fn the_runtime_keeps_the_rules() {
+        runtime_conformance(&RUNTIME, &this_device()).unwrap();
+        let other = DeviceSelection {
+            id: Some("onexplayer".to_string()),
+            ..DeviceSelection::none()
+        };
+        assert!(RUNTIME.start(&other).is_err());
+    }
+
+    #[test]
+    fn a_press_wakes_the_agent_with_its_button() {
+        let mut parts = RUNTIME.start(&this_device()).unwrap();
+        let source = &mut parts.sources[0];
+        assert!(source.handle().is_some());
+        let mut events = Vec::new();
+        source.signalled(&mut events);
+        assert_eq!(events, [AgentEvent::ButtonPressed(BUTTON)]);
+    }
+}

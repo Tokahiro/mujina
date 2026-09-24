@@ -1,0 +1,25 @@
+# @NAME@.
+#
+# Made by `cargo xtask new-device @ID@ --profile`; see docs/new-device.md, section 3.
+#
+# TODO: which companion software sends the buttons' keys, and anything worth knowing about it.
+id = "@ID@"
+name = "@NAME@"
+
+# Compared with the system's SMBIOS strings, case-insensitively; `*` matches anything.
+# TODO: the two strings `mujinactl doctor` prints after "device:". Until then no machine matches.
+[match]
+manufacturer = "TODO manufacturer"
+product = "TODO product"
+
+# One entry per extra button.
+[[buttons]]
+# A name for logs and the configuration: lower case, digits and _.
+key = "extra"
+# What the button is called on the device; Mujina Settings shows it.
+label = "Extra button"
+# TODO: the keys it sends, as `mujinactl probe` printed them: those held, then the one that
+# completes it.
+chord = "LCTRL+LALT+F24"
+# Only when a program sends them, so the same keys on a real keyboard keep working.
+injected_only = true

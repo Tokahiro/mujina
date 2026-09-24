@@ -1,0 +1,53 @@
+name: Launcher request
+description: A launcher Mujina should support better than its generic launcher does.
+title: "Launcher: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        First try *Another launcher* in Mujina Settings → Setup: for many launchers a program
+        and its arguments are enough
+        ([docs/new-launcher.md](https://github.com/Tokahiro/mujina/blob/main/docs/new-launcher.md)).
+        A launcher of its own is worth it for what that cannot do: games, menus, pages.
+  - type: input
+    id: launcher
+    attributes:
+      label: Launcher
+      description: Its name and the version you use.
+      placeholder: Playnite, and the version its About page shows
+    validations:
+      required: true
+  - type: textarea
+    id: full-screen
+    attributes:
+      label: How it starts full screen
+      description: >-
+        The command line or setting that starts it straight into its full-screen or console
+        UI, and how a running copy is asked to switch to it.
+      placeholder: Frontend.exe --fullscreen
+    validations:
+      required: true
+  - type: textarea
+    id: games
+    attributes:
+      label: Games starting and ending
+      description: >-
+        Whether it can tell other programs that a game started or ended (a file, a registry
+        value, an event, an extension or plug-in interface), and how you know.
+    validations:
+      required: true
+  - type: textarea
+    id: menus
+    attributes:
+      label: Menu and overlay
+      description: Keys or commands that open its menu, or an overlay in a game, if it has one.
+  - type: textarea
+    id: generic
+    attributes:
+      label: With the generic launcher
+      description: What already works with *Another launcher*, and what does not.
+  - type: textarea
+    id: links
+    attributes:
+      label: Links
+      description: Its website, its documentation for command lines or plug-ins, its source.

@@ -1,0 +1,27 @@
+[package]
+name = "mujina-application"
+description = "Use cases and ports of Mujina. Knows the domain, knows no operating system."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[package.metadata.mujina]
+# The crate's ring (docs/architecture.md); cargo xtask arch-check checks its dependencies.
+ring = "application"
+
+[features]
+# Fake port implementations for tests in this and in outer crates.
+test-util = []
+
+[dependencies]
+mujina-domain.workspace = true
+# `Msg`: the doctor's titles, in the user's language in Mujina Settings.
+mujina-i18n.workspace = true
+thiserror.workspace = true
+
+[lints]
+workspace = true

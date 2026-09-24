@@ -1,0 +1,25 @@
+//! @NAME@ as Mujina's launcher: started in Xbox mode, brought to the front, watched by
+//! the agent.
+//!
+//! Made by `cargo xtask new-launcher @ID@`. Every `TODO` marks what only
+//! knowledge of the launcher can fill in; docs/new-launcher.md says what each part is asked and
+//! when.
+//!
+//! [`DESCRIPTOR`] and its options are built everywhere, so they are tested on Linux too; the
+//! launcher at work needs Windows.
+
+mod descriptor;
+#[cfg(windows)]
+mod runtime;
+
+pub use descriptor::{@TYPE@Descriptor, @TYPE@Options, DESCRIPTOR};
+#[cfg(windows)]
+pub use runtime::@TYPE@Launcher;
+
+/// @NAME@, as `crates/app/src/registry.rs` lists it.
+#[cfg(windows)]
+pub static PLUGIN: mujina_adapter_kit::plugin::LauncherPlugin =
+    mujina_adapter_kit::plugin::LauncherPlugin {
+        descriptor: &DESCRIPTOR,
+        runtime: &runtime::RUNTIME,
+    };

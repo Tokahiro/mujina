@@ -1,0 +1,28 @@
+[package]
+name = "mujina-adapter-config"
+description = "Mujina's settings: config.toml in the data directory, read against the launchers and devices compiled in."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[package.metadata.mujina]
+# The crate's ring (docs/architecture.md); cargo xtask arch-check checks its dependencies.
+ring = "adapter"
+
+[dependencies]
+mujina-application.workspace = true
+mujina-domain.workspace = true
+serde = { workspace = true, features = ["derive"] }
+toml.workspace = true
+toml_edit.workspace = true
+
+[dev-dependencies]
+# Launchers and devices for the tests: the real ones are adapters, which this crate cannot use.
+mujina-application = { workspace = true, features = ["test-util"] }
+
+[lints]
+workspace = true

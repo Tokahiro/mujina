@@ -1,0 +1,166 @@
+// Over everything while the device button is captured, then with what came of it. The
+// controller is Rust's meanwhile: only B while waiting, A or B on the result. The keyboard and a
+// tap do the same.
+
+import { Theme } from "@mujina/theme.slint";
+import { Icons } from "@mujina/icons.slint";
+import { Notice, Words } from "controls.slint";
+
+// Where a capture is: not under way, waiting for the button, the button stored, the button
+// seen but not stored, nothing seen in time, or the watcher failing.
+export enum CapturePhase {
+    none,
+    waiting,
+    captured,
+    refused,
+    nothing-seen,
+    failed
+}
+
+export component CaptureOverlay inherits Rectangle {
+    in property <CapturePhase> phase;
+    in property <int> seconds;
+    in property <int> total-seconds: 10;
+    // The combination captured, or why the watcher failed (English).
+    in property <string> detail;
+    // What came of storing the combination captured.
+    in property <Notice> result;
+    // Cancel while waiting, close on the result.
+    callback dismiss();
+
+    property <bool> shown;
+    init => {
+        root.shown = true;
+        keys.focus();
+    }
+    opacity: root.shown ? 1 : 0;
+    animate opacity { duration: 160ms; easing: ease-out; }
+    background: #0a0b12ed;
+
+    property <bool> waiting: root.phase == CapturePhase.waiting;
+    property <bool> stored: root.phase == CapturePhase.captured;
+    // Waiting pulses: 1 → 1.06 in size, 1 → 0.72 in opacity, every 1.6 s.
+    property <float> pulse: root.waiting ? (1 - cos(animation-tick() / 1600ms * 360deg)) / 2 : 0;
+    property <color> tone: root.waiting ? Theme.accent : root.stored ? Theme.ok : Theme.problem;
+    property <string> title: root.waiting ? @tr("Press the device button now") : root.phase == CapturePhase.nothing-seen ? @tr("No button seen") : root.phase == CapturePhase.failed ? @tr("Capture did not work") : @tr("Captured {}", root.detail);
+    property <string> sub: root.waiting ? @tr("The button on the side or back of your handheld. Everything else is ignored while Mujina listens.") : root.phase == CapturePhase.nothing-seen ? @tr("Nothing arrived in {} seconds. Mujina recognises buttons that arrive as a key combination: try again, or enter the combination under Advanced.", root.total-seconds) : root.phase == CapturePhase.failed ? root.detail : Words.notice(root.result);
+
+    keys := FocusScope {
+        key-pressed(event) => {
+            if (event.text == Key.Escape || (!root.waiting && (event.text == Key.Return || event.text == Key.Space))) {
+                root.dismiss();
+            }
+            accept
+        }
+    }
+    TouchArea {
+        clicked => {
+            root.dismiss();
+        }
+    }
+
+    VerticalLayout {
+        alignment: center;
+        HorizontalLayout {
+            alignment: center;
+            VerticalLayout {
+                width: min(640 * Theme.u, root.width - 80 * Theme.u);
+                spacing: 30 * Theme.u;
+                HorizontalLayout {
+                    alignment: center;
+                    Rectangle {
+                        width: 140 * Theme.u;
+                        height: 140 * Theme.u;
+                        Rectangle {
+                            width: 130 * Theme.u * (1 + 0.06 * root.pulse);
+                            height: self.width;
+                            opacity: 1 - 0.28 * root.pulse;
+                            border-radius: 36 * Theme.u;
+                            background: root.waiting ? #9184d924 : root.stored ? #52c08d1f : #de6a601f;
+                            border-width: 2px;
+                            border-color: root.waiting ? #9184d98c : root.stored ? #52c08d59 : #de6a6059;
+                            Image {
+                                width: 58 * Theme.u;
+                                height: 58 * Theme.u;
+                                source: root.waiting ? Icons.button : root.stored ? Icons.ok : Icons.problem;
+                                colorize: root.waiting ? Theme.accent-light : root.tone;
+                            }
+                        }
+                    }
+                }
+                VerticalLayout {
+                    spacing: 12 * Theme.u;
+                    Text {
+                        text: root.title;
+                        font-size: Theme.overlay-title;
+                        font-weight: 500;
+                        letter-spacing: Theme.overlay-title * -0.02;
+                        color: Theme.text;
+                        horizontal-alignment: center;
+                        wrap: word-wrap;
+                    }
+                    Text {
+                        text: root.sub;
+                        font-size: 19 * Theme.u;
+                        color: Theme.text-body;
+                        horizontal-alignment: center;
+                        wrap: word-wrap;
+                    }
+                }
+                if root.waiting: VerticalLayout {
+                    spacing: 10 * Theme.u;
+                    HorizontalLayout {
+                        alignment: center;
+                        Rectangle {
+                            width: 340 * Theme.u;
+                            height: 6 * Theme.u;
+                            border-radius: 3 * Theme.u;
+                            background: #e9e9ed1f;
+                            Rectangle {
+                                x: 0;
+                                width: parent.width * max(0, root.seconds) / root.total-seconds;
+                                border-radius: parent.border-radius;
+                                background: Theme.accent;
+                                animate width { duration: 1000ms; easing: linear; }
+                            }
+                        }
+                    }
+                    Text {
+                        text: @tr("{} s left", root.seconds);
+                        font-size: 16 * Theme.u;
+                        color: Theme.faint;
+                        horizontal-alignment: center;
+                    }
+                }
+                HorizontalLayout {
+                    alignment: center;
+                    spacing: 9 * Theme.u;
+                    VerticalLayout {
+                        alignment: center;
+                        Rectangle {
+                            width: 28 * Theme.u;
+                            height: 28 * Theme.u;
+                            border-radius: 14 * Theme.u;
+                            border-width: 1px;
+                            border-color: #de6a6099;
+                            Text {
+                                text: "B";
+                                font-size: 13 * Theme.u;
+                                font-weight: 700;
+                                color: Theme.problem;
+                                horizontal-alignment: center;
+                                vertical-alignment: center;
+                            }
+                        }
+                    }
+                    Text {
+                        text: root.waiting ? @tr("Cancel") : @tr("Close");
+                        font-size: 16 * Theme.u;
+                        color: Theme.text-body;
+                        vertical-alignment: center;
+                    }
+                }
+            }
+        }
+    }
+}

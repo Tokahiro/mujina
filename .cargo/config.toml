@@ -1,0 +1,6 @@
+[alias]
+xtask = "run --quiet --locked --package xtask --"
+
+# Link the C runtime statically so the MSIX needs no VCLibs framework dependency.
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]

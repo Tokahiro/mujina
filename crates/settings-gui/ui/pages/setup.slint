@@ -1,0 +1,336 @@
+// Setup: what starts in Xbox mode, the device button, what Mujina fixes, and the details under
+// Advanced. Every change is stored at once; Rust answers with a toast. The core settings have
+// rows of their own here; a launcher's and a device's come from Rust, built from their settings.
+
+import { Theme } from "@mujina/theme.slint";
+import { Icons } from "@mujina/icons.slint";
+import { Card } from "@mujina/controls.slint";
+import { Group } from "../controls.slint";
+import { ScrollPage } from "../page.slint";
+import { RowItem, RowData, RowKind, RowSection, Rows, PluginRows } from "../rows.slint";
+
+// What config.toml says, as the pages show it. Choices are indices into the lists the pages and
+// the Rust side agree on; an empty text means "the default".
+export struct Config {
+    // Into the launcher names, which Rust lists from the launchers Mujina has: the one shown,
+    // which may be one being chosen.
+    launcher-kind: int,
+    // The launcher shown tells when a game runs, so the starting screen row applies.
+    game-detection: bool,
+    // It cannot keep its starting screen with its options as they are: without the setting
+    // `start-screen-needs` names (in the app's language), where one of its switches is it.
+    start-screen-off: bool,
+    start-screen-needs: string,
+    on-exit: int,
+    menu: string,
+    overlay: string,
+    device-profile: int,
+    custom-button: string,
+    modifier-gap-ms: int,
+    key-hold-ms: int,
+    button-remap: bool,
+    game-start-screen: bool,
+    launch-screen: bool,
+    debug-log: bool,
+    // Of this app: 0 as Windows, 1 English, 2 German.
+    language: int,
+}
+
+export component SetupPage inherits Rectangle {
+    in property <Config> config;
+    // The launchers Mujina has, by name, in the order Rust lists them.
+    in property <[string]> launcher-names;
+    // Automatic, None, then the built-in profiles.
+    in property <[string]> profiles;
+    // The button combination in effect, e.g. "LWIN+D"; empty without one.
+    in property <string> button-in-use;
+    // The options of the launcher shown and of the device in effect.
+    in property <PluginRows> launcher;
+    in property <PluginRows> device;
+    callback capture();
+    callback leave();
+
+    property <bool> games: root.config.game-detection;
+    property <bool> advanced;
+
+    // The rows, by group. Changes go to Rust through `Change`, by key.
+    property <[RowData]> start-rows: [
+        {
+            kind: RowKind.choice,
+            key: "launcher.kind",
+            title: @tr("Your launcher"),
+            description: @tr("Takes effect the next time you enter Xbox mode."),
+            options: root.launcher-names,
+            selected: root.config.launcher-kind
+        },
+        {
+            kind: RowKind.choice,
+            key: "launcher.on_exit",
+            title: @tr("When the launcher closes"),
+            description: @tr("Applies at once in Xbox mode."),
+            options: [@tr("Restart after a crash"), @tr("Always restart"), @tr("Do nothing")],
+            selected: root.config.on-exit
+        }
+    ];
+    property <[RowData]> button-rows: [
+        {
+            kind: RowKind.toggle,
+            key: "features.button_remap",
+            title: @tr("Use the device button"),
+            description: @tr("Opens the launcher's menu, or the overlay while a game runs."),
+            on: root.config.button-remap
+        },
+        {
+            kind: RowKind.choice,
+            key: "device.profile",
+            title: @tr("Which button your handheld has"),
+            description: @tr("Automatic is right for almost every device."),
+            options: root.profiles,
+            selected: root.config.device-profile
+        },
+        {
+            kind: RowKind.button,
+            key: "capture",
+            title: @tr("Teach Mujina your button"),
+            description: @tr("Press Capture, then the button on your handheld."),
+            code: root.button-in-use != "" ? @tr("Currently {}", root.button-in-use) : "",
+            label: @tr("Capture"),
+            icon: Icons.record
+        }
+    ];
+    // Only for a launcher that tells when a game runs.
+    property <[RowData]> start-screen-rows: [
+        {
+            kind: RowKind.toggle,
+            key: "features.game_start_screen",
+            disabled: root.config.start-screen-off,
+            title: @tr("Keep the starting screen while a game loads"),
+            description: root.config.start-screen-off && root.config.start-screen-needs != "" ? @tr("Needs “{}”.", root.config.start-screen-needs) : @tr("The launcher stays on “game is starting” until the game appears. Applies at once in Xbox mode."),
+            on: root.config.game-start-screen
+        }
+    ];
+    property <[RowData]> launch-screen-rows: [
+        {
+            kind: RowKind.toggle,
+            key: "features.launch_screen",
+            title: @tr("Black screen while the launcher starts"),
+            description: @tr("Instead of Xbox mode's own grey. Takes effect the next time you enter Xbox mode."),
+            on: root.config.launch-screen
+        }
+    ];
+    property <[RowData]> header-rows: [
+        {
+            kind: RowKind.header,
+            key: "advanced",
+            title: @tr("Advanced"),
+            description: @tr("Key combinations, timings, window details. Most people never need these."),
+            open: root.advanced
+        }
+    ];
+    property <[RowData]> advanced-rows: [
+        {
+            kind: RowKind.text,
+            key: "launcher.menu",
+            small: true,
+            title: @tr("Menu shortcut"),
+            description: @tr("Sent instead of the launcher's own."),
+            value: root.config.menu,
+            placeholder: @tr("The launcher's own")
+        },
+        {
+            kind: RowKind.text,
+            key: "launcher.overlay",
+            small: true,
+            title: @tr("Overlay shortcut"),
+            description: @tr("Sent inside games. Empty means read it from the launcher."),
+            value: root.config.overlay,
+            placeholder: @tr("Read from the launcher")
+        },
+        {
+            kind: RowKind.text,
+            key: "device.button",
+            small: true,
+            title: @tr("Device button combination"),
+            description: @tr("Modifier and key, e.g. LWIN+D. Wins over the button chosen above; empty uses it."),
+            value: root.config.custom-button,
+            placeholder: @tr("From the button above")
+        },
+        {
+            kind: RowKind.number,
+            key: "timing.modifier_gap_ms",
+            small: true,
+            title: @tr("Pause between keys"),
+            description: @tr("Between the keys of a shortcut Mujina sends. 20 ms suits almost every game."),
+            number: root.config.modifier-gap-ms,
+            unit: "ms",
+            step: 5,
+            minimum: 0,
+            maximum: 500
+        },
+        {
+            kind: RowKind.number,
+            key: "timing.key_hold_ms",
+            small: true,
+            title: @tr("Key held for"),
+            description: @tr("Games read the keyboard once a frame — too short and they miss it."),
+            number: root.config.key-hold-ms,
+            unit: "ms",
+            step: 10,
+            minimum: 10,
+            maximum: 1000
+        }
+    ];
+
+    // Where each group's rows start: the page's rows are numbered in order, each group after the
+    // ones before it.
+    property <int> launcher-at: root.start-rows.length;
+    property <int> button-at: root.launcher-at + root.launcher.main.length;
+    property <int> device-at: root.button-at + root.button-rows.length;
+    property <int> features-at: root.device-at + root.device.main.length;
+    property <int> start-screen-at: root.features-at + root.launcher.features.length;
+    property <int> launch-screen-at: root.start-screen-at + root.start-screen-rows.length;
+    property <int> header-at: root.launch-screen-at + root.launch-screen-rows.length;
+    property <int> advanced-at: root.header-at + root.header-rows.length;
+    property <int> launcher-advanced-at: root.advanced-at + root.advanced-rows.length;
+    property <int> device-advanced-at: root.launcher-advanced-at + root.launcher.advanced.length;
+    // The same groups in the same order, and which rows the controller lands on.
+    property <[bool]> rows: Rows.enabled([
+        { rows: root.start-rows },
+        { rows: root.launcher.main },
+        { rows: root.button-rows },
+        { rows: root.device.main },
+        { rows: root.launcher.features },
+        { rows: root.start-screen-rows, hidden: !root.games },
+        { rows: root.launch-screen-rows },
+        { rows: root.header-rows },
+        { rows: root.advanced-rows, hidden: !root.advanced },
+        { rows: root.launcher.advanced, hidden: !root.advanced },
+        { rows: root.device.advanced, hidden: !root.advanced }
+    ]);
+
+    // A button row or the Advanced header.
+    function pressed(key: string) {
+        if (key == "capture") {
+            root.capture();
+        } else if (key == "advanced") {
+            root.advanced = !root.advanced;
+        }
+    }
+
+    public function enter() {
+        page.enter();
+    }
+
+    // Back from the capture overlay, on the same row.
+    public function resume() {
+        page.resume();
+    }
+
+    page := ScrollPage {
+        shown: root.visible;
+        title: @tr("Setup");
+        rows: root.rows;
+        leave => {
+            root.leave();
+        }
+
+        Group {
+            label: @tr("What starts in Xbox mode");
+            Card {
+                for row[i] in root.start-rows: RowItem {
+                    data: row;
+                    index: i;
+                    page: page.state;
+                }
+                // A layout only with rows in it: an empty one, or one row wrapped in its own, takes a
+                // share of the card's height and moves the rows around it.
+                if root.launcher.main.length > 0: VerticalLayout {
+                    for row[i] in root.launcher.main: RowItem {
+                        data: row;
+                        index: root.launcher-at + i;
+                        page: page.state;
+                    }
+                }
+            }
+        }
+
+        Group {
+            label: @tr("Your device button");
+            Card {
+                for row[i] in root.button-rows: RowItem {
+                    data: row;
+                    index: root.button-at + i;
+                    page: page.state;
+                    press(key) => {
+                        root.pressed(key);
+                    }
+                }
+                for row[i] in root.device.main: RowItem {
+                    data: row;
+                    index: root.device-at + i;
+                    page: page.state;
+                }
+            }
+        }
+
+        Group {
+            label: @tr("What Mujina fixes");
+            Card {
+                if root.launcher.features.length > 0: VerticalLayout {
+                    for row[i] in root.launcher.features: RowItem {
+                        data: row;
+                        index: root.features-at + i;
+                        page: page.state;
+                    }
+                }
+                if root.games: RowItem {
+                    data: root.start-screen-rows[0];
+                    index: root.start-screen-at;
+                    page: page.state;
+                }
+                RowItem {
+                    data: root.launch-screen-rows[0];
+                    index: root.launch-screen-at;
+                    page: page.state;
+                }
+            }
+        }
+
+        VerticalLayout {
+            spacing: 10 * Theme.u;
+            for row[i] in root.header-rows: RowItem {
+                data: row;
+                index: root.header-at + i;
+                page: page.state;
+                press(key) => {
+                    root.pressed(key);
+                }
+            }
+
+            if root.advanced: Card {
+                property <bool> appeared;
+                init => {
+                    self.appeared = true;
+                }
+                opacity: self.appeared ? 1 : 0;
+                animate opacity { duration: 180ms; easing: ease-out; }
+                background: Theme.card-advanced;
+                for row[i] in root.advanced-rows: RowItem {
+                    data: row;
+                    index: root.advanced-at + i;
+                    page: page.state;
+                }
+                for row[i] in root.launcher.advanced: RowItem {
+                    data: row;
+                    index: root.launcher-advanced-at + i;
+                    page: page.state;
+                }
+                for row[i] in root.device.advanced: RowItem {
+                    data: row;
+                    index: root.device-advanced-at + i;
+                    page: page.state;
+                }
+            }
+        }
+    }
+}

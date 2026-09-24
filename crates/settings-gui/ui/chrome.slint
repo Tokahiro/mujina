@@ -1,0 +1,222 @@
+// The rail on the left: the mark, the pages, and Close in full screen.
+
+import { Theme } from "@mujina/theme.slint";
+import { Icons } from "@mujina/icons.slint";
+import { Mark } from "@mujina/mark.slint";
+
+component RailEntry inherits Rectangle {
+    in property <image> icon;
+    in property <string> text;
+    // The page shown is this one.
+    in property <bool> current;
+    // The controller is on this entry.
+    in property <bool> focused;
+    callback clicked();
+    height: 56 * Theme.u;
+    border-radius: Theme.radius-row;
+    clip: true;
+    background: touch.pressed ? Theme.accent-28 : root.focused ? Theme.accent-16 : root.current ? Theme.accent-13 : touch.has-hover ? #e9e9ed0f : transparent;
+    border-width: root.focused ? 1.5px : 0px;
+    border-color: Theme.accent-focus;
+    accessible-role: button;
+    accessible-label: root.text;
+    accessible-action-default => {
+        root.clicked();
+    }
+    drop-shadow-blur: root.focused ? 16 * Theme.u : 0px;
+    drop-shadow-color: Theme.glow;
+    // The current page's accent bar on the left edge.
+    Rectangle {
+        x: 0;
+        width: 3 * Theme.u;
+        background: root.current ? Theme.accent : transparent;
+    }
+    HorizontalLayout {
+        padding-left: 16 * Theme.u;
+        padding-right: 16 * Theme.u;
+        spacing: 16 * Theme.u;
+        VerticalLayout {
+            alignment: center;
+            Image {
+                width: 26 * Theme.u;
+                height: 26 * Theme.u;
+                source: root.icon;
+                colorize: label.color;
+            }
+        }
+        label := Text {
+            text: root.text;
+            font-size: Theme.row-title;
+            font-weight: 500;
+            vertical-alignment: center;
+            overflow: elide;
+            color: root.current || root.focused ? Theme.text : Theme.muted;
+        }
+    }
+    touch := TouchArea {
+        clicked => {
+            root.clicked();
+        }
+    }
+}
+
+// A page as the rail lists it.
+struct RailPage {
+    icon: image,
+    text: string,
+}
+
+export component Rail inherits Rectangle {
+    // The page shown: 0 Status, 1 Setup, 2 System, 3 Help.
+    in-out property <int> page;
+    in property <bool> fullscreen;
+    // Where the controller is in the rail: a page, or Close after the last one.
+    in-out property <int> selected;
+    // The pages, in order; what the window shows for each is in main.slint.
+    property <[RailPage]> pages: [
+        { icon: Icons.status, text: @tr("Status") },
+        { icon: Icons.setup, text: @tr("Setup") },
+        { icon: Icons.system, text: @tr("System") },
+        { icon: Icons.help, text: @tr("Help") }
+    ];
+    out property <int> count: root.pages.length;
+    out property <bool> focused: keys.has-focus;
+    // Into the page shown, onto its first row.
+    callback enter();
+    callback close();
+    forward-focus: keys;
+    width: 300 * Theme.u;
+    background: @linear-gradient(180deg, #9184d912 0%, #9184d900 40%);
+
+    // Up and down show the page at once; A or right enters it. B leaves the app in full screen,
+    // where there is no title bar to close it with.
+    keys := FocusScope {
+        key-pressed(event) => {
+            if (event.text == Key.DownArrow) {
+                root.selected = min(root.fullscreen ? root.count : root.count - 1, root.selected + 1);
+                if (root.selected < root.count) {
+                    root.page = root.selected;
+                }
+                return accept;
+            }
+            if (event.text == Key.UpArrow) {
+                root.selected = max(0, root.selected - 1);
+                root.page = root.selected;
+                return accept;
+            }
+            if (event.text == Key.Return || event.text == Key.Space || event.text == Key.RightArrow) {
+                if (root.selected == root.count) {
+                    root.close();
+                } else {
+                    root.enter();
+                }
+                return accept;
+            }
+            if (event.text == Key.Escape && root.fullscreen) {
+                root.close();
+                return accept;
+            }
+            reject
+        }
+    }
+
+    Rectangle {
+        x: parent.width - 1px;
+        width: 1px;
+        background: Theme.line;
+    }
+
+    VerticalLayout {
+        padding-top: 26 * Theme.u;
+        padding-bottom: 20 * Theme.u;
+        padding-left: 16 * Theme.u;
+        padding-right: 16 * Theme.u;
+        spacing: 26 * Theme.u;
+
+        HorizontalLayout {
+            padding-left: 10 * Theme.u;
+            padding-right: 10 * Theme.u;
+            spacing: 16 * Theme.u;
+            alignment: start;
+            Mark {
+                size: 44 * Theme.u;
+                ground: #1a1d2b;
+            }
+            VerticalLayout {
+                alignment: center;
+                Text {
+                    text: "Mujina";
+                    font-size: 21 * Theme.u;
+                    font-weight: 600;
+                    letter-spacing: -0.21 * Theme.u;
+                    color: Theme.text;
+                }
+                Text {
+                    text: @tr("Settings").to-uppercase();
+                    font-size: Theme.label;
+                    letter-spacing: Theme.label * 0.04;
+                    color: Theme.muted;
+                }
+            }
+        }
+
+        VerticalLayout {
+            spacing: 6 * Theme.u;
+            for entry[index] in root.pages: RailEntry {
+                icon: entry.icon;
+                text: entry.text;
+                current: root.page == index;
+                focused: keys.has-focus && root.selected == index;
+                clicked => {
+                    root.selected = index;
+                    root.page = index;
+                    root.enter();
+                }
+            }
+        }
+
+        Rectangle {
+            vertical-stretch: 1;
+        }
+
+        if root.fullscreen: Rectangle {
+            height: 52 * Theme.u;
+            border-radius: Theme.radius-row;
+            border-width: keys.has-focus && root.selected == root.count ? 2px : 1.5px;
+            border-color: keys.has-focus && root.selected == root.count ? Theme.accent-focus : Theme.accent;
+            background: close-touch.pressed ? Theme.accent-28 : keys.has-focus && root.selected == root.count ? Theme.accent-18 : close-touch.has-hover ? Theme.accent-12 : transparent;
+            drop-shadow-blur: keys.has-focus && root.selected == root.count ? 16 * Theme.u : 0px;
+            drop-shadow-color: Theme.glow;
+            accessible-role: button;
+            accessible-label: @tr("Close");
+            accessible-action-default => {
+                root.close();
+            }
+            HorizontalLayout {
+                alignment: center;
+                spacing: 10 * Theme.u;
+                VerticalLayout {
+                    alignment: center;
+                    Image {
+                        width: 21 * Theme.u;
+                        height: 21 * Theme.u;
+                        source: Icons.close;
+                        colorize: Theme.accent-light;
+                    }
+                }
+                Text {
+                    text: @tr("Close");
+                    font-size: 18 * Theme.u;
+                    font-weight: 500;
+                    color: Theme.accent-light;
+                    vertical-alignment: center;
+                }
+            }
+            close-touch := TouchArea {
+                clicked => {
+                    root.close();
+                }
+            }
+        }
+    }
+}

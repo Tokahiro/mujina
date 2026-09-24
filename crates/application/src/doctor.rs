@@ -1,0 +1,471 @@
+//! Self-diagnosis. The target devices have no keyboard, so "why does it not work" has to be
+//! answerable from one command whose output can be read on the device or sent to someone.
+
+use std::fmt::Write as _;
+
+use crate::Msg;
+use crate::ports::{
+    FseState, FullScreenExperience, HomeAppRegistry, HomeLauncher, LauncherState, PackageIdentity,
+};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Severity {
+    Ok,
+    Warning,
+    Problem,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Finding {
+    /// Which check found it: stable, English and lower case, e.g. `developer mode`. What
+    /// `mujinactl doctor` prints, so that reports stay comparable, and what Mujina Settings
+    /// looks a finding up by.
+    pub id: &'static str,
+    /// What Mujina Settings calls the check, e.g. "Developer Mode"; its own crate's catalog
+    /// translates it.
+    pub title: Msg,
+    pub severity: Severity,
+    /// What it found, in English, as `mujinactl doctor` and the log say it.
+    pub detail: String,
+    /// What it found as a sentence for someone who reads no report, which its crate's catalog
+    /// translates: Mujina Settings' System page shows it in the window's language. `None` for a
+    /// check whose detail says it all.
+    pub summary: Option<Msg>,
+    /// What a page can offer to put it right, as the check decides.
+    pub remedy: Option<Remedy>,
+}
+
+impl Finding {
+    /// The finding, said in `summary` as well ([`Finding::summary`]).
+    #[must_use]
+    pub fn saying(self, summary: Msg) -> Self {
+        Self {
+            summary: Some(summary),
+            ..self
+        }
+    }
+
+    /// The finding, with what a page can offer beside it ([`Finding::remedy`]).
+    #[must_use]
+    pub fn remedied_by(self, remedy: Remedy) -> Self {
+        Self {
+            remedy: Some(remedy),
+            ..self
+        }
+    }
+}
+
+/// What a page can offer beside a finding. The check that found it chooses, so that no page
+/// has to know which of them needs what.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Remedy {
+    /// Windows' page of location permissions.
+    LocationSettings,
+    /// Starting the background agent.
+    StartAgent,
+}
+
+/// One thing worth looking at. Adapters contribute checks for what only they know about
+/// (operating system settings, a launcher's files and ports).
+pub trait Check {
+    /// The id of its findings ([`Finding::id`]); known before it looks, so that a page can
+    /// ask for the checks it shows alone.
+    fn id(&self) -> &'static str;
+
+    /// The title of its findings ([`Finding::title`]).
+    fn title(&self) -> Msg;
+
+    fn examine(&self) -> Finding;
+
+    /// A finding of this check.
+    fn found(&self, severity: Severity, detail: impl Into<String>) -> Finding
+    where
+        Self: Sized,
+    {
+        Finding {
+            id: self.id(),
+            title: self.title(),
+            severity,
+            detail: detail.into(),
+            summary: None,
+            remedy: None,
+        }
+    }
+}
+
+pub struct Doctor<'a> {
+    pub fse: &'a dyn FullScreenExperience,
+    pub identity: &'a dyn PackageIdentity,
+    pub registry: &'a dyn HomeAppRegistry,
+    pub launcher: &'a dyn HomeLauncher,
+    /// Checks beyond the ones the ports above allow: the operating system's, then the
+    /// launcher's own.
+    pub checks: &'a [Box<dyn Check>],
+}
+
+/// The id of the doctor's check of Xbox mode, the full screen experience.
+pub const FULL_SCREEN_EXPERIENCE: &str = "full screen experience";
+
+// The doctor's own checks, by id and title.
+const FSE: (&str, Msg) = (FULL_SCREEN_EXPERIENCE, Msg::new("Xbox mode"));
+const PACKAGE: (&str, Msg) = ("package", Msg::new("Mujina's package"));
+const HOME_APP: (&str, Msg) = ("home app", Msg::new("Home app"));
+const LAUNCHER: (&str, Msg) = ("launcher", Msg::new("Launcher"));
+
+fn finding((id, title): (&'static str, Msg), severity: Severity, detail: String) -> Finding {
+    Finding {
+        id,
+        title,
+        severity,
+        detail,
+        summary: None,
+        remedy: None,
+    }
+}
+
+/// One of the doctor's own checks: its id, and how it looks.
+type Own<'d> = (&'static str, fn(&Doctor<'d>) -> Finding);
+
+impl<'d> Doctor<'d> {
+    /// Its own checks, in the order they are looked at, before the others.
+    fn own() -> [Own<'d>; 4] {
+        [
+            (FSE.0, Self::check_fse),
+            (PACKAGE.0, Self::check_package),
+            (HOME_APP.0, Self::check_home_app),
+            (LAUNCHER.0, Self::check_launcher),
+        ]
+    }
+
+    pub fn examine(&self) -> Vec<Finding> {
+        self.examine_only(|_| true)
+    }
+
+    /// The findings of the checks whose id `wanted` takes, in the order of
+    /// [`examine`](Self::examine). The rest are not looked at: a page that shows a few need not
+    /// wait for all.
+    pub fn examine_only(&self, wanted: impl Fn(&str) -> bool) -> Vec<Finding> {
+        let own = Self::own()
+            .into_iter()
+            .filter(|(id, _)| wanted(id))
+            .map(|(_, check)| check(self));
+        let theirs = self
+            .checks
+            .iter()
+            .filter(|check| wanted(check.id()))
+            .map(|check| check.examine());
+        own.chain(theirs).collect()
+    }
+
+    /// Every finding, as [`examine`](Self::examine) has them, with those `known` from a moment
+    /// before (a page's few, say) in place of looking again.
+    pub fn examine_knowing(&self, mut known: Vec<Finding>) -> Vec<Finding> {
+        let mut take = |id: &str| {
+            let at = known.iter().position(|finding| finding.id == id)?;
+            Some(known.swap_remove(at))
+        };
+        let mut found = Vec::new();
+        for (id, check) in Self::own() {
+            found.push(take(id).unwrap_or_else(|| check(self)));
+        }
+        for check in self.checks {
+            found.push(take(check.id()).unwrap_or_else(|| check.examine()));
+        }
+        found
+    }
+
+    fn check_fse(&self) -> Finding {
+        let (severity, detail, summary) = match self.fse.state() {
+            FseState::Active => (
+                Severity::Ok,
+                "active",
+                Msg::new("On. You are in Xbox mode now."),
+            ),
+            FseState::Inactive => (
+                Severity::Ok,
+                "supported, currently on the desktop",
+                Msg::new("Available. You are on the desktop now."),
+            ),
+            FseState::Unavailable => (
+                Severity::Problem,
+                "this Windows build has no full screen experience API",
+                Msg::new("This Windows has no Xbox mode."),
+            ),
+        };
+        finding(FSE, severity, detail.to_string()).saying(summary)
+    }
+
+    fn check_package(&self) -> Finding {
+        match self.identity.app_user_model_id() {
+            Some(id) => finding(PACKAGE, Severity::Ok, id),
+            None => finding(
+                PACKAGE,
+                Severity::Problem,
+                "running unpackaged; Windows only accepts a packaged app as home app".to_string(),
+            ),
+        }
+    }
+
+    fn check_home_app(&self) -> Finding {
+        let ours = self.identity.app_user_model_id();
+        let (severity, detail) = match self.registry.current() {
+            Ok(Some(current)) if Some(&current) == ours.as_ref() => {
+                (Severity::Ok, "Mujina is the home app".to_string())
+            }
+            Ok(Some(other)) => (Severity::Warning, format!("home app is {other}")),
+            Ok(None) => (Severity::Warning, "no home app is configured".to_string()),
+            Err(error) => (Severity::Problem, error.to_string()),
+        };
+        finding(HOME_APP, severity, detail)
+    }
+
+    fn check_launcher(&self) -> Finding {
+        let name = self.launcher.display_name();
+        let (severity, detail) = match self.launcher.locate() {
+            Ok(install) => {
+                let state = match self.launcher.state() {
+                    LauncherState::NotRunning => "not running",
+                    LauncherState::RunningWithoutUi => "running without console UI",
+                    LauncherState::UiVisible => "console UI on screen",
+                };
+                (
+                    Severity::Ok,
+                    format!("{name} at {} ({state})", install.executable.display()),
+                )
+            }
+            Err(error) => (Severity::Problem, format!("{name}: {error}")),
+        };
+        finding(LAUNCHER, severity, detail)
+    }
+}
+
+/// Renders findings as plain text, one per line.
+pub fn render(findings: &[Finding]) -> String {
+    let mut text = String::new();
+    for finding in findings {
+        let mark = match finding.severity {
+            Severity::Ok => "ok  ",
+            Severity::Warning => "warn",
+            Severity::Problem => "FAIL",
+        };
+        // Writing into a String cannot fail.
+        let _ = writeln!(text, "[{mark}] {}: {}", finding.id, finding.detail);
+    }
+    text
+}
+
+#[cfg(test)]
+mod tests {
+    use std::cell::Cell;
+    use std::rc::Rc;
+
+    use super::*;
+    use crate::testing::{FakeFse, FakeHomeAppRegistry, FakeIdentity, FakeLauncher};
+
+    #[test]
+    fn healthy_system_has_no_complaints() {
+        let fse = FakeFse(FseState::Active);
+        let identity = FakeIdentity::packaged("Mujina_abc!App");
+        let registry = FakeHomeAppRegistry::with_current(Some("Mujina_abc!App"));
+        let launcher = FakeLauncher::installed(LauncherState::UiVisible);
+        let doctor = Doctor {
+            fse: &fse,
+            identity: &identity,
+            registry: &registry,
+            launcher: &launcher,
+            checks: &[],
+        };
+
+        let findings = doctor.examine();
+        assert!(
+            findings.iter().all(|f| f.severity == Severity::Ok),
+            "{findings:?}"
+        );
+        assert_eq!(render(&findings).lines().count(), 4);
+    }
+
+    #[test]
+    fn problems_are_named() {
+        let fse = FakeFse(FseState::Unavailable);
+        let identity = FakeIdentity::unpackaged();
+        let registry = FakeHomeAppRegistry::with_current(Some("Other!App"));
+        let launcher = FakeLauncher::missing();
+        let doctor = Doctor {
+            fse: &fse,
+            identity: &identity,
+            registry: &registry,
+            launcher: &launcher,
+            checks: &[],
+        };
+
+        let severities: Vec<_> = doctor.examine().iter().map(|f| f.severity).collect();
+        assert_eq!(
+            severities,
+            [
+                Severity::Problem,
+                Severity::Problem,
+                Severity::Warning,
+                Severity::Problem
+            ]
+        );
+    }
+
+    /// A check of an adapter's, which says it is fine.
+    struct Quiet;
+
+    impl Check for Quiet {
+        fn id(&self) -> &'static str {
+            "quiet"
+        }
+
+        fn title(&self) -> Msg {
+            Msg::new("Quiet")
+        }
+
+        fn examine(&self) -> Finding {
+            self.found(Severity::Ok, "calm")
+        }
+    }
+
+    #[test]
+    fn a_page_asks_for_the_checks_it_shows_by_their_ids() {
+        let fse = FakeFse(FseState::Active);
+        let identity = FakeIdentity::unpackaged();
+        let registry = FakeHomeAppRegistry::default();
+        let launcher = FakeLauncher::missing();
+        let checks: [Box<dyn Check>; 1] = [Box::new(Quiet)];
+        let doctor = Doctor {
+            fse: &fse,
+            identity: &identity,
+            registry: &registry,
+            launcher: &launcher,
+            checks: &checks,
+        };
+        let found = doctor.examine_only(|id| id == "quiet" || id == "full screen experience");
+        let ids: Vec<&str> = found.iter().map(|finding| finding.id).collect();
+        assert_eq!(ids, ["full screen experience", "quiet"]);
+        assert_eq!(found[0].title, Msg::new("Xbox mode"));
+        assert_eq!(
+            found[1],
+            Finding {
+                id: "quiet",
+                title: Msg::new("Quiet"),
+                severity: Severity::Ok,
+                detail: "calm".into(),
+                summary: None,
+                remedy: None,
+            }
+        );
+        assert_eq!(render(&found[1..]), "[ok  ] quiet: calm\n");
+    }
+
+    /// A check of an adapter's that counts how often it looked.
+    struct Counted {
+        id: &'static str,
+        looked: Rc<Cell<u32>>,
+    }
+
+    impl Check for Counted {
+        fn id(&self) -> &'static str {
+            self.id
+        }
+
+        fn title(&self) -> Msg {
+            Msg::new("Counted")
+        }
+
+        fn examine(&self) -> Finding {
+            self.looked.set(self.looked.get() + 1);
+            self.found(Severity::Ok, format!("look {}", self.looked.get()))
+        }
+    }
+
+    #[test]
+    fn what_a_page_found_a_moment_ago_is_not_looked_at_again() {
+        let fse = FakeFse(FseState::Active);
+        let identity = FakeIdentity::unpackaged();
+        let registry = FakeHomeAppRegistry::default();
+        let launcher = FakeLauncher::missing();
+        let (first, second) = (Rc::new(Cell::new(0)), Rc::new(Cell::new(0)));
+        let checks: [Box<dyn Check>; 2] = [
+            Box::new(Counted {
+                id: "first",
+                looked: Rc::clone(&first),
+            }),
+            Box::new(Counted {
+                id: "second",
+                looked: Rc::clone(&second),
+            }),
+        ];
+        let doctor = Doctor {
+            fse: &fse,
+            identity: &identity,
+            registry: &registry,
+            launcher: &launcher,
+            checks: &checks,
+        };
+        let known = doctor.examine_only(|id| id == "second" || id == "launcher");
+        let all = doctor.examine_knowing(known.clone());
+        // In the doctor's order, as if looked at once.
+        let ids: Vec<&str> = all.iter().map(|finding| finding.id).collect();
+        assert_eq!(
+            ids,
+            [
+                "full screen experience",
+                "package",
+                "home app",
+                "launcher",
+                "first",
+                "second"
+            ]
+        );
+        assert_eq!((first.get(), second.get()), (1, 1));
+        assert_eq!((&all[3], &all[5]), (&known[0], &known[1]));
+    }
+
+    #[test]
+    fn a_finding_can_say_it_in_a_sentence_while_the_report_keeps_its_detail() {
+        let identity = FakeIdentity::unpackaged();
+        let registry = FakeHomeAppRegistry::default();
+        let launcher = FakeLauncher::missing();
+        let xbox_mode = |state| {
+            let fse = FakeFse(state);
+            let doctor = Doctor {
+                fse: &fse,
+                identity: &identity,
+                registry: &registry,
+                launcher: &launcher,
+                checks: &[],
+            };
+            doctor
+                .examine_only(|id| id == FULL_SCREEN_EXPERIENCE)
+                .remove(0)
+        };
+        let desktop = xbox_mode(FseState::Inactive);
+        assert_eq!(
+            desktop.summary,
+            Some(Msg::new("Available. You are on the desktop now."))
+        );
+        assert_eq!(
+            render(&[desktop]),
+            "[ok  ] full screen experience: supported, currently on the desktop\n"
+        );
+        let missing = xbox_mode(FseState::Unavailable);
+        assert_eq!(
+            (missing.severity, missing.summary),
+            (
+                Severity::Problem,
+                Some(Msg::new("This Windows has no Xbox mode."))
+            )
+        );
+        // Adapters' checks say it the same way.
+        let quiet = Quiet
+            .found(Severity::Warning, "loud")
+            .saying(Msg::new("Loud."))
+            .remedied_by(Remedy::StartAgent);
+        assert_eq!(
+            (quiet.summary, quiet.remedy),
+            (Some(Msg::new("Loud.")), Some(Remedy::StartAgent))
+        );
+    }
+}

@@ -1,0 +1,286 @@
+# German texts of Mujina Setup. The context (msgctxt) is the Slint component the text appears
+# in; a text without a translation here stays English. `cargo xtask i18n-check` lists them.
+msgid ""
+msgstr ""
+"Project-Id-Version: Mujina\n"
+"POT-Creation-Date: 2026-09-22 00:00+0200\n"
+"PO-Revision-Date: 2026-09-22 00:00+0200\n"
+"Last-Translator: \n"
+"Language-Team: German\n"
+"Language: de\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+msgctxt "StepItem"
+msgid "Turn on Developer Mode and trust Mujina's certificate (one prompt)"
+msgstr "Entwicklermodus einschalten und Mujinas Zertifikat vertrauen (eine Abfrage)"
+
+msgctxt "StepItem"
+msgid "Trust Mujina's certificate (one prompt)"
+msgstr "Mujinas Zertifikat vertrauen (eine Abfrage)"
+
+msgctxt "StepItem"
+msgid "Turn on Developer Mode (one prompt)"
+msgstr "Entwicklermodus einschalten (eine Abfrage)"
+
+msgctxt "StepItem"
+msgid "Install Mujina"
+msgstr "Mujina installieren"
+
+msgctxt "StepItem"
+msgid "Make Mujina the home app of Xbox mode"
+msgstr "Mujina als Home-App des Xbox-Modus festlegen"
+
+msgctxt "StepItem"
+msgid "Arrange for the home app setting to be given back if Mujina is ever removed"
+msgstr "Dafür sorgen, dass die Home-App zurückgegeben wird, falls Mujina entfernt wird"
+
+msgctxt "StepItem"
+msgid "Give the home app setting back"
+msgstr "Home-App zurückgeben"
+
+msgctxt "StepItem"
+msgid "Remove Mujina"
+msgstr "Mujina entfernen"
+
+msgctxt "StepItem"
+msgid "Remove the files Mujina placed in other programs' folders"
+msgstr "Dateien entfernen, die Mujina in Ordnern anderer Programme abgelegt hat"
+
+msgctxt "StepItem"
+msgid "Remove what the installer left"
+msgstr "Entfernen, was der Installer hinterlassen hat"
+
+msgctxt "SetupWindow"
+msgid "Mujina Setup"
+msgstr "Mujina-Setup"
+
+msgctxt "SetupWindow"
+msgid "Remove Mujina from this device."
+msgstr "Mujina von diesem Gerät entfernen."
+
+msgctxt "SetupWindow"
+msgid "Make Mujina the console home of Xbox mode."
+msgstr "Mujina zur Konsolen-Startseite des Xbox-Modus machen."
+
+msgctxt "SetupWindow"
+msgid "Mujina is installed as a Windows package. If this PC is not prepared yet, Windows asks once for administrator rights: to turn on Developer Mode, which home apps other than Microsoft's need, and to trust Mujina's own certificate, with which it is signed. That is also why Windows may warn about this installer."
+msgstr "Mujina wird als Windows-Paket installiert. Ist dieser PC noch nicht vorbereitet, fragt Windows einmal nach Administratorrechten: um den Entwicklermodus einzuschalten, den Home-Apps außer der von Microsoft brauchen, und um Mujinas eigenem Zertifikat zu vertrauen, mit dem es signiert ist. Deshalb warnt Windows unter Umständen auch vor diesem Installer."
+
+msgctxt "SetupWindow"
+msgid "The home app setting goes back to what it was before Mujina, then the package is removed, and with it the files Mujina placed in other programs' folders. Developer Mode and the certificate stay: removing them would need administrator rights again."
+msgstr "Die Home-App wird wieder die, die sie vor Mujina war, danach werden das Paket und mit ihm die Dateien entfernt, die Mujina in Ordnern anderer Programme angelegt hat. Entwicklermodus und Zertifikat bleiben: sie zu entfernen bräuchte erneut Administratorrechte."
+
+msgctxt "SetupWindow"
+msgid "Make Mujina the home app of Xbox mode"
+msgstr "Mujina als Home-App des Xbox-Modus festlegen"
+
+msgctxt "SetupWindow"
+msgid "Open Mujina Settings"
+msgstr "Mujina-Einstellungen öffnen"
+
+msgctxt "SetupWindow"
+msgid "Remove"
+msgstr "Entfernen"
+
+msgctxt "SetupWindow"
+msgid "Update"
+msgstr "Aktualisieren"
+
+msgctxt "SetupWindow"
+msgid "Install"
+msgstr "Installieren"
+
+msgctxt "SetupWindow"
+msgid "Close"
+msgstr "Schließen"
+
+msgctxt "SetupWindow"
+msgid "Installing…"
+msgstr "Wird installiert…"
+
+msgctxt "SetupWindow"
+msgid "Updating…"
+msgstr "Wird aktualisiert…"
+
+msgctxt "SetupWindow"
+msgid "Removing…"
+msgstr "Wird entfernt…"
+
+msgctxt "SetupWindow"
+msgid "Setup stopped"
+msgstr "Setup abgebrochen"
+
+msgctxt "SetupWindow"
+msgid "Mujina is removed."
+msgstr "Mujina ist entfernt."
+
+msgctxt "SetupWindow"
+msgid "Done. Enter Xbox mode to start with Mujina."
+msgstr "Fertig. Wechsle in den Xbox-Modus, um mit Mujina zu starten."
+
+msgctxt "SetupWindow"
+msgid "Mujina is installed."
+msgstr "Mujina ist installiert."
+
+msgctxt "SetupWindow"
+msgid "The administrator prompt was declined."
+msgstr "Die Administratorabfrage wurde abgelehnt."
+
+msgctxt "SetupWindow"
+msgid "The administrator part of Setup refused its arguments."
+msgstr "Der Administratorteil des Setups hat seine Argumente abgelehnt."
+
+msgctxt "SetupWindow"
+msgid "Developer Mode could not be turned on."
+msgstr "Der Entwicklermodus konnte nicht eingeschaltet werden."
+
+msgctxt "SetupWindow"
+msgid "Mujina's certificate could not be added to the trusted people of this device."
+msgstr "Mujinas Zertifikat konnte nicht zu den vertrauenswürdigen Personen dieses Geräts hinzugefügt werden."
+
+msgctxt "SetupWindow"
+msgid "Preparing the machine failed."
+msgstr "Das Vorbereiten des Geräts ist fehlgeschlagen."
+
+msgctxt "StepItem"
+msgid "Check that this device can run Mujina"
+msgstr "Prüfen, ob dieses Gerät Mujina ausführen kann"
+
+msgctxt "StepItem"
+msgid "Update Mujina"
+msgstr "Mujina aktualisieren"
+
+msgctxt "StepItem"
+msgid "Install Mujina again"
+msgstr "Mujina erneut installieren"
+
+msgctxt "StepItem"
+msgid "Replace the newer Mujina with this version"
+msgstr "Das neuere Mujina durch diese Version ersetzen"
+
+msgctxt "SetupWindow"
+msgid "Checking this device…"
+msgstr "Dieses Gerät wird geprüft…"
+
+msgctxt "SetupWindow"
+msgid "Update Mujina {} to this version."
+msgstr "Mujina {} auf diese Version aktualisieren."
+
+msgctxt "SetupWindow"
+msgid "This version is installed already. Install it again?"
+msgstr "Diese Version ist schon installiert. Erneut installieren?"
+
+msgctxt "SetupWindow"
+msgid "A newer Mujina ({}) is installed. Replace it with this version?"
+msgstr "Ein neueres Mujina ({}) ist installiert. Durch diese Version ersetzen?"
+
+msgctxt "SetupWindow"
+msgid "This build of Mujina Setup carries no package."
+msgstr "Dieser Build von Mujina-Setup enthält kein Paket."
+
+msgctxt "SetupWindow"
+msgid "Mujina needs Windows 11 24H2 (build 26100) or later. This device has build {}."
+msgstr "Mujina braucht Windows 11 24H2 (Build 26100) oder neuer. Dieses Gerät hat Build {}."
+
+msgctxt "SetupWindow"
+msgid "Reinstall"
+msgstr "Neu installieren"
+
+msgctxt "SetupWindow"
+msgid "Replace"
+msgstr "Ersetzen"
+
+msgctxt "SetupWindow"
+msgid "Mujina is running in Xbox mode now. Installing stops it; it starts again the next time you enter Xbox mode."
+msgstr "Mujina läuft gerade im Xbox-Modus. Die Installation beendet es; es startet wieder, wenn du das nächste Mal in den Xbox-Modus wechselst."
+
+msgctxt "SetupWindow"
+msgid "Windows did not start the administrator part of Setup."
+msgstr "Windows hat den Administratorteil des Setups nicht gestartet."
+
+msgctxt "SetupWindow"
+msgid "Mujina needs Windows 11 24H2 (build 26100) or later."
+msgstr "Mujina braucht Windows 11 24H2 (Build 26100) oder neuer."
+
+msgctxt "SetupWindow"
+msgid "A newer version of Mujina is installed."
+msgstr "Eine neuere Version von Mujina ist installiert."
+
+msgctxt "SetupWindow"
+msgid "This version of Mujina is installed already, from a different build. Remove Mujina first, then install it again."
+msgstr "Diese Version von Mujina ist schon installiert, aus einem anderen Build. Entferne Mujina zuerst und installiere es dann erneut."
+
+msgctxt "SetupWindow"
+msgid "Windows does not trust the signature of Mujina's package."
+msgstr "Windows vertraut der Signatur von Mujinas Paket nicht."
+
+msgctxt "SetupWindow"
+msgid "Windows installs no apps from outside the Store on this device. Turn on Developer Mode and try again."
+msgstr "Windows installiert auf diesem Gerät keine Apps von außerhalb des Stores. Schalte den Entwicklermodus ein und versuche es erneut."
+
+msgctxt "SetupWindow"
+msgid "A policy of this device does not allow installing apps."
+msgstr "Eine Richtlinie dieses Geräts erlaubt keine App-Installationen."
+
+msgctxt "SetupWindow"
+msgid "Mujina is in use and could not be replaced. Leave Xbox mode and try again."
+msgstr "Mujina wird gerade verwendet und konnte nicht ersetzt werden. Verlasse den Xbox-Modus und versuche es erneut."
+
+msgctxt "SetupWindow"
+msgid "There is not enough space on the drive."
+msgstr "Auf dem Laufwerk ist nicht genug Platz."
+
+msgctxt "SetupWindow"
+msgid "Windows found a conflict with an app that is installed."
+msgstr "Windows hat einen Konflikt mit einer installierten App festgestellt."
+
+msgctxt "SetupWindow"
+msgid "The package this installer carries is damaged. Download Mujina Setup again."
+msgstr "Das Paket in diesem Installer ist beschädigt. Lade Mujina-Setup erneut herunter."
+
+msgctxt "SetupWindow"
+msgid "Windows could not install the package."
+msgstr "Windows konnte das Paket nicht installieren."
+
+msgctxt "SetupWindow"
+msgid "This Mujina is not installed."
+msgstr "Dieses Mujina ist nicht installiert."
+
+msgctxt "SetupWindow"
+msgid "The home app setting could not be changed."
+msgstr "Die Home-App-Einstellung konnte nicht geändert werden."
+
+msgctxt "SetupWindow"
+msgid "The check at sign-in could not be arranged or removed."
+msgstr "Die Prüfung bei der Anmeldung konnte nicht eingerichtet oder entfernt werden."
+
+msgctxt "SetupWindow"
+msgid "Files Mujina placed in other programs' folders could not be removed. Setup tries again at your next sign-in."
+msgstr "Dateien, die Mujina in Ordnern anderer Programme abgelegt hat, konnten nicht entfernt werden. Setup versucht es bei deiner nächsten Anmeldung erneut."
+
+msgctxt "SetupWindow"
+msgid "Something went wrong."
+msgstr "Etwas ist schiefgelaufen."
+
+msgctxt "SetupWindow"
+msgid "Code {}"
+msgstr "Code {}"
+
+msgctxt "SetupWindow"
+msgid "Code {}: {}"
+msgstr "Code {}: {}"
+
+msgctxt "SetupWindow"
+msgid "Copy details"
+msgstr "Details kopieren"
+
+msgctxt "SetupWindow"
+msgid "Open log"
+msgstr "Protokoll öffnen"
+
+msgctxt "SetupWindow"
+msgid "Try again"
+msgstr "Erneut versuchen"

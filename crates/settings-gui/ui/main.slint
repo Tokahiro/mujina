@@ -1,0 +1,312 @@
+// Mujina Settings, after design_handoff_mujina_settings/: a rail with its pages, a hint bar in
+// full screen, and a toast after every change.
+//
+// Controller and keyboard navigation is the app's own, not Slint's Tab chain: in the rail,
+// up/down chooses the page and A or right enters it; on a page, up/down moves between rows,
+// left/right changes a row's value, A presses, B goes back to the rail. Each page is one
+// FocusScope that knows its current row. Every page exists all the time and is only hidden, so
+// the window can hand focus to it.
+
+import { Theme, Health } from "@mujina/theme.slint";
+import { Icons } from "@mujina/icons.slint";
+import { Nav, Change } from "nav.slint";
+import { Toast, HintBar, Notice, ToastKind, Said } from "controls.slint";
+import { Rail } from "chrome.slint";
+import { StatusPage, Verdict, DeviceInfo, ButtonSource, WifiFix, CheckRow } from "pages/status.slint";
+import { Rows, RowData, RowKind, RowSection, PluginRows } from "rows.slint";
+import { SetupPage, Config } from "pages/setup.slint";
+import { SystemPage, SystemInfo, HomeApp } from "pages/system.slint";
+import { HelpPage, LogLine } from "pages/help.slint";
+import { CaptureOverlay, CapturePhase } from "overlay.slint";
+
+import "@mujina/assets/fonts/Inter-Regular.ttf";
+import "@mujina/assets/fonts/Inter-Medium.ttf";
+import "@mujina/assets/fonts/Inter-SemiBold.ttf";
+
+// Rust passes states and data; the pages word them. The icons are for the rows Rust builds.
+export {
+    Icons,
+    Nav,
+    Rows,
+    RowData,
+    RowKind,
+    RowSection,
+    PluginRows,
+    Change,
+    Notice,
+    ToastKind,
+    Said,
+    Verdict,
+    DeviceInfo,
+    ButtonSource,
+    WifiFix,
+    CheckRow,
+    Health,
+    Config,
+    SystemInfo,
+    HomeApp,
+    LogLine,
+    CapturePhase
+}
+
+export component MainWindow inherits Window {
+    title: @tr("Mujina Settings");
+    icon: Icons.app;
+    default-font-family: "Inter";
+    background: Theme.ground-bottom;
+    preferred-width: 900px;
+    preferred-height: 640px;
+    min-width: 900px;
+    min-height: 640px;
+    forward-focus: rail;
+
+    in property <string> version;
+    in property <bool> fullscreen;
+    in-out property <int> page: 0;
+    // How many pages the rail lists; the shoulder buttons cycle through them.
+    out property <int> page-count: rail.count;
+
+    // Status
+    in property <Verdict> verdict;
+    in property <bool> checking;
+    in property <string> checked-time;
+    in property <DeviceInfo> device;
+    in property <string> note;
+    in property <[CheckRow]> checks;
+
+    // What came of the last change.
+    in property <Notice> toast;
+    in property <bool> toast-shown;
+
+    // Setup
+    in property <Config> config;
+    // The launchers Mujina has, by name.
+    in property <[string]> launcher-names;
+    in property <[string]> profiles;
+    in property <string> button-in-use;
+    // The options of the launcher shown and of the device in effect, as rows.
+    in property <PluginRows> launcher-rows;
+    in property <PluginRows> device-rows;
+
+    // The capture overlay: the seconds left of `capture-total`, the combination captured or why
+    // the watcher failed, and what came of storing it.
+    in property <CapturePhase> capture-phase;
+    in property <int> capture-seconds;
+    in property <int> capture-total: 10;
+    in property <string> capture-detail;
+    in property <Notice> capture-result;
+
+    // System
+    in property <SystemInfo> system-info;
+    // What Windows allows, as the doctor finds it.
+    in property <[RowData]> system-checks;
+
+    // Help
+    in property <[LogLine]> log-lines;
+    in property <string> log-error;
+    in property <string> data-directory;
+
+    callback refresh();
+    // Runs only the checks again, not the settings: for a page with checks when it is shown.
+    callback check();
+    callback refresh-log();
+    callback open-data-directory();
+    callback register-home();
+    callback unregister-home();
+    callback quit();
+    callback capture();
+    callback dismiss-capture();
+    // The Setup page was left: a launcher chosen without what it requires is forgotten.
+    callback leave-setup();
+    // The button of the System page's row of the check `id`.
+    callback check-action(string);
+    callback copy(string);
+    // Remove Mujina, on the System page: Mujina Setup takes over.
+    callback remove-mujina();
+
+    // For the shoulder buttons: show another page with the controller on the rail.
+    public function select-page(index: int) {
+        root.page = index;
+        rail.selected = index;
+        rail.focus();
+    }
+
+    function back-to-rail() {
+        rail.selected = root.page;
+        rail.focus();
+    }
+
+    function enter-page() {
+        if (root.page == 0) {
+            status.enter();
+        } else if (root.page == 1) {
+            setup.enter();
+        } else if (root.page == 2) {
+            system.enter();
+        } else {
+            root.refresh-log();
+            help.enter();
+        }
+    }
+
+    // Full screen fits the design's 1280 × 800 to the screen; the desktop window is the same
+    // layout, smaller.
+    function update-density() {
+        Theme.density = root.fullscreen ? max(0.6, min(root.width / 1280px, root.height / 800px)) : 0.72;
+    }
+
+    init => {
+        root.update-density();
+        rail.focus();
+    }
+    changed width => {
+        root.update-density();
+    }
+    changed height => {
+        root.update-density();
+    }
+    changed fullscreen => {
+        root.update-density();
+    }
+    changed page => {
+        if (root.page != 1) {
+            root.leave-setup();
+        }
+        // Status and System show the checks, which a change of settings does not run: each
+        // time one of them is shown, they run again.
+        if (root.page == 0 || root.page == 2) {
+            root.check();
+        }
+    }
+    changed capture-phase => {
+        if (root.capture-phase == CapturePhase.none && root.page == 1) {
+            setup.resume();
+        }
+    }
+
+    // The design's lift in the top left: a radial gradient centred off the window's edge.
+    Rectangle {
+        x: root.width * 0.18 - self.width / 2;
+        y: 0 - self.height / 2;
+        width: root.width * 2.2;
+        height: self.width;
+        background: @radial-gradient(circle, #1c1f30 0%, #161826 30%, #121420 62%);
+    }
+
+    VerticalLayout {
+        HorizontalLayout {
+            vertical-stretch: 1;
+            rail := Rail {
+                page <=> root.page;
+                fullscreen: root.fullscreen;
+                enter => {
+                    root.enter-page();
+                }
+                close => {
+                    root.quit();
+                }
+            }
+
+            Rectangle {
+                horizontal-stretch: 1;
+                status := StatusPage {
+                    visible: root.page == 0;
+                    verdict: root.verdict;
+                    checking: root.checking;
+                    checked-time: root.checked-time;
+                    device: root.device;
+                    note: root.note;
+                    checks: root.checks;
+                    check-again => {
+                        root.refresh();
+                    }
+                    open-folder => {
+                        root.open-data-directory();
+                    }
+                    leave => {
+                        root.back-to-rail();
+                    }
+                }
+                setup := SetupPage {
+                    visible: root.page == 1;
+                    config: root.config;
+                    launcher-names: root.launcher-names;
+                    profiles: root.profiles;
+                    button-in-use: root.button-in-use;
+                    launcher: root.launcher-rows;
+                    device: root.device-rows;
+                    capture => {
+                        root.capture();
+                    }
+                    leave => {
+                        root.back-to-rail();
+                    }
+                }
+                system := SystemPage {
+                    visible: root.page == 2;
+                    info: root.system-info;
+                    checks: root.system-checks;
+                    register-home => {
+                        root.register-home();
+                    }
+                    unregister-home => {
+                        root.unregister-home();
+                    }
+                    act(id) => {
+                        root.check-action(id);
+                    }
+                    copy(value) => {
+                        root.copy(value);
+                    }
+                    remove-mujina => {
+                        root.remove-mujina();
+                    }
+                    leave => {
+                        root.back-to-rail();
+                    }
+                }
+                help := HelpPage {
+                    visible: root.page == 3;
+                    detailed-log: root.config.debug-log;
+                    folder: root.data-directory;
+                    lines: root.log-lines;
+                    log-error: root.log-error;
+                    version: root.version;
+                    language: root.config.language;
+                    open-folder => {
+                        root.open-data-directory();
+                    }
+                    refresh-log => {
+                        root.refresh-log();
+                    }
+                    leave => {
+                        root.back-to-rail();
+                    }
+                }
+            }
+        }
+
+        if root.fullscreen: HintBar { }
+    }
+
+    Toast {
+        notice: root.toast;
+        shown: root.toast-shown;
+        width: min(self.preferred-width, min(760 * Theme.u, root.width - 48 * Theme.u));
+        height: self.preferred-height;
+        x: (root.width - self.width) / 2;
+        y: root.height - self.height - (root.fullscreen ? 82 : 20) * Theme.u + (root.toast-shown ? 0px : 8 * Theme.u);
+        animate y { duration: 180ms; easing: ease-out; }
+    }
+
+    if root.capture-phase != CapturePhase.none: CaptureOverlay {
+        phase: root.capture-phase;
+        seconds: root.capture-seconds;
+        total-seconds: root.capture-total;
+        detail: root.capture-detail;
+        result: root.capture-result;
+        dismiss => {
+            root.dismiss-capture();
+        }
+    }
+}

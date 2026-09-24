@@ -1,0 +1,17 @@
+[package]
+name = "mujina-i18n"
+description = "Texts from Rust in the user's language: gettext catalogs compiled in, read by a Localizer."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[package.metadata.mujina]
+# The crate's ring (docs/architecture.md); cargo xtask arch-check checks its dependencies.
+ring = "leaf"
+
+[lints]
+workspace = true

@@ -1,0 +1,265 @@
+// Help: a detailed log for bug reports, the log itself, and what Mujina is.
+
+import { Theme } from "@mujina/theme.slint";
+import { Icons } from "@mujina/icons.slint";
+import { Card, OutlineButton, FocusFrame } from "@mujina/controls.slint";
+import { Group, SectionLabel } from "../controls.slint";
+import { ScrollPage } from "../page.slint";
+import { RowItem, RowData, RowKind } from "../rows.slint";
+import { Mark } from "@mujina/mark.slint";
+
+// One line of mujina.log, split for colouring. Lines that do not parse keep everything in
+// `message`.
+export struct LogLine {
+    time: string,
+    level: string,
+    message: string,
+}
+
+export component HelpPage inherits Rectangle {
+    in property <bool> detailed-log;
+    in property <string> folder;
+    in property <[LogLine]> lines;
+    // Why the log could not be read, in English; empty when it could.
+    in property <string> log-error;
+    in property <string> version;
+    // 0 as Windows, 1 English, 2 German
+    in property <int> language;
+    callback open-folder();
+    callback refresh-log();
+    callback leave();
+
+    property <[RowData]> report-rows: [
+        {
+            kind: RowKind.toggle,
+            key: "logging.debug",
+            title: @tr("Write down everything"),
+            description: @tr("Records every event in the log. Turn it on, make the problem happen again, then send the folder. Applies at once in Xbox mode."),
+            on: root.detailed-log
+        },
+        {
+            kind: RowKind.button,
+            key: "folder",
+            plain: true,
+            title: @tr("Open the folder with the log"),
+            code: root.folder,
+            label: @tr("Open"),
+            icon: Icons.folder
+        }
+    ];
+    // Write down everything, the folder, Refresh, the log, the language.
+    property <[bool]> rows: [true, true, true, true, true];
+    property <length> scroll-step: 120 * Theme.u;
+    property <length> log-end: min(0px, log.height - log.content-height);
+
+    public function enter() {
+        log.content-y = 0;
+        page.enter();
+    }
+
+    page := ScrollPage {
+        shown: root.visible;
+        title: @tr("Help");
+        rows: root.rows;
+        // On the log, up and down read it first.
+        step(delta) => {
+            if (page.current != 3) {
+                return false;
+            }
+            if (delta > 0 && log.content-y > root.log-end) {
+                log.content-y = max(root.log-end, log.content-y - root.scroll-step);
+                return true;
+            }
+            if (delta < 0 && log.content-y < 0) {
+                log.content-y = min(0px, log.content-y + root.scroll-step);
+                return true;
+            }
+            false
+        }
+        // Refresh is the page's own button.
+        activate(row) => {
+            if (row == 2) {
+                root.refresh-log();
+                return true;
+            }
+            false
+        }
+        // Refresh and the log are not rows; they are shown by hand.
+        moved(row) => {
+            if (row == 2) {
+                page.reveal(refresh.absolute-position.y, refresh.height);
+            } else if (row == 3) {
+                page.reveal(log-box.absolute-position.y, log-box.height);
+            }
+        }
+        leave => {
+            root.leave();
+        }
+
+        Group {
+            label: @tr("Reporting a problem");
+            Card {
+                for row[i] in root.report-rows: RowItem {
+                    data: row;
+                    index: i;
+                    page: page.state;
+                    press(key) => {
+                        root.open-folder();
+                    }
+                }
+            }
+        }
+
+        VerticalLayout {
+            spacing: 12 * Theme.u;
+            HorizontalLayout {
+                padding-left: 4 * Theme.u;
+                padding-right: 4 * Theme.u;
+                SectionLabel {
+                    text: @tr("Log — newest first").to-uppercase();
+                    vertical-alignment: center;
+                    horizontal-stretch: 1;
+                }
+                refresh := OutlineButton {
+                    icon: Icons.again;
+                    text: @tr("Refresh");
+                    min-height: 42 * Theme.u;
+                    text-size: Theme.description;
+                    icon-size: 17 * Theme.u;
+                    focused: page.focused && page.current == 2;
+                    clicked => {
+                        page.current = 2;
+                        root.refresh-log();
+                    }
+                }
+            }
+            log-box := FocusFrame {
+                height: 290 * Theme.u;
+                border-radius: Theme.radius-card;
+                rest: Theme.log;
+                focus-fill: Theme.log;
+                rest-border: Theme.line;
+                focused: page.focused && page.current == 3;
+                clip: true;
+                log := Flickable {
+                    x: 18 * Theme.u;
+                    y: 14 * Theme.u;
+                    width: parent.width - 22 * Theme.u;
+                    height: parent.height - 28 * Theme.u;
+                    content-width: self.width;
+                    content-height: log-lines.preferred-height;
+                    log-lines := VerticalLayout {
+                        width: log.width;
+                        if root.log-error != "": HorizontalLayout {
+                            padding-top: 5 * Theme.u;
+                            padding-bottom: 5 * Theme.u;
+                            Text {
+                                horizontal-stretch: 1;
+                                text: @tr("The log could not be read: {}", root.log-error);
+                                font-family: Theme.mono;
+                                font-size: 14.5 * Theme.u;
+                                color: Theme.text-body;
+                                wrap: word-wrap;
+                            }
+                        }
+                        for line in root.lines: HorizontalLayout {
+                            spacing: 16 * Theme.u;
+                            padding-top: 5 * Theme.u;
+                            padding-bottom: 5 * Theme.u;
+                            if line.time != "": Text {
+                                text: line.time;
+                                font-family: Theme.mono;
+                                font-size: 14.5 * Theme.u;
+                                color: Theme.fainter;
+                            }
+                            if line.level != "": Text {
+                                min-width: 50 * Theme.u;
+                                text: line.level;
+                                font-family: Theme.mono;
+                                font-size: 14.5 * Theme.u;
+                                color: line.level == "WARN" ? Theme.warning : line.level == "ERROR" ? Theme.problem : line.level == "INFO" ? Theme.faint : Theme.fainter;
+                            }
+                            Text {
+                                horizontal-stretch: 1;
+                                text: line.message;
+                                font-family: Theme.mono;
+                                font-size: 14.5 * Theme.u;
+                                color: Theme.text-body;
+                                wrap: word-wrap;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Group {
+            label: @tr("Language");
+            Card {
+                RowItem {
+                    data: {
+                        kind: RowKind.choice,
+                        key: "interface.language",
+                        title: @tr("Language of this app"),
+                        description: @tr("Applies at once."),
+                        // Each language by its own name.
+                        options: [@tr("Same as Windows"), "English", "Deutsch"],
+                        selected: root.language
+                    };
+                    index: 4;
+                    page: page.state;
+                }
+            }
+        }
+
+        Group {
+            label: @tr("About");
+            Card {
+                inset-x: 26 * Theme.u;
+                inset-y: 24 * Theme.u;
+                HorizontalLayout {
+                    spacing: 26 * Theme.u;
+                    VerticalLayout {
+                        alignment: start;
+                        Mark {
+                            size: 60 * Theme.u;
+                            ground: Theme.card;
+                        }
+                    }
+                    VerticalLayout {
+                        spacing: 7 * Theme.u;
+                        horizontal-stretch: 1;
+                        Text {
+                            text: "Mujina " + root.version;
+                            font-size: Theme.statement;
+                            font-weight: 500;
+                            letter-spacing: Theme.statement * -0.015;
+                            color: Theme.text;
+                        }
+                        Text {
+                            max-width: 640 * Theme.u;
+                            text: @tr("Makes a Windows 11 handheld start like a console: it becomes the home app of Xbox mode and opens your launcher in its place. Named after 狢, a shapeshifter from Japanese folklore.");
+                            font-size: Theme.body;
+                            color: Theme.text-body;
+                            wrap: word-wrap;
+                        }
+                        Text {
+                            text: @tr("Licence: MIT OR Apache-2.0");
+                            font-size: Theme.description;
+                            color: Theme.muted;
+                        }
+                    }
+                    // Slint's own badge, as its licence asks.
+                    VerticalLayout {
+                        alignment: start;
+                        Image {
+                            height: 48 * Theme.u;
+                            width: self.height * 212 / 97;
+                            source: Icons.made-with-slint;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

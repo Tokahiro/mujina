@@ -1,0 +1,35 @@
+[package]
+name = "mujina-setup"
+description = "Mujina's installer: installs, updates and removes the package, with the steps around it."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[package.metadata.mujina]
+# The crate's ring (docs/architecture.md); cargo xtask arch-check checks its dependencies.
+ring = "installer"
+
+[[bin]]
+name = "mujina-setup"
+path = "src/main.rs"
+
+[dependencies]
+lexopt.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+# The home app rule and its registry (INST-12): the same code as mujinactl's, in-process.
+mujina-adapter-windows.workspace = true
+mujina-application.workspace = true
+mujina-winutil.workspace = true
+slint.workspace = true
+
+# The UI compiler runs only where the app exists; elsewhere build.rs does nothing.
+[target.'cfg(windows)'.build-dependencies]
+slint-build.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,23 @@
+//! @NAME@ as a device of Mujina's: a handheld whose extra buttons reach
+//! Windows some other way than as key chords, such as a vendor HID report.
+//!
+//! Made by `cargo xtask new-device @ID@`. Every `TODO` marks what only
+//! knowledge of the device can fill in; docs/new-device.md, section 4, says what each part is
+//! asked and when.
+//!
+//! [`DESCRIPTOR`] is built everywhere, so it is tested on Linux too; the buttons at work need
+//! Windows.
+
+mod descriptor;
+#[cfg(windows)]
+mod runtime;
+
+pub use descriptor::{@TYPE@Descriptor, DESCRIPTOR};
+
+/// @NAME@, as `crates/app/src/registry.rs` lists it in `DEVICE_PLUGINS`.
+#[cfg(windows)]
+pub static PLUGIN: mujina_adapter_kit::plugin::DevicePlugin =
+    mujina_adapter_kit::plugin::DevicePlugin {
+        descriptor: &DESCRIPTOR,
+        runtime: &runtime::RUNTIME,
+    };

@@ -1,0 +1,104 @@
+// The design's tokens (design_handoff_mujina_settings/README.md), shared by Mujina Settings and
+// Mujina Setup. Every size here is at the handheld scale (1280 × 800) and multiplied by `density`:
+// 1 in full screen on a 1280 × 800 screen, 0.72 in Settings' desktop window, and 1 in Setup,
+// which draws its own sizes in px and the shared controls at that scale. Write sizes as
+// `16 * Theme.u`.
+
+// How a doctor finding came out, as the pages colour it.
+export enum Health {
+    ok,
+    warning,
+    problem
+}
+
+export global Theme {
+    in-out property <float> density: 1;
+    out property <length> u: 1px * density;
+
+    // Colour
+    out property <color> ground: #161826;
+    out property <color> ground-top: #1c1f30;
+    out property <color> ground-bottom: #121420;
+    out property <color> card: #1c1f2d;
+    out property <color> card-advanced: #1a1d29;
+    // A card row while it is pressed, in Setup.
+    out property <color> card-pressed: #23253a;
+    out property <color> tile: #1e2130;
+    out property <color> sunken: #14161f;
+    out property <color> log: #13151e;
+    out property <color> text: #e9e9ed;
+    out property <color> text-soft: #cfd3e5;
+    out property <color> text-body: #b2b6ca;
+    out property <color> muted: #9397ab;
+    out property <color> faint: #75798c;
+    out property <color> fainter: #595d6c;
+    out property <color> divider: #3f424d;
+    out property <color> line: #e9e9ed14;
+    out property <color> line-soft: #e9e9ed0d;
+    out property <color> line-strong: #e9e9ed2e;
+    out property <color> hover: #e9e9ed0d;
+    out property <color> accent: #9184d9;
+    out property <color> accent-fill: #796cbf;
+    out property <color> accent-pressed-track: #968ae0;
+    out property <color> accent-focus: #b5abfc;
+    out property <color> accent-light: #d2cefd;
+    out property <color> accent-knob: #f5f4ff;
+    out property <color> ok: #52c08d;
+    out property <color> warning: #d9a441;
+    out property <color> problem: #de6a60;
+
+    // Accent tints, as the design names them by percentage.
+    out property <color> accent-12: #9184d91f;
+    out property <color> accent-13: #9184d921;
+    out property <color> accent-14: #9184d924;
+    out property <color> accent-16: #9184d929;
+    out property <color> accent-18: #9184d92e;
+    out property <color> accent-20: #9184d933;
+    out property <color> accent-24: #9184d93d;
+    out property <color> accent-25: #9184d940;
+    out property <color> accent-26: #9184d942;
+    out property <color> accent-28: #9184d947;
+    out property <color> accent-30: #9184d94d;
+    out property <color> accent-32: #9184d952;
+    out property <color> accent-34: #9184d957;
+    out property <color> glow: #9184d966;
+
+    // Type
+    out property <string> mono: "Consolas";
+    out property <length> page-title: 40 * u;
+    out property <length> overlay-title: 36 * u;
+    out property <length> hero: 28 * u;
+    out property <length> statement: 25 * u;
+    out property <length> row-title: 21 * u;
+    out property <length> value: 20 * u;
+    out property <length> check-topic: 18 * u;
+    out property <length> body: 17 * u;
+    out property <length> check-detail: 16 * u;
+    out property <length> description: 15 * u;
+    out property <length> label: 13 * u;
+
+    // Shape
+    out property <length> radius-row: 10 * u;
+    out property <length> radius-card: 14 * u;
+    out property <length> radius-tile: 12 * u;
+    out property <length> touch: 46 * u;
+    out property <length> row-min: 64 * u;
+
+    // Motion
+    out property <duration> fade: 180ms;
+    out property <duration> slide: 150ms;
+
+    // The colour of a doctor state.
+    public pure function state-color(health: Health) -> color {
+        return health == Health.problem ? problem : health == Health.warning ? warning : ok;
+    }
+
+    // The same at 12 % and 35 %, for the hero disc and its ring.
+    public pure function state-tint(health: Health) -> color {
+        return health == Health.problem ? #de6a601f : health == Health.warning ? #d9a4411f : #52c08d1f;
+    }
+
+    public pure function state-ring(health: Health) -> color {
+        return health == Health.problem ? #de6a6059 : health == Health.warning ? #d9a44159 : #52c08d59;
+    }
+}

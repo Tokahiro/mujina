@@ -1,0 +1,111 @@
+//! @NAME@ as the configuration and the tools see it: its options under
+//! `[launcher.@ID@]` and what it offers. Portable, so its rules are tested on
+//! every system.
+
+use std::path::PathBuf;
+
+use mujina_application::Msg;
+use mujina_application::launcher::{LauncherCaps, LauncherDescriptor, OptionTable};
+use mujina_application::settings::SettingValue;
+use mujina_application::settings::schema::{Applies, SettingKind, SettingSpec, TextFormat};
+
+pub struct @TYPE@Descriptor;
+
+pub static DESCRIPTOR: @TYPE@Descriptor = @TYPE@Descriptor;
+
+// Each text is a `Msg`, so that i18n-check holds lang/de.po to it; the setting keeps its English.
+// TODO: the options it needs. This one is an example: where the program is, for when Mujina
+// cannot find it by itself. Keep it, change it or remove it, together with the template below,
+// the catalog and `@TYPE@Options`.
+const SETTINGS: &[SettingSpec] = &[SettingSpec {
+    key: "executable",
+    kind: SettingKind::Text {
+        format: TextFormat::Path,
+    },
+    title: Msg::new("Program").english(),
+    help: Msg::new("Where @NAME@ is installed, if Mujina does not find the program by itself.")
+        .english(),
+    applies: Applies::NextSession,
+    requires: None,
+    required: false,
+}];
+
+// Its block of the configuration template: each option, commented out, in the order of
+// `SETTINGS`. The conformance test holds the two together.
+const TEMPLATE: &str = r#"# @NAME@, with kind = "@ID@" above:
+# [launcher.@ID@]
+# executable = 'C:\Path\To\@ID@.exe'    # only if Mujina does not find it
+"#;
+
+/// `[launcher.@ID@]` as the runtime uses it, with the defaults where it says nothing.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct @TYPE@Options {
+    /// Where the program is; `None` leaves it to the runtime to find.
+    pub executable: Option<PathBuf>,
+}
+
+impl @TYPE@Options {
+    pub fn read(options: &OptionTable) -> Self {
+        let executable = match options.get("executable") {
+            Some(SettingValue::Text(path)) if !path.is_empty() => Some(PathBuf::from(path)),
+            _ => None,
+        };
+        Self { executable }
+    }
+}
+
+impl LauncherDescriptor for @TYPE@Descriptor {
+    fn id(&self) -> &'static str {
+        "@ID@"
+    }
+
+    fn name(&self) -> &'static str {
+        Msg::new("@NAME@").english()
+    }
+
+    fn settings(&self) -> &'static [SettingSpec] {
+        SETTINGS
+    }
+
+    fn template(&self) -> &'static str {
+        TEMPLATE
+    }
+
+    /// TODO: what it offers. Each `true` needs its part in the runtime: game detection
+    /// `game_running`, a menu and an overlay their shortcuts or `open_menu` / `open_overlay`,
+    /// navigation `navigate`. Without a menu the device button does nothing in its UI.
+    fn capabilities(&self, _options: &OptionTable) -> LauncherCaps {
+        LauncherCaps {
+            game_detection: false,
+            menu: false,
+            overlay: false,
+            navigation: false,
+        }
+    }
+
+    fn catalogs(&self) -> &'static [(&'static str, &'static str)] {
+        &[("de", include_str!("../lang/de.po"))]
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_descriptor_keeps_the_rules() {
+        mujina_application::testing::conformance(&DESCRIPTOR);
+    }
+
+    #[test]
+    fn the_program_is_where_the_options_say() {
+        let mut options = OptionTable::new();
+        assert_eq!(@TYPE@Options::read(&options).executable, None);
+        let path = r"C:\Path\To\@ID@.exe";
+        options.insert("executable".to_string(), SettingValue::Text(path.to_string()));
+        assert_eq!(
+            @TYPE@Options::read(&options).executable,
+            Some(PathBuf::from(path))
+        );
+    }
+}
