@@ -25,8 +25,8 @@ pub trait LauncherRuntime: Sync {
 
 pub struct SessionParts {
     pub launcher: Box<dyn SessionLauncher>,
-    /// E.g. one reporting [`AgentEvent::LauncherStateChanged`]; may be empty. A source must not
-    /// block, and owns what it waits on.
+    /// E.g. one reporting [`AgentEvent::LauncherStateChanged`]; may be empty, as the agent watches
+    /// the process itself. A source must not block, and owns what it waits on.
     pub sources: Vec<Box<dyn WaitSource<AgentEvent>>>,
 }
 
@@ -38,7 +38,7 @@ pub struct LauncherPlugin {
 /// A device's Windows side, for the resident agent. One runtime may serve several devices, so
 /// that switching between them applies at once ([`DeviceButtons::reconfigure`]).
 pub trait DeviceRuntime: Sync {
-    /// Called on the agent's main thread, even with no button mapped; runs as long as the parts.
+    /// On the agent's main thread, even with no button mapped; what it starts ends with the parts.
     fn start(&self, device: &DeviceSelection) -> PortResult<DeviceParts>;
 
     /// What `doctor` should look at, e.g. the device's own software that also reacts to a button.

@@ -372,6 +372,7 @@ mod tests {
             AgentEvent::LauncherStarted,
             AgentEvent::LauncherStateChanged,
             foreground(Some("CMD.EXE")),
+            // Its owner is unknown, so it may be the launcher's.
             foreground(None),
         ] {
             assert!(is_reason_to_look(&reason, stand_in), "{reason:?}");
