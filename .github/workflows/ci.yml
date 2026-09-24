@@ -21,7 +21,7 @@ env:
   CARGO_TERM_COLOR: always
 
 # `rustup toolchain install` without arguments installs what rust-toolchain.toml pins.
-# Caches are saved on main only: tags can restore main's, not each other's.
+# Only main saves caches, except slint-tr-extractor's: tags can restore main's, not each other's.
 # release.yml finds portable, win-check and win-package by their names: rename them in both files.
 
 jobs:

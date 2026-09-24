@@ -1,5 +1,5 @@
-//! @NAME@ as a device of Mujina's: a handheld whose extra buttons send no key chords.
-//! Each `TODO` needs knowledge of the device (docs/new-device.md, section 4).
+//! @NAME@ as a device of Mujina's: a handheld whose extra buttons send no
+//! key chords. Each `TODO` needs knowledge of the device (docs/new-device.md, section 4).
 
 mod descriptor;
 #[cfg(windows)]

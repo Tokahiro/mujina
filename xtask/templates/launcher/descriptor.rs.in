@@ -1,5 +1,5 @@
-//! @NAME@ as the configuration and the tools see it: its options and what it offers.
-//! Portable, so its rules are tested on every system.
+//! @NAME@ as the configuration and the tools see it: its options and what
+//! it offers. Portable, so its rules are tested on every system.
 
 use std::path::PathBuf;
 
