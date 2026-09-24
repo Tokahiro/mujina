@@ -1,4 +1,4 @@
-//! Builds every file in `profiles/devices/` into the crate, so a new device needs no Rust edit.
+//! Builds each file in `profiles/devices/` into the crate: a key-chord device needs no Rust edit.
 
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};

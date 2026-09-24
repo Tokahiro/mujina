@@ -22,7 +22,7 @@ use crate::hook::{WM_REINSTALL_HOOK, WM_REPLAY_LOST};
 // Marks keystrokes synthesized by Mujina; defined next to the one other place that sends them.
 pub(crate) use mujina_winutil::window::OWN_INPUT_TAG;
 
-/// Tags held-back keys sent on ("MUJR") apart from our own, so the hook can count their return.
+/// Tags held-back keys sent on ("MUJR"), unlike Mujina's own, so the hook can count their return.
 pub(crate) const REPLAY_TAG: usize = 0x4D55_4A52;
 
 /// How long after a chord the hook must have seen our own keystrokes.
@@ -35,13 +35,11 @@ pub(crate) static SAW_OWN_INPUT: AtomicBool = AtomicBool::new(false);
 pub(crate) static HOOK_THREAD: AtomicU32 = AtomicU32::new(0);
 
 pub(crate) enum Job {
+    /// A launcher's shortcut, or a button passed on.
     Chord(KeyChord, HoldTiming),
     /// The hook thread `from` hears how much Windows refused. Built outside the hook callback,
     /// which must not allocate.
-    Replay {
-        events: Box<Replay>,
-        from: u32,
-    },
+    Replay { events: Box<Replay>, from: u32 },
 }
 
 /// Starts the sender thread on first use; `None` if it could not be started.
@@ -225,7 +223,7 @@ fn hold(chord: KeyChord, timing: HoldTiming) -> bool {
     all
 }
 
-/// Has the hook reinstalled if our keystrokes did not pass through it: Windows dropped it.
+/// Has the hook reinstalled if Mujina's keystrokes did not pass through it: Windows dropped it.
 /// Replays meanwhile go out at once, since the hook holds back every key until they come back.
 fn verify_hook(jobs: &Receiver<Job>, waiting: &mut VecDeque<Job>) {
     if HOOK_THREAD.load(Ordering::Relaxed) == 0 {

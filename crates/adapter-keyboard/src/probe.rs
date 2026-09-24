@@ -29,7 +29,8 @@ pub struct Observation {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Keys {
     PassOn,
-    /// Nothing else sees them until watching ends (Mujina's own keystrokes excepted).
+    /// Nothing else sees them until watching ends, except Mujina's own keys and those an elevated
+    /// program sends, which Windows delivers anyway.
     Hold,
 }
 

@@ -96,7 +96,7 @@ pub fn run(standalone: bool) -> ExitCode {
         env!("CARGO_PKG_VERSION")
     );
     // Opened first: the home role starts the agent, then the launcher, and a signal sent before
-    // this point is lost.
+    // this point is lost. A launcher started meanwhile is still found by its process.
     let mut sources = signals();
     // ShellExecute, which activates the home role, wants COM; an STA for the thread's life keeps
     // it from being torn down after every activation (ADR-0014).
