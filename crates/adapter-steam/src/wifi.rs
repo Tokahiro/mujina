@@ -127,7 +127,8 @@ impl IconFeed {
 pub enum WifiChanges {
     /// Connecting and disconnecting.
     Connection,
-    /// Those, and the signal strength, which Windows grants only with the location permission.
+    /// Those, and the signal strength, which Windows grants only with the package's wiFiControl
+    /// capability and the location permission.
     ConnectionAndSignal,
 }
 

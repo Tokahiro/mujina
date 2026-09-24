@@ -169,8 +169,6 @@ impl HomeLauncher for SteamBigPicture {
         navigation::show(STEAM_DEBUG_PORT, route, patience).map_err(PortError::Failed)
     }
 
-    /// Home role only: the synthetic key tap this may need passes through the agent's keyboard
-    /// hook, whose thread would be the one waiting here.
     fn focus_game(&self) -> PortResult<()> {
         let handle =
             games::window().ok_or_else(|| PortError::NotFound("the game's window".into()))?;
