@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 
 use mujina_application::ports::{LauncherInstall, PortError, PortResult};
 
-/// The install `executable` belongs to: the launcher runs in the directory it lies in.
+/// The install of `executable`; the launcher runs in the executable's directory.
 pub fn install_from_executable(executable: PathBuf) -> PortResult<LauncherInstall> {
     if !executable.is_file() {
         return Err(PortError::NotFound(format!(

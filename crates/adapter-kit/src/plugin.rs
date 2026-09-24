@@ -1,6 +1,5 @@
-//! Launchers and devices as the composition root plugs them in: each one's portable description
-//! and its Windows side, paired. The root lists these pairs in `crates/app/src/registry.rs`
-//! (ADR-0013).
+//! Launcher and device plug-ins: each pairs a portable descriptor with its Windows side.
+//! `crates/app/src/registry.rs` lists them (ADR-0013).
 
 use mujina_application::agent::AgentEvent;
 use mujina_application::device::{DeviceDescriptor, DeviceSelection};
@@ -9,16 +8,15 @@ use mujina_application::launcher::{LauncherDescriptor, OptionTable};
 use mujina_application::ports::{DeviceButtons, HomeLauncher, PortResult, SessionLauncher};
 use mujina_winutil::wait::WaitSource;
 
-/// What runs of a launcher on Windows, built from its options as the configuration has them.
-/// Building must not block: the home role builds its part on every activation.
-// TODO(leftover-1): an undo hook for what a runtime changes outside Mujina (Steam's debugging
-// marker), for when a feature is switched off, another launcher chosen or Mujina removed.
+/// A launcher's Windows side, built from its configured options. Building must not block: the
+/// home role builds its part on every activation.
+// TODO: an undo hook for what a runtime changes outside Mujina (Steam's debugging marker), for
+// when a feature is switched off, another launcher is chosen or Mujina is removed.
 pub trait LauncherRuntime: Sync {
     /// For the short-lived home role, and for the tools: starts nothing that outlives the call.
     fn home(&self, options: &OptionTable) -> Box<dyn HomeLauncher>;
 
-    /// For the resident agent: the launcher as it runs beside it, with whatever it keeps running
-    /// in the background.
+    /// For the resident agent: the launcher, with whatever it keeps running in the background.
     fn session(&self, options: &OptionTable) -> SessionParts;
 
     /// What `doctor` should look at for this launcher.
@@ -27,14 +25,11 @@ pub trait LauncherRuntime: Sync {
     }
 }
 
-/// What the agent gets of a launcher.
 pub struct SessionParts {
     pub launcher: Box<dyn SessionLauncher>,
-    /// Kernel objects of the launcher's own that the agent's event loop waits on beside its
-    /// own, each with what it means when signalled. A launcher that can signal its state brings
-    /// a source that reports [`AgentEvent::LauncherStateChanged`] (Steam: a change notification
-    /// on its registry key); one that cannot brings none, and the agent still sees its process
-    /// come and go. A source must not block, and owns whatever it waits on.
+    /// The launcher's own wait sources for the agent's event loop, e.g. one reporting
+    /// [`AgentEvent::LauncherStateChanged`] (Steam: its registry key). May be empty; the agent
+    /// still sees the process come and go. A source must not block, and owns what it waits on.
     pub sources: Vec<Box<dyn WaitSource<AgentEvent>>>,
 }
 
@@ -44,18 +39,17 @@ pub struct LauncherPlugin {
     pub runtime: &'static dyn LauncherRuntime,
 }
 
-/// What runs of a device on Windows, for the resident agent. One runtime may serve several
-/// devices: every key-chord device is served by the keyboard crate's, so that a switch between
-/// them applies at once ([`DeviceButtons::reconfigure`]).
+/// A device's Windows side, for the resident agent. One runtime may serve several devices (all
+/// key-chord devices share the keyboard crate's), so that switching between them applies at
+/// once ([`DeviceButtons::reconfigure`]).
 pub trait DeviceRuntime: Sync {
-    /// Starts the buttons of `device`, one this runtime serves, on the agent's main thread; its
-    /// id is `None` where no button is mapped yet (switched off), and one may be later. What it
-    /// starts lasts as long as the parts. Failing leaves the agent without the button, and says
-    /// why in the log.
+    /// Starts the buttons of `device` on the agent's main thread. Its id is `None` while no
+    /// button is mapped (switched off); a later reconfigure may map one. What it starts lasts as
+    /// long as the parts. On failure the agent runs without the button and logs why.
     fn start(&self, device: &DeviceSelection) -> PortResult<DeviceParts>;
 
-    /// What `doctor` should look at for the devices it serves: the device's own software that
-    /// reacts to a button too, for one.
+    /// What `doctor` should look at for the devices it serves, e.g. the device's own software
+    /// that also reacts to a button.
     fn checks(&self) -> Vec<Box<dyn Check>> {
         Vec::new()
     }
@@ -67,29 +61,24 @@ pub trait DeviceRuntime: Sync {
     }
 }
 
-/// What the agent gets of a device.
 pub struct DeviceParts {
     pub buttons: Box<dyn DeviceButtons>,
-    /// Kernel objects the agent's event loop waits on for this device's presses, each reporting
-    /// [`AgentEvent::ButtonPressed`] with the button's id. A device may bring several, one per
-    /// way its buttons reach Windows. A source must not block, and owns whatever it waits on.
+    /// Wait sources for this device's presses, each reporting [`AgentEvent::ButtonPressed`]; one
+    /// per way its buttons reach Windows. A source must not block, and owns what it waits on.
     pub sources: Vec<Box<dyn WaitSource<AgentEvent>>>,
 }
 
-/// One device, as `registry.rs` lists it. Descriptors are made at run time where they are data
-/// (a profile file), so the pair holds whatever outlives the program.
+/// One device, as `registry.rs` lists it. A descriptor may be data made at run time (a profile
+/// file).
 #[derive(Clone, Copy)]
 pub struct DevicePlugin {
     pub descriptor: &'static dyn DeviceDescriptor,
     pub runtime: &'static dyn DeviceRuntime,
 }
 
-/// What every device runtime has to do beyond its own tests, for a device crate to check in
-/// them: start with the button switched off (the agent starts it so, and a later change may
-/// switch it on; a runtime that refused would leave the button unmapped for the whole session),
-/// then take over being switched off, `device` (one of its own), and being switched off again.
-/// What it fails at, otherwise. `device` should need no hardware, like a selection whose options
-/// map no button.
+/// Conformance check for a device crate's tests: the runtime must start switched off (as the
+/// agent starts it; refusing would leave the button unmapped all session), then reconfigure to
+/// off, to `device` and to off again. Returns what failed. `device` should need no hardware.
 pub fn runtime_conformance(
     runtime: &dyn DeviceRuntime,
     device: &DeviceSelection,

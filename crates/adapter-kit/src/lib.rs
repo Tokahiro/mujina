@@ -1,8 +1,5 @@
-//! What adapters share, in Mujina's terms.
-//!
-//! Adapters never depend on each other, and `winutil` knows nothing about Mujina, so code that
-//! every launcher adapter needs and that speaks in ports lives here instead of being copied into
-//! each one. Only what needs Windows is built for Windows; the rest is tested everywhere.
+//! Code that launcher adapters share and that speaks in ports. Adapters never depend on each
+//! other, and `winutil` knows nothing about Mujina, so it lives here.
 
 pub mod launcher;
 #[cfg(windows)]
