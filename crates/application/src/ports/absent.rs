@@ -6,14 +6,11 @@ use mujina_domain::keys::{HoldTiming, KeyChord};
 use super::{DeviceButtons, KeySender};
 use crate::device::DeviceSelection;
 
-/// Stands in for a port whose adapter could not be started, so the rest keeps working: nothing
-/// is caught and nothing is sent. Whoever finds the adapter missing says so in the log; this
-/// only keeps quiet.
+/// Does nothing, so the rest keeps working; the caller logs that the adapter is missing.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct Absent;
 
 impl DeviceButtons for Absent {
-    /// Nothing runs that could take a device over.
     fn reconfigure(&self, _device: &DeviceSelection) -> bool {
         false
     }

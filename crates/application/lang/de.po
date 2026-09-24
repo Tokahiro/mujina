@@ -1,6 +1,5 @@
-# German texts of mujina-application that Mujina Settings shows: the titles of the doctor's own
-# checks, and what its check of Xbox mode says on the System page. Compiled in (CATALOGS in
-# src/lib.rs); `cargo xtask i18n-check` lists what is missing.
+# German texts of mujina-application for Mujina Settings, compiled in via CATALOGS (src/lib.rs).
+# `cargo xtask i18n-check` lists what is missing.
 msgid ""
 msgstr ""
 "Project-Id-Version: Mujina\n"

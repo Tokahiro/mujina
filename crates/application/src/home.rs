@@ -7,8 +7,7 @@ use mujina_domain::activation::HomeDestination;
 
 use crate::ports::{AgentControl, HomeLauncher, LaunchScreen, LauncherState, PortError};
 
-/// How long the launch screen waits for the console UI. A cold start with an update check takes
-/// a while; after this the user gets to see whatever the launcher is showing.
+/// How long the launch screen waits for the console UI; a cold start with an update check is slow.
 const UI_TIMEOUT: Duration = Duration::from_secs(60);
 
 /// How long the launch screen stays above the console UI once that has appeared. Long enough
@@ -22,7 +21,6 @@ pub enum HomeOutcome {
     Focused,
     /// The launcher was running without its console UI and was asked to show it.
     SwitchedToUi,
-    /// The launcher was started.
     Started,
     /// The running game was brought back to the front; the launcher was left alone.
     ReturnedToGame,
@@ -36,8 +34,8 @@ pub struct HomeReport {
     pub warnings: Vec<String>,
 }
 
-/// Why the launcher could not be brought up. The message names the port's error too, so that
-/// error is not also given as the source: whoever prints the chain would print it twice.
+/// Why the launcher could not be brought up. The port's error is in the message, not the source,
+/// so a printed error chain does not repeat it.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum HomeError {
     #[error("launcher is not installed: {0}")]
@@ -63,9 +61,8 @@ impl<'a> HomeActivation<'a> {
         }
     }
 
-    /// Covers the desktop while the launcher starts and waits for its console UI. The screen is
-    /// an ordinary window behind the launcher's, so the launcher's own start-up (update progress,
-    /// intro video) stays fully visible.
+    /// Covers the desktop while the launcher starts. The screen stays behind the launcher's
+    /// window, so its own start-up (update progress, intro video) stays visible.
     #[must_use]
     pub fn with_screen(mut self, screen: &'a dyn LaunchScreen) -> Self {
         self.screen = Some(screen);
@@ -88,14 +85,13 @@ impl<'a> HomeActivation<'a> {
             warnings.push(format!("agent not started: {error}"));
         }
 
-        // On every activation, not only before a start: the launcher may have been started by
-        // something else, and it may be restarted by anything. Never blocks bringing it up.
+        // On every activation: something else may have started or restarted the launcher.
         if let Err(error) = self.launcher.prepare(&install) {
             warnings.push(format!("preparation skipped: {error}"));
         }
 
-        // Asked for by the agent when the device button is pressed with the game behind another
-        // window. Without a game window to be found, the launcher is the next best place.
+        // The agent asks for this when the game is behind another window. Without a game window,
+        // the launcher is the next best place.
         let mut destination = self.destination;
         if destination == HomeDestination::Game {
             match self.launcher.focus_game() {
@@ -130,8 +126,8 @@ impl<'a> HomeActivation<'a> {
                 HomeOutcome::Started
             }
         };
-        // A launcher the agent watched may be gone, and one it never saw may have come: it looks
-        // for the launcher's process now, not only once its window comes to the front.
+        // The launcher's process may have changed: the agent looks for it now, not only once its
+        // window comes to the front.
         if outcome != HomeOutcome::Focused {
             self.agent.launcher_started();
         }
@@ -139,21 +135,16 @@ impl<'a> HomeActivation<'a> {
         if outcome != HomeOutcome::Focused
             && let Some(screen) = self.screen
         {
-            // Only now: the launcher is already on its way, so whatever the screen needs to
-            // get in front costs no start-up time. The launcher shows nothing for a second
-            // or more, so the screen is up long before there is anything to cover.
+            // Shown after the launcher is on its way, so it costs no start-up time; the launcher
+            // shows nothing for a second or more anyway.
             screen.show();
             let ready = || self.launcher.state() == LauncherState::UiVisible;
             let appeared = screen.hold_until(&ready, UI_TIMEOUT);
             if appeared {
-                // The console UI's window exists before it has painted, and it takes the
-                // foreground by itself, so the screen ends up behind an empty window and
-                // what lies further back shows through (seen on a device as a flash). The
-                // screen goes above it until it has had time to paint. Short: the launcher's
-                // own start-up belongs to the user, not behind a black window.
+                // The console UI's window takes the foreground before it has painted, and what
+                // lies behind shows through as a flash. The screen stays above it until it paints.
                 screen.raise();
-                // Make sure the console UI ends up in front even if something else grabbed
-                // the focus while the launcher was starting.
+                // In case something else took the focus while the launcher was starting.
                 if let Err(error) = self.launcher.focus_ui() {
                     warnings.push(format!("console UI not focused: {error}"));
                 }
@@ -164,8 +155,8 @@ impl<'a> HomeActivation<'a> {
             screen.close();
         }
 
-        // A launcher that was just started comes up on its home page by itself. One that was
-        // already showing something else is taken there, as the home button of a console does.
+        // A freshly started launcher opens its home page by itself; one already showing something
+        // else is taken there, as a console's home button does.
         let wanted = destination != HomeDestination::Home || outcome == HomeOutcome::Focused;
         if wanted
             && self.launcher.state() == LauncherState::UiVisible
@@ -345,7 +336,7 @@ mod tests {
             error.to_string(),
             "launcher is not installed: not found: fake launcher"
         );
-        // In the message, so not the source as well: a printed chain would say it twice.
+        // Already in the message, so not repeated as the source.
         assert!(std::error::Error::source(&error).is_none());
 
         let error = HomeError::LaunchFailed(PortError::Failed("no window".to_string()));

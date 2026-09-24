@@ -1,7 +1,6 @@
-//! What a setting is, as data: its key, the kind of value it takes, what it is called and when a
-//! change takes effect. The core settings are described here; every launcher and every device
-//! describes its own ([`LauncherDescriptor::settings`], [`DeviceDescriptor::settings`]), so that
-//! neither the configuration reader nor the tools have to know one to handle its options.
+//! Settings described as data, so the configuration reader and the tools need not know them. The
+//! core settings are here; launchers and devices describe their own
+//! ([`LauncherDescriptor::settings`], [`DeviceDescriptor::settings`]).
 
 use crate::device::DeviceDescriptor;
 use crate::launcher::{LauncherDescriptor, OptionTable};
@@ -10,17 +9,14 @@ use crate::settings::SettingValue;
 /// One setting, by its key within its section: `ui_link` in `[launcher.steam]`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SettingSpec {
-    /// The key within its section, e.g. `wifi_indicator`: lower case, digits and `_`.
+    /// Lower case, digits and `_`, e.g. `wifi_indicator`.
     pub key: &'static str,
     pub kind: SettingKind,
-    /// A short name, e.g. "Correct the Wi-Fi icon in Steam". English, and the key of its
-    /// translation in the catalogs of the launcher or device that has it, with which Mujina
-    /// Settings shows it. They write it as `Msg::new("…").english()`, so that `cargo xtask
-    /// i18n-check` finds it; the core settings' stay English, as Mujina Settings words their rows
-    /// itself.
+    /// A short English name, e.g. "Correct the Wi-Fi icon in Steam", and its translation key.
+    /// Write it as `Msg::new("…").english()` so `cargo xtask i18n-check` finds it. Core settings
+    /// stay English: Mujina Settings words their rows itself.
     pub title: &'static str,
-    /// A sentence or two on what it does, as Mujina Settings shows it under the title. English,
-    /// like the title.
+    /// A sentence or two shown under the title; English, like the title.
     pub help: &'static str,
     pub applies: Applies,
     /// A toggle of the same section without which this setting does nothing. Mujina Settings
@@ -30,25 +26,22 @@ pub struct SettingSpec {
     pub required: bool,
 }
 
-/// The kind of value a setting takes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SettingKind {
     Toggle {
         default: bool,
     },
-    /// One of `values`.
     Choice {
         values: &'static [&'static str],
         default: &'static str,
     },
-    /// Text; nothing applies while it is not set.
+    /// Nothing applies while it is not set.
     Text {
         format: TextFormat,
     },
     /// A list of texts, such as a program's arguments. Mujina Settings edits it as one line with
     /// [`TextFormat::ArgumentList`]'s rules.
     TextList,
-    /// A whole number from `min` to `max`.
     Number {
         min: i64,
         max: i64,
@@ -94,7 +87,6 @@ impl SettingKind {
         }
     }
 
-    /// Whether this kind of setting takes `value`.
     pub fn admits(&self, value: &SettingValue) -> bool {
         match (self, value) {
             (SettingKind::Toggle { .. }, SettingValue::Bool(_))
@@ -110,7 +102,6 @@ impl SettingKind {
         }
     }
 
-    /// What applies while nothing is set; `None` for the kinds without a default.
     pub fn default_value(&self) -> Option<SettingValue> {
         match self {
             SettingKind::Toggle { default } => Some(SettingValue::Bool(*default)),
@@ -149,8 +140,7 @@ pub struct SettingSection {
     pub settings: &'static [SettingSpec],
 }
 
-/// Mujina's own settings, section by section. Each launcher's `[launcher.<id>]` comes from its
-/// descriptor.
+/// Mujina's own settings; `[launcher.<id>]` and `[device.<id>]` come from the descriptors.
 pub static CORE: &[SettingSection] = &[
     SettingSection {
         name: "features",
@@ -374,10 +364,8 @@ pub fn find(
     settings.iter().find(|spec| spec.key == leaf)
 }
 
-/// Whether an agent that runs the launcher `running` (its id) takes a change of dotted `key` over
-/// at once. What no setting describes, such as a key that was removed, waits for the next
-/// session: nothing running follows it. So do the options of another launcher, which the running
-/// one leaves alone. A device's options apply as its settings say.
+/// Whether an agent running the launcher `running` (an id) takes a change of dotted `key` over at
+/// once. Unknown keys and other launchers' options wait for the next session.
 pub fn takes_effect_live(
     key: &str,
     launchers: &[&dyn LauncherDescriptor],
