@@ -1,9 +1,6 @@
-//! A small file logger behind the `log` facade, synchronous on purpose: a logging thread would be
-//! one more thing that wakes up, for a handful of lines per session.
-//!
-//! Every role appends to `mujina.log`, which is rotated to `mujina.log.1` past a size. Each
-//! process checks on opening and every few lines; until then it may write to a file another role
-//! has rotated. Rotation is best effort: racing processes may lose the older file.
+//! A synchronous file logger behind the `log` facade: a logging thread would be one more thing
+//! that wakes up. Every role appends to `mujina.log`, rotated to `mujina.log.1` past a size; best
+//! effort, as racing processes may lose the older file.
 
 use std::ffi::OsString;
 use std::fs::{File, OpenOptions};

@@ -1,7 +1,6 @@
 //! Noticing that the session ends: sign-out, shutdown, or the Restart Manager closing the agent.
 //! Windows tells windows, not processes, so the agent owns a hidden window that receives
-//! `WM_ENDSESSION`. Once that is answered the process may end at any moment, so what must happen
-//! (the last log lines) happens while the message is handled; the exit after it is best effort.
+//! `WM_ENDSESSION`.
 
 use std::cell::{Cell, RefCell};
 use std::ptr::{null, null_mut};

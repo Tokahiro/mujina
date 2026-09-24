@@ -1,7 +1,6 @@
-//! The agent's event loop: one thread, blocked in the kernel until something happens, on
-//! [`mujina_winutil::wait::EventLoop`]. Nothing is polled. It wakes for Xbox mode
-//! ([`FseSource`]), the caller's sources, the launcher's process ending ([`ProcessExitSource`]),
-//! and window messages (the foreground hook, the session end), in that order.
+//! The agent's event loop on [`mujina_winutil::wait::EventLoop`]: one thread, blocked in the
+//! kernel, nothing polled. It wakes for Xbox mode ([`FseSource`]), the caller's sources, the
+//! launcher's process ending ([`ProcessExitSource`]) and window messages, in that order.
 
 use std::cell::RefCell;
 use std::ptr::null_mut;

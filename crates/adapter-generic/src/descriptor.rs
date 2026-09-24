@@ -70,7 +70,6 @@ const TEMPLATE: &str = r#"# A launcher Mujina does not know, with kind = "generi
 # process = "frontend.exe"        # default: the executable's file name
 "#;
 
-/// The generic launcher's settings.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct GenericLauncherConfig {
     pub executable: PathBuf,

@@ -1,7 +1,6 @@
-//! The home app's own full-screen window while the launcher starts: see-through by default, black
-//! on request. Not topmost, so whatever the launcher shows (its update progress too) appears in
-//! front of it. The readiness check runs only when WinEvent hooks report a window shown or
-//! brought to the front.
+//! The home app's full-screen window while the launcher starts: see-through by default, black on
+//! request. Not topmost, so the launcher's windows appear in front of it. The costly readiness
+//! check runs only when WinEvent hooks report a window shown or brought to the front.
 
 use std::cell::Cell;
 use std::ptr::{null, null_mut};

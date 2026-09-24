@@ -1,9 +1,6 @@
-//! The launcher's process as a wait source of the agent's event loop: its handle is signalled
-//! when the process ends.
-//!
-//! The launcher may start after the agent or be restarted, so the process is looked up again,
-//! but only when there is a reason ([`Lookout`]) and never on a timer: a lookup may take a
-//! snapshot of every process.
+//! The launcher's process as a wait source of the agent's event loop. The launcher may start
+//! after the agent or restart, so its process is looked up again when there is a reason
+//! ([`Lookout`]), never on a timer: a lookup may take a snapshot of every process.
 
 use std::cell::Cell;
 use std::os::windows::io::{AsHandle, BorrowedHandle};

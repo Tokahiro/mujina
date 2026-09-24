@@ -68,8 +68,8 @@ pub struct DeviceParts {
     pub sources: Vec<Box<dyn WaitSource<AgentEvent>>>,
 }
 
-/// One device, as `registry.rs` lists it. A descriptor may be data made at run time (a profile
-/// file).
+/// One device, as `registry.rs` lists it. A descriptor made at run time (a profile file) must be
+/// kept for the rest of the program, e.g. in a static.
 #[derive(Clone, Copy)]
 pub struct DevicePlugin {
     pub descriptor: &'static dyn DeviceDescriptor,
