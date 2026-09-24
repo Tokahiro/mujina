@@ -374,7 +374,8 @@ mod tests {
         );
     }
 
-    /// A call over it fails at once, as a broken link, not a timeout: it cannot have got through.
+    /// A call over a session Steam closed fails at once, as a broken link: it cannot have got
+    /// through.
     #[test]
     fn a_session_closed_at_the_other_end_is_a_broken_link() {
         let port = fake_endpoint(|_| {});

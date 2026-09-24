@@ -138,7 +138,7 @@ impl DirectMenus {
     /// Opens or closes the host's side menu through its menu store, which works wherever the
     /// keyboard focus is: after a programmatic bring-to-front, `Ctrl+1` goes nowhere. Returns at
     /// once whether the press was taken on (not while the link is down or the host's functions
-    /// are missing); the link's worker carries it out, as the caller also runs the keyboard hook.
+    /// are missing); the link's worker carries it out.
     pub fn toggle(&self, host: MenuHost) -> bool {
         let Some(session) = self.link.session() else {
             return false;
