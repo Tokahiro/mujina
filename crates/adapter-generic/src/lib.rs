@@ -1,12 +1,7 @@
-//! A launcher Mujina knows nothing about, driven entirely by the configuration.
-//!
-//! Good enough to boot into any full-screen frontend: locate and start an executable, tell
-//! whether it is up, and bring its window to the front. Everything a generic launcher cannot
-//! know — menus beyond `ESC`, navigation, a network indicator, game detection — stays at its
-//! defaults; a launcher that deserves more gets a dedicated adapter (see `docs/new-launcher.md`).
-//!
-//! [`DESCRIPTOR`] and [`GenericLauncherConfig`] are built everywhere, so they are tested on
-//! Linux too; the launcher at work needs Windows.
+//! A launcher Mujina knows nothing about, driven entirely by the configuration: start an
+//! executable, tell whether it is up, and bring its window to the front. Menus beyond `ESC`,
+//! navigation, a network indicator and game detection need a dedicated adapter
+//! (`docs/new-launcher.md`).
 
 mod descriptor;
 #[cfg(windows)]
