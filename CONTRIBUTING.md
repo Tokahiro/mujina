@@ -108,6 +108,35 @@ mujina-setup`, then `packaging/sign.ps1` for the package, `packaging/attach-payl
 attach it, and `packaging/sign.ps1` for the installer. A build of Mujina Setup straight from
 cargo carries no package and says so.
 
+## Releasing
+
+Only the maintainer can push a `v*` tag, and pushing one is the decision to release
+([docs/signing.md](docs/signing.md#gating-the-release-key)).
+
+1. Bump the version on a branch from `main`, in one commit `chore(release): X.Y.Z`:
+   - `version` in the root `Cargo.toml`;
+   - `Cargo.lock`, with `cargo update --workspace`, which moves only the workspace's own crates;
+   - `CHANGELOG.md`: `## [Unreleased]` becomes `## [X.Y.Z] - YYYY-MM-DD`.
+
+   `cargo xtask version-check vX.Y.Z` and `cargo xtask release-notes vX.Y.Z` show what the
+   release workflow will check and print.
+2. Open a pull request and merge it once CI is green. `main` takes no direct pushes.
+3. Wait until CI has passed on `main` for the merged commit, then tag that commit:
+
+   ```
+   git fetch origin
+   git tag -a vX.Y.Z origin/main -m "Mujina X.Y.Z"
+   git push origin vX.Y.Z
+   ```
+
+4. `release.yml` does the rest. Its `preflight` job checks the tag against `Cargo.toml`, the
+   CHANGELOG entry, and that CI passed on `main` for exactly this commit (it waits up to 45
+   minutes for a CI run still going); then it builds, signs and publishes the release.
+
+A tag on a commit CI has not passed on `main` fails in `preflight`, before anything is built.
+Move it to the right commit: `git push origin :refs/tags/vX.Y.Z`, then
+`git tag -fa vX.Y.Z <commit> -m "Mujina X.Y.Z"` and push it again.
+
 ## Adding a device
 
 If the device's extra buttons arrive as keyboard chords, no code is needed, only a profile file:
