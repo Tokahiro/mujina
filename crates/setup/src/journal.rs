@@ -105,7 +105,7 @@ mod tests {
 
     #[test]
     fn a_log_that_cannot_be_written_stops_nothing() {
-        // A folder where the file should be: every write fails, quietly.
+        // A folder where the file should be, so every write fails.
         let folder = folder("blocked");
         fs::create_dir_all(folder.join("setup.log")).unwrap();
         FileJournal::new(folder.join("setup.log"), clock).note("lost");

@@ -1,6 +1,5 @@
-//! Mujina Setup: installs, updates and removes Mujina (ADR-0012, ADR-0015). [`cli::USAGE`] lists
-//! the options; `--elevated` (the administrator part) and `--cleanup` (the check at sign-in) are
-//! internal.
+//! Installs, updates and removes Mujina (ADR-0012, ADR-0015); [`cli::USAGE`] lists the options.
+//! Internal: `--elevated` (the administrator part) and `--cleanup` (the check at sign-in).
 
 #![cfg_attr(windows, windows_subsystem = "windows")]
 
@@ -103,8 +102,7 @@ fn about() -> std::process::ExitCode {
 const RELAUNCHED: &str = "MUJINA_SETUP_OUTSIDE_PACKAGE";
 
 /// Starts this program again outside Mujina's package if it runs inside it, and says whether it
-/// did: a process of the package would be stopped by the removal it runs. Settings already asks
-/// Windows for this, but whether that reaches Setup itself is not documented.
+/// did: a process of the package would be stopped by the removal it runs.
 #[cfg(windows)]
 fn relaunched_outside_package(mode: cli::Mode, log: Option<&std::path::Path>) -> bool {
     use mujina_winutil::{package, process};

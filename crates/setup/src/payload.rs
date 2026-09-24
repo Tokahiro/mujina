@@ -1,20 +1,17 @@
-//! The package this installer carries: the signed MSIX, its certificate and a few lines about
-//! them, attached as data resources by `packaging/attach-payload.ps1` (docs/signing.md). The
-//! certificate is not checked against the lines: both come from the same file.
+//! The package attached by `packaging/attach-payload.ps1` (docs/signing.md): the signed MSIX,
+//! its certificate and lines about them, not checked against each other (all from one file).
 
 use std::fmt;
 
 use crate::plan::Version;
 
-/// The resources `packaging/attach-payload.ps1` adds, by name, all raw data (`RT_RCDATA`).
+/// Names of the `RT_RCDATA` resources `packaging/attach-payload.ps1` adds.
 pub const MSIX_RESOURCE: &str = "MUJINA_MSIX";
 pub const CER_RESOURCE: &str = "MUJINA_CER";
 pub const ABOUT_RESOURCE: &str = "MUJINA_ABOUT";
 
-/// What the attached package is, as `mujina-setup.exe --about` prints it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct About {
-    /// The manifest's `Identity Name`, `Mujina`.
     pub name: String,
     /// The manifest's `Identity Publisher`, exactly as written there, e.g. `CN=Mujina`.
     pub publisher: String,
@@ -97,7 +94,6 @@ impl fmt::Display for About {
     }
 }
 
-/// The package, as attached to this executable.
 #[cfg(windows)]
 #[derive(Debug, Clone)]
 pub struct Payload {
@@ -106,11 +102,10 @@ pub struct Payload {
     pub cer: &'static [u8],
 }
 
-/// Why this executable has no usable package.
 #[cfg(windows)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Missing {
-    /// Nothing was attached: a build straight from cargo.
+    /// A build straight from cargo.
     NotAttached,
     /// Partly attached, or not what it says it is.
     Damaged(String),

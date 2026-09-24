@@ -1,12 +1,10 @@
-//! Carries out a plan for the window and the command line, over small traits that `host_windows`
-//! implements and the tests fake. Every decision is made here; the host only does what it is told.
+//! Carries out a plan over traits the host implements; the host only does what it is told.
 
 use std::fmt;
 
 use crate::plan::{self, Choice, Facts, Package, Refusal, Step};
 
-/// Why a step failed: a kind the window words in the user's language, and a code and detail
-/// kept as Windows or a program said them, for the log.
+/// The window words `kind` in the user's language; `code` and `detail` stay raw, for the log.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StepError {
     pub kind: ErrorKind,
@@ -62,11 +60,8 @@ pub enum ErrorKind {
     Declined,
     /// Windows did not start the administrator part (a policy, say); `code` is the Win32 error.
     ElevationFailed,
-    /// The administrator part refused its arguments.
     ElevatedArguments,
-    /// The administrator part could not turn Developer Mode on.
     DeveloperMode,
-    /// The administrator part could not add the certificate.
     Certificate,
     /// The administrator part ended with a code of none of the above (a crash, say).
     Preparing,
@@ -76,8 +71,7 @@ pub enum ErrorKind {
     NewerInstalled,
     /// 0x80073CFB, ERROR_PACKAGE_ALREADY_EXISTS: the same version, but not the same file.
     SameVersionDiffers,
-    /// 0x800B0100, 0x800B0109, 0x800B010A: the signature is missing or its certificate is not
-    /// trusted.
+    /// 0x800B0100, 0x800B0109, 0x800B010A: no signature, or its certificate is not trusted.
     NotTrusted,
     /// 0x80073CFF, ERROR_INSTALL_POLICY_FAILURE: sideloading is off (Developer Mode).
     SideloadingOff,
@@ -95,13 +89,10 @@ pub enum ErrorKind {
     DeploymentFailed,
     /// This Mujina (this package family) is not installed.
     NotInstalled,
-    /// The home app setting could not be read or changed.
     HomeApp,
-    /// The check at sign-in could not be arranged or removed.
     SignInCheck,
     /// A file Mujina placed in another program's folder could not be deleted.
     Files,
-    /// Anything else; `detail` says what.
     Other,
 }
 
@@ -144,7 +135,6 @@ pub trait Probe {
     fn facts(&self) -> Facts;
 }
 
-/// The machine-wide part, which needs administrator rights.
 pub trait Trust {
     /// Developer Mode on and the certificate trusted, behind one prompt.
     fn prepare(&self) -> Result<(), StepError>;
@@ -157,7 +147,6 @@ pub trait Packages {
     fn installed(&self) -> bool;
 }
 
-/// The home app of Xbox mode, through mujina-application's `HomeAppRegistration`.
 pub trait HomeApp {
     fn make(&self) -> Result<(), StepError>;
     /// Gives the setting back if this Mujina has it; if another app has it, touches nothing.
@@ -176,10 +165,8 @@ pub trait SignInCheck {
 
 /// The files Mujina made outside its own folders, as recorded when it made them.
 pub trait CreatedFiles {
-    /// Deletes every recorded file, then the record; the record stays while one cannot be
-    /// deleted.
+    /// Deletes every recorded file, then the record, which stays while a file cannot be deleted.
     fn forget(&self) -> Result<(), StepError>;
-    /// Whether any are still recorded.
     fn remain(&self) -> bool;
 }
 
@@ -198,7 +185,6 @@ pub enum StepState {
     Failed,
 }
 
-/// Who watches the run: the window's rows, or nobody.
 pub trait Progress {
     fn update(&mut self, index: usize, state: StepState);
 }
@@ -276,7 +262,6 @@ fn execute(host: &impl Host, step: Step) -> Result<(), StepError> {
 /// anyway: a failure that keeps repeating will not go away.
 pub const SIGN_IN_ATTEMPTS: u32 = 5;
 
-/// What the check at sign-in did.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SignedIn {
     Installed,
@@ -372,8 +357,6 @@ fn finish(result: Result<(), Failure>) -> Unattended {
 
 #[cfg(test)]
 pub(crate) mod testing {
-    //! A host in memory that records what it was asked to do and fails where a test says.
-
     use std::cell::{Cell, RefCell};
 
     use super::*;
@@ -517,7 +500,6 @@ pub(crate) mod testing {
         Version::parse(text).unwrap()
     }
 
-    /// A device prepared by an earlier installation of 0.27.0, Mujina the home app.
     pub fn installed_before() -> Facts {
         Facts {
             os_build: Some(26200),
@@ -530,7 +512,6 @@ pub(crate) mod testing {
         }
     }
 
-    /// A device never prepared, with nothing of Mujina on it.
     pub fn untouched() -> Facts {
         Facts {
             dev_mode: false,
@@ -717,14 +698,12 @@ mod tests {
                 .iter()
                 .any(|line| line.contains("giving the home app back failed"))
         );
-        // A later sign-in that succeeds removes the check, and the count with it.
         assert_eq!(sign_in(&host), SignedIn::Done);
         assert_eq!(host.attempts.get(), 0);
     }
 
     #[test]
     fn installing_again_gives_the_check_all_its_attempts() {
-        // Removed through Settings → Apps; two sign-ins could not give the home app back.
         let host = FakeHost::new(untouched());
         for _ in 0..2 {
             host.fail("give home app back");
@@ -763,21 +742,18 @@ mod tests {
 
     #[test]
     fn unattended_installs_keep_the_home_app_as_it_is_and_never_downgrade() {
-        // An update where another app became the home app: it stays.
         let host = FakeHost::new(Facts {
             home_app_is_this: false,
             ..installed_before()
         });
         assert_eq!(install_unattended(&host, false), Unattended::Done);
         assert!(!host.calls().contains(&"make home app".to_string()));
-        // A first installation makes Mujina the home app, unless told not to.
         let host = FakeHost::new(untouched());
         assert_eq!(install_unattended(&host, false), Unattended::Done);
         assert!(host.calls().contains(&"make home app".to_string()));
         let host = FakeHost::new(untouched());
         assert_eq!(install_unattended(&host, true), Unattended::Done);
         assert!(!host.calls().contains(&"make home app".to_string()));
-        // A newer version installed: refused, nothing done.
         let host = FakeHost::new(Facts {
             installed: Some(version("0.29.0.0")),
             ..installed_before()

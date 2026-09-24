@@ -1,11 +1,9 @@
 //! Which steps an installation or removal takes, and in which order. The rule: a safety net
-//! comes before the change it guards. The check at sign-in is arranged before Mujina becomes the
-//! home app; the home app is given back before the package goes.
+//! comes before the change it guards.
 
 use std::fmt;
 
-/// The Windows build Mujina's package requires (`MinVersion` 10.0.26100.0 in
-/// `packaging/AppxManifest.xml.in`): Windows 11 24H2.
+/// `MinVersion` 10.0.26100.0 in `packaging/AppxManifest.xml.in`: Windows 11 24H2.
 pub const REQUIRED_BUILD: u32 = 26100;
 
 /// A package version, as Windows orders them: four numbers, compared from the left.
@@ -30,8 +28,7 @@ impl Version {
         parts.next().is_none().then_some(version)
     }
 
-    /// From a package full name, `Name_1.2.3.4_x64__publisherid`; a package name holds no
-    /// underscore.
+    /// From a full name, `Name_1.2.3.4_x64__publisherid`; a package name holds no underscore.
     pub fn from_full_name(full_name: &str) -> Option<Self> {
         Self::parse(full_name.split('_').nth(1)?)
     }
@@ -48,7 +45,6 @@ impl fmt::Display for Version {
     }
 }
 
-/// What Setup found out about the device, before it changes anything.
 // Independent facts, each read on its own; no two of them make a state together.
 #[allow(clippy::struct_excessive_bools)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -58,13 +54,9 @@ pub struct Facts {
     pub dev_mode: bool,
     /// Exactly this installer's certificate, not one with the same name from before a renewal.
     pub cert_trusted: bool,
-    /// The version of this package family installed for the user.
     pub installed: Option<Version>,
-    /// `None` for a build that carries no package.
     pub carried: Option<Version>,
-    /// Exactly this family is the home app of Xbox mode.
     pub home_app_is_this: bool,
-    /// Mujina's background agent runs in this session (it does in Xbox mode).
     pub agent_running: bool,
 }
 
@@ -80,12 +72,10 @@ impl Facts {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Choice {
     pub make_home_app: bool,
-    /// Replacing a newer installed version was confirmed.
     pub replace_newer: bool,
 }
 
-/// What an earlier installation already did to this machine. Two facts, so that the prompt says
-/// what it is for.
+/// What an earlier installation already did; two facts so that the prompt names what it is for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Preparation {
     pub developer_mode: bool,
@@ -98,7 +88,6 @@ impl Preparation {
     }
 }
 
-/// How the carried package goes onto the device.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Package {
     Install,
@@ -144,15 +133,12 @@ pub enum Step {
     RemoveCleanup,
 }
 
-/// Why nothing may be installed here.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Blocker {
-    /// Older than [`REQUIRED_BUILD`]: Windows would refuse the package only after the prompt and
-    /// the changes to the machine.
+    /// Older than [`REQUIRED_BUILD`]; Windows would refuse the package only after the prompt.
     WindowsTooOld { build: u32 },
 }
 
-/// Why [`install`] gives no steps.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Refusal {
     /// This build of Setup carries no package (a CI check, a local build without one).
@@ -232,7 +218,6 @@ mod tests {
         Version::parse(text).unwrap()
     }
 
-    /// A first installation on a device never prepared, Windows new enough.
     fn fresh() -> Facts {
         Facts {
             os_build: Some(26200),
@@ -396,7 +381,6 @@ mod tests {
         let blocked = Blocker::WindowsTooOld { build: 22631 };
         assert_eq!(preflight(&old), Some(blocked));
         assert_eq!(install(&old, HOME), Err(Refusal::Blocked(blocked)));
-        // Before anything else, the downgrade question too.
         let old_and_newer = Facts {
             os_build: Some(22631),
             ..prepared("0.29.0.0")

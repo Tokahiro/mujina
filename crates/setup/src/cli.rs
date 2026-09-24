@@ -46,7 +46,6 @@ pub enum Request {
         no_home_app: bool,
         log: Option<PathBuf>,
     },
-    /// The administrator part, which the installer starts itself.
     Elevated,
     /// The check at sign-in, for the attached package's family.
     Cleanup {
@@ -162,7 +161,6 @@ fn parse_options(arguments: Vec<OsString>) -> Result<Request, lexopt::Error> {
     })
 }
 
-/// The administrator part's exit codes on failure.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ElevatedFailure {
     Arguments = 2,
@@ -212,7 +210,6 @@ mod tests {
         assert!(parsed(&["--elevated", "evil.cer"]).is_err());
         assert!(parsed(&["--elevated", ""]).is_err());
         assert!(parsed(&["--elevated", "--elevated"]).is_err());
-        // Anywhere else it is refused, rather than taken for the window.
         assert!(parsed(&["--uninstall", "--elevated"]).is_err());
         assert!(parsed(&["--elevated=x"]).is_err());
     }
@@ -220,7 +217,6 @@ mod tests {
     #[test]
     fn the_check_at_sign_in_takes_no_family() {
         assert_eq!(parsed(&["--cleanup"]), Ok(Request::Cleanup { log: None }));
-        // The family is the attached package's: a name after it is refused.
         assert!(parsed(&["--cleanup", "Mujina_k2veznmcx4n98"]).is_err());
         assert!(parsed(&["--cleanup", "--quiet"]).is_err());
     }

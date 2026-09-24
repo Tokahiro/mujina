@@ -1,6 +1,5 @@
-//! The runner's host on the machine. Every program is started by its full path, never looked up
-//! by name, and data reaches PowerShell only through environment variables, never inside the
-//! command text.
+//! The runner's host on the machine. Programs start by full path, never by name; data reaches
+//! PowerShell only through environment variables, never inside the command text.
 
 use std::ffi::OsStr;
 use std::os::windows::process::CommandExt;
@@ -44,12 +43,9 @@ const SETUP_KEY: &str = r"Software\Mujina\Setup";
 const ATTEMPTS_VALUE: &str = "CleanupAttempts";
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
-/// The machine, for the package attached to this executable.
 pub struct WindowsHost {
     payload: Option<&'static Payload>,
-    /// The family Setup works on: the attached package's.
     family: Option<String>,
-    /// The window the administrator prompt belongs to.
     owner: Option<WindowHandle>,
     /// None when Setup runs with administrator rights and no `--log` names a file.
     journal: Option<FileJournal>,
@@ -102,9 +98,8 @@ impl WindowsHost {
     }
 }
 
-/// Where `--log` says, else the usual place, but not with administrator rights: any program of
-/// the user's could link that folder to a system one, and the log would be written there as
-/// administrator (SECURITY.md).
+/// Where `--log` says, else the usual place, but none as administrator: a program of the user's
+/// could link that folder to a system one and have the log written there (SECURITY.md).
 pub fn log_file(requested: Option<PathBuf>) -> Option<PathBuf> {
     requested.or_else(|| (!process::is_elevated()).then(default_log))
 }
@@ -388,8 +383,7 @@ fn copy_folders(copy: &Path) -> Vec<&Path> {
 }
 
 /// Removes the copy of Setup and its empty folders. A running program cannot delete itself, so
-/// when this is the copy, PowerShell waits for it to end (bounded, as the ID may be reused) and
-/// retries a few times while Windows still holds the file.
+/// for the copy PowerShell waits for it to end (bounded: IDs are reused) and retries while locked.
 fn remove_copy(copy: &Path) -> Result<(), String> {
     let folders = copy_folders(copy);
     if std::env::current_exe().ok().as_deref() != Some(copy) {
@@ -474,7 +468,7 @@ impl WorkFolder {
         Self(std::env::temp_dir().join(format!("mujina-setup-{}-{instance}", std::process::id())))
     }
 
-    /// Writes `bytes` into the folder as `name`, a bare file name.
+    /// `name` must be a bare file name.
     fn unpack(&self, name: &str, bytes: &[u8]) -> Result<PathBuf, String> {
         std::fs::create_dir_all(&self.0)
             .map_err(|error| format!("{}: {error}", self.0.display()))?;

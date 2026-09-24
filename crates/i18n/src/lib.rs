@@ -1,6 +1,5 @@
-//! Texts that Rust puts into a window, in the user's language. Slint translates its `@tr` texts
-//! itself; a text Rust has only at run time goes through a [`Localizer`], which reads the same
-//! gettext `.po` catalogs. A [`Msg`]'s English wording is its key (msgid) in every catalog.
+//! Texts from Rust in the user's language, through a [`Localizer`] that reads the same gettext
+//! `.po` catalogs as Slint's `@tr`. A [`Msg`]'s English wording is its key (msgid).
 
 mod catalog;
 
@@ -8,7 +7,6 @@ use std::collections::HashMap;
 
 pub use catalog::{Catalog, ParseError};
 
-/// A text as written, in English.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Msg(&'static str);
 

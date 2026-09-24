@@ -1,5 +1,4 @@
-//! The Setup window. Checking the device and running the plan each happen on a thread of their
-//! own.
+//! The Setup window. Checking the device and running the plan each get a thread of their own.
 
 use std::cell::RefCell;
 use std::path::{Path, PathBuf};
@@ -40,7 +39,6 @@ const LANGUAGES: [&str; 2] = ["en", "de"];
 #[derive(Default)]
 struct State {
     facts: Option<Facts>,
-    /// The failure shown, for Copy details.
     failure: Option<RunFailure>,
 }
 
@@ -222,7 +220,6 @@ fn show_plan(window: &SetupWindow, steps: &[Step]) {
     window.set_steps(ModelRc::from(Rc::new(VecModel::from(rows))));
 }
 
-/// Preparing names only what is still missing, so that the prompt says what it is for.
 fn kind(step: Step) -> StepKind {
     match step {
         Step::Preflight => StepKind::CheckDevice,
@@ -416,10 +413,8 @@ mod tests {
 
     #[test]
     fn try_again_keeps_the_home_app_switch_as_the_run_found_it() {
-        // A first installation: the switch starts on.
         assert_eq!(starting_switch(None, &facts()), Some(true));
-        // The package went on, then a later step failed. Found again, Mujina is installed and
-        // not the home app, whose default is off: the switch keeps what the user ran with.
+        // The package went on, then a later step failed: found again, its default is off.
         let installed = Facts {
             installed: Version::parse("0.28.0.0"),
             ..facts()
@@ -458,7 +453,6 @@ mod tests {
             "{copied}"
         );
         assert!(copied.ends_with(r"Log: C:\log\setup.log"), "{copied}");
-        // As administrator without --log there is none, and the details say why.
         let copied = details(&failure, None);
         assert!(
             copied.ends_with("Log: none (Setup ran with administrator rights)"),

@@ -1,16 +1,13 @@
-//! A gettext `.po` catalog, as far as texts from Rust need it. Slint's texts carry their
-//! component as context (msgctxt); a [`Catalog`] keeps only texts without one.
+//! A gettext `.po` catalog's texts without a context (msgctxt): Slint's texts carry one.
 
 use std::collections::HashMap;
 use std::fmt;
 
-/// The texts of a catalog that Rust looks up: English to translation.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Catalog {
     texts: HashMap<String, String>,
 }
 
-/// Where a catalog is not a `.po` file.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParseError {
     pub line: usize,
@@ -133,15 +130,14 @@ impl Catalog {
         Ok(catalog)
     }
 
-    /// Every text of the catalog Rust looks up, English first.
+    /// `(english, translation)` pairs.
     pub fn texts(&self) -> impl Iterator<Item = (&str, &str)> {
         self.texts
             .iter()
             .map(|(english, translation)| (english.as_str(), translation.as_str()))
     }
 
-    /// Keeps `entry` if Rust uses it: translated, not fuzzy, no context, no plural and not the
-    /// header (the empty msgid).
+    /// Keeps `entry` if Rust uses it. The header is the entry with the empty msgid.
     fn keep(&mut self, entry: Entry) {
         let translation = match entry.translations.as_slice() {
             [translation] if !translation.is_empty() => translation,

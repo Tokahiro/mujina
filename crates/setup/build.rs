@@ -1,5 +1,4 @@
-//! Compiles the user interface and embeds the icon. The package is not built in:
-//! `packaging/attach-payload.ps1` attaches it to the finished executable (ADR-0015).
+//! Compiles the UI and embeds the icon. `packaging/attach-payload.ps1` adds the package (ADR-0015).
 
 #[cfg(windows)]
 use std::path::Path;
@@ -22,7 +21,7 @@ fn compile_ui() {
     icon_resource::embed(Path::new("../../packaging/mujina.ico"));
 
     println!("cargo:rerun-if-changed=lang");
-    // The UI shared with Settings, in the repository's ui/, imported as "@mujina/...".
+    // The UI shared with Settings, imported as "@mujina/...".
     let shared = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../ui");
     let libraries = std::collections::HashMap::from([("mujina".to_string(), shared)]);
     // Texts in lang/<language>/LC_MESSAGES/mujina-setup.po; the window selects the language.
