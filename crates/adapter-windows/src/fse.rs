@@ -28,8 +28,8 @@ type UnregisterFn = unsafe extern "system" fn(*mut c_void);
 
 pub struct WindowsFse {
     is_active: Option<IsActiveFn>,
-    /// Bound as a pair: a registration is only made where it can be undone. Where they are
-    /// missing, the call that found so, for the log.
+    /// Bound as a pair, so a registration is only made where it can be undone. The error is kept
+    /// for the log.
     notifications: Win32Result<(RegisterFn, UnregisterFn)>,
 }
 
@@ -87,7 +87,7 @@ impl WindowsFse {
             )
         };
         if result < 0 {
-            // The GDK does not say that a failed registration leaves nothing behind.
+            // The GDK does not say that a failed registration keeps no pointer to the context.
             std::mem::forget(changed);
             return Err(Win32Error {
                 call: "RegisterGamingFullScreenExperienceChangeNotification",
@@ -123,9 +123,8 @@ impl Drop for FseWatch {
         // SAFETY: bound with the documented signature; `registration` came from a successful
         // registration and is undone exactly once.
         unsafe { (self.unregister)(self.registration) };
-        // The GDK does not say whether unregistering waits for a callback that is running, and
-        // the agent drops its watch right after a switch, when a second one may be under way. So
-        // the event stays for the rest of the process: one handle, as the agent watches once.
+        // The GDK does not say whether unregistering waits for a running callback, and a second
+        // switch may be under way. So the event is leaked: one handle, as the agent watches once.
         std::mem::forget(Arc::clone(&self.changed));
     }
 }
@@ -146,7 +145,6 @@ impl FullScreenExperience for WindowsFse {
 /// Xbox mode switched on or off, as a wait source of the agent's event loop.
 pub struct FseSource<'a> {
     fse: &'a WindowsFse,
-    /// Unregistered when the source is dropped.
     watch: FseWatch,
 }
 

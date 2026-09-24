@@ -1,10 +1,6 @@
-//! Tells a running agent that the home role has just started the launcher, or switched it to its
-//! console UI, so that the agent looks for the launcher's process again. The same pattern as
-//! `settings_signal` (ADR-0010): a named auto-reset event in the session's namespace, no IPC, and
-//! the agent only ever waits on it.
-//!
-//! Without it the agent would find a launcher it did not see start only once the launcher's
-//! window comes to the front, and one started while the agent was still getting ready not at all.
+//! Tells a running agent that the home role started the launcher or switched it to its console
+//! UI, so that the agent looks for the launcher's process again. Same pattern as
+//! `settings_signal` (ADR-0010).
 
 use std::os::windows::io::{AsHandle, BorrowedHandle};
 
@@ -19,10 +15,8 @@ pub fn listen() -> Option<LauncherStartedSource> {
     LauncherStartedSource::named(NAME)
 }
 
-/// For the home role, once the launcher has been started or switched to its console UI. Does
-/// nothing noticeable without a running agent. Should the event not exist yet, it is gone again
-/// with this call's handle (a named event lives as long as a handle to it, CreateEventW), and an
-/// agent that opens it later looks for the launcher once it is ready anyway.
+/// For the home role. Without a running agent the event dies with this call's handle
+/// (CreateEventW); an agent that starts later looks for the launcher anyway.
 pub fn notify() {
     if let Ok(event) = Event::named_auto_reset(NAME) {
         event.set();

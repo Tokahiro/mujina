@@ -19,6 +19,5 @@ pub mod session_end;
 pub mod settings_signal;
 pub mod smbios;
 
-/// The translations of this crate's texts (the titles of its checks), by the language `lang/`
-/// names them in: for Mujina Settings, which shows them.
+/// Translations of this crate's texts (its checks), by language, for Mujina Settings.
 pub const CATALOGS: &[(&str, &str)] = &[("de", include_str!("../lang/de.po"))];

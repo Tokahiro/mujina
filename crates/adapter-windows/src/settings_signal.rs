@@ -1,6 +1,5 @@
-//! Tells a running agent that `config.toml` changed. A named event in the session's namespace, so
-//! a settings tool and the agent of the same session find each other without any IPC, and the
-//! agent only ever waits on it.
+//! Tells a running agent that `config.toml` changed, through a named event in the session's
+//! namespace (ADR-0010).
 
 use std::os::windows::io::{AsHandle, BorrowedHandle};
 

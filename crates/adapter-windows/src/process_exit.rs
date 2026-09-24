@@ -1,19 +1,9 @@
-//! The launcher's process, as a wait source of the agent's event loop: a process handle is
-//! signalled once the process has ended, and the agent supervises the launcher by that.
+//! The launcher's process as a wait source of the agent's event loop: its handle is signalled
+//! when the process ends.
 //!
-//! Which process that is changes during a session. The launcher may be started after the agent
-//! (the home role starts the agent first), brought back by the home role after a crash, or
-//! restarted by anything else. So the source looks the process up again whenever it watches none
-//! and there is a reason to believe the launcher may be there now: the home role started it, a
-//! window of its own came to the front, or its state changed ([`Lookout`]). While it watches one,
-//! only the launcher's state changing makes it ask again, since that is when a launcher that
-//! keeps its process id where it can be read (Steam, in the registry) writes a new one. Never on
-//! another wake, and never on a timer: looking up may take a snapshot of every process (the
-//! generic launcher finds its process by name).
-//!
-//! An id is taken for the launcher's only if the process it names has not ended and runs an
-//! image the launcher owns: an id the launcher left behind, after a crash say, may have been
-//! given to another process since, as Windows reuses them.
+//! The launcher may start after the agent or be restarted, so the process is looked up again,
+//! but only when there is a reason ([`Lookout`]) and never on a timer: a lookup may take a
+//! snapshot of every process.
 
 use std::cell::Cell;
 use std::os::windows::io::{AsHandle, BorrowedHandle};
@@ -24,12 +14,9 @@ use mujina_domain::supervision::LauncherExit;
 use mujina_winutil::process::ProcessWatch;
 use mujina_winutil::wait::WaitSource;
 
-/// Whether an event is a reason to look for the launcher's process again: the home role started
-/// the launcher, one of its windows came to the front (a launcher started by anything shows
-/// one), or it said its state changed (Steam writes its new process id then). `owns` tells the
-/// launcher's processes by image name (`SessionLauncher::owns_process`). A window whose process
-/// is not known counts too; another program's does not, so that switching between other
-/// programs never takes a snapshot of every process.
+/// Whether an event is a reason to look for the launcher's process again. `owns` is
+/// `SessionLauncher::owns_process`. Other programs' windows are no reason, so that switching
+/// between them never takes a snapshot of every process.
 pub fn is_reason_to_look(event: &AgentEvent, owns: impl Fn(&str) -> bool) -> bool {
     match event {
         AgentEvent::LauncherStarted | AgentEvent::LauncherStateChanged => true,
@@ -45,11 +32,11 @@ pub struct Lookout(Rc<Reasons>);
 
 #[derive(Default)]
 struct Reasons {
-    /// A reason to look while no process is watched. One seen while the old process is still
-    /// watched counts for the next look, so that a launcher which restarted at once is found as
-    /// soon as its old process is gone.
+    /// A reason to look once no process is watched. One noted while the old process is still
+    /// watched is kept, so a launcher that restarted at once is found when its old process ends.
     look: Cell<bool>,
-    /// The launcher's state changed: where its process is is asked even while one is watched.
+    /// The launcher's state changed (Steam then writes its new process id): ask again even while
+    /// a process is watched.
     ask_again: Cell<bool>,
 }
 
@@ -126,10 +113,9 @@ impl WaitSource<AgentEvent> for ProcessExitSource<'_> {
                 reasons.ask_again.set(false);
                 Some((self.process_id)())
             }
-            // The launcher may name another process now: one that restarted itself may name
-            // its new process before the old one has ended, whose end is then not the
-            // launcher's and not reported. One that names none has no process to supervise.
-            // Both as before stage 5.
+            // A launcher that restarted itself may name its new process before the old one has
+            // ended; the old one's end is then not reported. One that names none has no process
+            // to supervise.
             Some(watched) if reasons.ask_again.take() => {
                 let pid = (self.process_id)();
                 (pid != Some(watched)).then(|| {
@@ -151,8 +137,7 @@ impl WaitSource<AgentEvent> for ProcessExitSource<'_> {
     }
 
     fn signalled(&mut self, out: &mut Vec<AgentEvent>) {
-        // An ended process stays signalled, so its handle is let go of here: until there is a
-        // reason to look again, there is nothing to wait for.
+        // An ended process stays signalled, so its handle is dropped until the next look.
         if let Some(process) = self.watch.take() {
             let exit = LauncherExit {
                 exit_code: process.exit_code(),
@@ -180,9 +165,8 @@ mod tests {
 
     use super::*;
 
-    /// A launcher stand-in that never ends by itself: it is created suspended, so it runs
-    /// nothing, until the test ends it. Ended when dropped too, so that a failing test leaves no
-    /// process behind.
+    /// A launcher stand-in that never ends by itself (it is created suspended). Ended when
+    /// dropped too, so that a failing test leaves no process behind.
     struct StandIn(Child);
 
     impl StandIn {
@@ -214,7 +198,7 @@ mod tests {
         }
     }
 
-    /// The launcher's processes, as the tests' launcher tells them: its stand-ins.
+    /// The tests' `owns_process`.
     fn stand_in(name: &str) -> bool {
         name.eq_ignore_ascii_case("cmd.exe")
     }
@@ -248,12 +232,10 @@ mod tests {
         }
     }
 
-    /// The process the source watches, if any.
     fn watched(source: &ProcessExitSource<'_>) -> Option<u32> {
         source.watch.as_ref().map(ProcessWatch::pid)
     }
 
-    /// Whether the source's handle is signalled right now.
     fn signalled_now(source: &mut ProcessExitSource<'_>) -> bool {
         let handle = source.handle().unwrap().as_raw_handle();
         // SAFETY: a process handle the source holds until it is next asked for one; a zero
@@ -326,8 +308,7 @@ mod tests {
         assert_eq!(exit_code(&out), Some(1), "and its end is reported too");
     }
 
-    /// A launcher that restarted itself may name its new process before the old one has ended
-    /// (launcher-4): the new one is watched, and the old one's end is none of the launcher's.
+    /// A launcher that restarted itself may name its new process before the old one has ended.
     #[test]
     fn a_process_the_launcher_names_anew_is_watched_in_place_of_the_old() {
         let at = Whereabouts::default();
@@ -355,7 +336,6 @@ mod tests {
         assert_eq!(at.asked.get(), 3);
     }
 
-    /// As before stage 5: a launcher that names no process any more has none to supervise.
     #[test]
     fn a_launcher_that_names_no_process_any_more_has_none_watched() {
         let at = Whereabouts::default();
@@ -439,10 +419,8 @@ mod tests {
         }
     }
 
-    /// Run as the agent's loop runs it, whose handler takes note of every event before handing
-    /// it on: a launcher that ends is reported, and one the home role brings back is watched
-    /// again, however often. The test ends a stand-in only on a wake after the one
-    /// before which the source looked, so the process is always watched by then.
+    /// Run as the agent's loop runs it, whose handler notes every event before handing it on.
+    /// A stand-in is ended only on a wake after the source has looked, so it is watched by then.
     #[test]
     fn a_launcher_brought_back_is_supervised_again_every_time() {
         let at = Whereabouts::default();

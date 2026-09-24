@@ -16,9 +16,8 @@ impl PackageIdentity for WindowsPackageIdentity {
     }
 }
 
-/// The identity of the Mujina package of `family`, for a program outside it: Mujina Setup, which
-/// makes that package the home app and gives the setting back, before and after the package
-/// exists.
+/// The identity of the Mujina package of `family`, for Mujina Setup, which runs outside the
+/// package, also before it is installed and after it is removed.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FamilyIdentity {
     family: String,

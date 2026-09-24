@@ -12,7 +12,7 @@ use windows_sys::Win32::System::Threading::{
 
 use crate::launcher_signal;
 
-/// Per-session names; what another logged-in user runs is none of our business.
+/// Per-session names, so what another signed-in user runs does not count.
 const MUTEX_NAME: &str = r"Local\Mujina.agent";
 const HOME_MUTEX_NAME: &str = r"Local\Mujina.home";
 const SETTINGS_APP_MUTEX_NAME: &str = r"Local\Mujina.settings-app";
@@ -20,15 +20,14 @@ const SETTINGS_APP_MUTEX_NAME: &str = r"Local\Mujina.settings-app";
 /// Argument that makes `mujina.exe` run as agent.
 pub const AGENT_ARGUMENT: &str = "agent";
 
-/// Held by the agent for as long as it runs.
+/// A claimed role (agent, home activation or settings app), held while this value lives.
 pub struct AgentInstance {
     /// Holding the named mutex open is the claim; dropping it closes the mutex.
     _mutex: OwnedHandle,
 }
 
-/// Held by a home activation while it brings the launcher up. Windows activates the home app
-/// again when it is not satisfied yet (seen three times during one boot); the extra activations
-/// must not each start the launcher.
+/// Held by a home activation while it brings the launcher up. Windows may activate the home app
+/// again before it is satisfied (seen three times in one boot); only one may start the launcher.
 pub type HomeInstance = AgentInstance;
 
 impl AgentInstance {
@@ -56,8 +55,7 @@ impl AgentInstance {
         }
         // SAFETY: plain call, read immediately after the call it refers to.
         let taken = unsafe { GetLastError() } == ERROR_ALREADY_EXISTS;
-        // SAFETY: a handle of our own, which CloseHandle closes; dropped at once if the name is
-        // taken already.
+        // SAFETY: a valid handle that nothing else owns; CloseHandle closes it.
         let handle = unsafe { OwnedHandle::from_raw_handle(handle) };
         (!taken).then_some(Self { _mutex: handle })
     }
@@ -72,7 +70,7 @@ pub fn agent_is_running() -> bool {
     if handle.is_null() {
         return false;
     }
-    // SAFETY: a handle of our own, which CloseHandle closes; it is closed again at once.
+    // SAFETY: a valid handle that nothing else owns; CloseHandle closes it.
     drop(unsafe { OwnedHandle::from_raw_handle(handle) });
     true
 }
