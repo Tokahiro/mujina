@@ -1,4 +1,4 @@
-//! `[device.button]`: a modifier and a key for a device no profile knows; it wins over any profile.
+//! `[device.button]`, a modifier and a key; while it names a button, it wins over any profile.
 
 use mujina_application::device::{
     ButtonId, ButtonSpec, DeviceDescriptor, Suppression, SystemIdentity,
