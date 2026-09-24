@@ -2741,7 +2741,7 @@ dependencies = [
 
 [[package]]
 name = "mujina-adapter-config"
-version = "0.27.0"
+version = "0.28.0"
 dependencies = [
  "mujina-application",
  "mujina-domain",
@@ -2752,7 +2752,7 @@ dependencies = [
 
 [[package]]
 name = "mujina-adapter-generic"
-version = "0.27.0"
+version = "0.28.0"
 dependencies = [
  "mujina-adapter-kit",
  "mujina-application",
@@ -2762,7 +2762,7 @@ dependencies = [
 
 [[package]]
 name = "mujina-adapter-keyboard"
-version = "0.27.0"
+version = "0.28.0"
 dependencies = [
  "log",
  "mujina-adapter-kit",
@@ -2776,7 +2776,7 @@ dependencies = [
 
 [[package]]
 name = "mujina-adapter-kit"
-version = "0.27.0"
+version = "0.28.0"
 dependencies = [
  "log",
  "mujina-application",
@@ -2786,7 +2786,7 @@ dependencies = [
 
 [[package]]
 name = "mujina-adapter-steam"
-version = "0.27.0"
+version = "0.28.0"
 dependencies = [
  "log",
  "mujina-adapter-kit",
@@ -2800,7 +2800,7 @@ dependencies = [
 
 [[package]]
 name = "mujina-adapter-windows"
-version = "0.27.0"
+version = "0.28.0"
 dependencies = [
  "log",
  "mujina-application",
@@ -2811,7 +2811,7 @@ dependencies = [
 
 [[package]]
 name = "mujina-app"
-version = "0.27.0"
+version = "0.28.0"
 dependencies = [
  "lexopt",
  "log",
@@ -2828,7 +2828,7 @@ dependencies = [
 
 [[package]]
 name = "mujina-application"
-version = "0.27.0"
+version = "0.28.0"
 dependencies = [
  "mujina-domain",
  "mujina-i18n",
@@ -2837,15 +2837,15 @@ dependencies = [
 
 [[package]]
 name = "mujina-domain"
-version = "0.27.0"
+version = "0.28.0"
 
 [[package]]
 name = "mujina-i18n"
-version = "0.27.0"
+version = "0.28.0"
 
 [[package]]
 name = "mujina-settings-gui"
-version = "0.27.0"
+version = "0.28.0"
 dependencies = [
  "mujina-app",
  "mujina-application",
@@ -2858,7 +2858,7 @@ dependencies = [
 
 [[package]]
 name = "mujina-setup"
-version = "0.27.0"
+version = "0.28.0"
 dependencies = [
  "lexopt",
  "mujina-adapter-windows",
@@ -2870,7 +2870,7 @@ dependencies = [
 
 [[package]]
 name = "mujina-winutil"
-version = "0.27.0"
+version = "0.28.0"
 dependencies = [
  "windows-sys 0.61.2",
 ]
@@ -5885,7 +5885,7 @@ checksum = "ec7a2a501ed189703dba8b08142f057e887dfc4b2cc4db2d343ac6376ba3e0b9"
 
 [[package]]
 name = "xtask"
-version = "0.27.0"
+version = "0.28.0"
 dependencies = [
  "rspolib",
  "serde_json",

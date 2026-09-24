@@ -161,7 +161,9 @@ impl fmt::Display for Seen {
         }
         f.write_str(match self.game {
             GameSeen::None => "; no game",
-            GameSeen::Running | GameSeen::InFront => "; a game runs",
+            // Only the launcher's word: where the game is was not needed, so it was not looked at.
+            GameSeen::Running => "; the launcher counts a game as running",
+            GameSeen::InFront => "; a game runs",
             GameSeen::Behind => "; the game's window is behind it",
             GameSeen::NoWindow => "; a game runs, without a window to go back to",
             GameSeen::NotFound => "; a game runs but its window cannot be found",
@@ -240,7 +242,8 @@ mod tests {
         };
         assert_eq!(
             report.describe("Steam Big Picture"),
-            "the menu, opened by the launcher (in front: the launcher; a game runs; desktop)"
+            "the menu, opened by the launcher (in front: the launcher; the launcher counts a game as \
+             running; desktop)"
         );
         let unread = PressReport {
             seen: Some(Seen {
