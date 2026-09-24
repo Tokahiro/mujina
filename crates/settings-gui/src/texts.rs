@@ -17,7 +17,7 @@ pub const CATALOGS: [(&str, &str); 1] = [(
 )];
 
 pub const AUTOMATIC: Msg = Msg::new("Automatic");
-/// With what the button is called on the device found.
+/// `{}`: the button's name on the device found.
 pub const AUTOMATIC_WITH: Msg = Msg::new("Automatic ({})");
 pub const NONE: Msg = Msg::new("None");
 // The buttons of the System page's rows.
@@ -25,7 +25,7 @@ pub const WINDOWS_SETTINGS: Msg = Msg::new("Windows settings");
 pub const START_IT: Msg = Msg::new("Start it");
 
 thread_local! {
-    /// Thread-local: everything the window shows is built on its thread.
+    /// Everything the window shows is built on its thread.
     static LOCALIZER: RefCell<Localizer> = RefCell::new(localizer());
     /// The language set, for the words of a part made after it was set.
     static LANGUAGE: RefCell<String> = RefCell::new(String::from("en"));
@@ -108,7 +108,7 @@ mod tests {
 
     #[test]
     fn every_catalog_reads() {
-        // The parts' too: the Localizer leaves one that does not read out, English.
+        // The parts' too: `localizer` skips a catalog that does not parse, leaving it English.
         let parts = tool::catalogs();
         assert!(!parts.is_empty());
         for (language, po) in CATALOGS.iter().chain(&parts) {

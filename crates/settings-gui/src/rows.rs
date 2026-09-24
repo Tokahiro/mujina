@@ -1,7 +1,5 @@
 //! The Setup page's rows for a launcher's or device's own options, built from its
-//! `SettingSpec`s, so a new one needs no change here. A launcher's switches join What Mujina
-//! fixes; optional names, shortcuts and numbers go under Advanced; the rest stays with the
-//! launcher choice or the device's button.
+//! `SettingSpec`s, so a new launcher or device needs no change here.
 
 use mujina_application::settings::SettingValue;
 use mujina_application::settings::schema::{self, Applies, SettingKind, SettingSpec, TextFormat};

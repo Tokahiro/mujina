@@ -89,7 +89,7 @@ export global Theme {
         return health == Health.problem ? problem : health == Health.warning ? warning : ok;
     }
 
-    // The same at 12 % and 35 %, for the hero disc and its ring.
+    // `state-color` at 12 % and 35 %, for the hero disc and its ring.
     public pure function state-tint(health: Health) -> color {
         return health == Health.problem ? #de6a601f : health == Health.warning ? #d9a4411f : #52c08d1f;
     }

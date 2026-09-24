@@ -7,9 +7,7 @@ import { Mark } from "@mujina/mark.slint";
 component RailEntry inherits Rectangle {
     in property <image> icon;
     in property <string> text;
-    // The page shown is this one.
     in property <bool> current;
-    // The controller is on this entry.
     in property <bool> focused;
     callback clicked();
     height: 56 * Theme.u;

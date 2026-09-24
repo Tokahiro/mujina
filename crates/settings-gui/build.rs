@@ -5,7 +5,8 @@
 mod icon_resource;
 
 fn main() {
-    // Windows only: elsewhere the crate is a stub and `slint-build` is not a dependency.
+    // `cfg(windows)` is the host, the only one with `slint-build`; CARGO_CFG_WINDOWS is the
+    // target, since elsewhere the crate is a stub.
     #[cfg(windows)]
     if std::env::var_os("CARGO_CFG_WINDOWS").is_some() {
         compile_ui();

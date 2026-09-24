@@ -67,8 +67,8 @@ pub fn run() -> Result<(), slint::PlatformError> {
     window.run()
 }
 
-/// Swaps Slint's window icon for the executable's own. Retried on a timer: Slint creates the
-/// window only once the event loop runs.
+/// Swaps Slint's single large window icon for the executable's, which has small sizes. Retried
+/// on a timer: Slint creates the window only once the event loop runs.
 fn use_own_icon(attempts: u8) {
     Timer::single_shot(Duration::from_millis(50), move || {
         if !winutil_window::use_own_icon() && attempts > 1 {
@@ -364,14 +364,14 @@ fn found_facts(window: &MainWindow, run: u64, facts: &tool::SystemFacts) {
     if CHECKS.with(|checks| checks.borrow().run) != run {
         return;
     }
-    // Steam starts the packaged app through its execution alias.
+    // The execution alias starts the app inside its package; Steam takes it as a program.
     let packaged = mujina_winutil::package::family_name().is_some();
     let steam_target = match std::env::var("LOCALAPPDATA") {
         Ok(local) if packaged => format!(r"{local}\Microsoft\WindowsApps\mujina-settings.exe"),
         _ => String::new(),
     };
     let mut info = status::system_info(facts, &steam_target);
-    // Only Mujina Setup's own copy removes in the right order; without it, Settings → Apps.
+    // Only Mujina Setup's copy gives the home app back before removing; else Settings → Apps.
     info.can_remove = tool::retained_setup().is_some();
     window.set_system_info(info);
     SYSTEM_FINDINGS.with(|shown| shown.borrow_mut().clone_from(&facts.findings));
@@ -702,7 +702,7 @@ fn show_toast(window: &MainWindow, notice: Notice) {
 struct Capture {
     /// Set to stop the watcher while it waits.
     cancel: Option<Arc<AtomicBool>>,
-    /// Ticks the overlay's countdown while held.
+    /// The overlay's countdown; dropping it stops the ticks.
     _countdown: Option<Timer>,
     /// The toast for the stored button, shown once the overlay is closed.
     toast: Option<Notice>,

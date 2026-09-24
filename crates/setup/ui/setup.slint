@@ -32,7 +32,6 @@ export enum StepKind {
     remove-cleanup
 }
 
-// How far a step is.
 export enum StepState {
     todo,
     running,
@@ -274,7 +273,6 @@ component SwitchRow inherits FocusFrame {
     }
 }
 
-// One step and how far it is.
 component StepItem inherits Rectangle {
     in property <StepRow> step;
     property <StepKind> kind: root.step.kind;
@@ -441,7 +439,6 @@ export component SetupWindow inherits Window {
     // Mujina's agent runs now, and installing stops it.
     in property <bool> stops-agent;
     in property <[StepRow]> steps;
-    // Why the step that failed failed.
     in property <Failure> failure;
     in property <bool> make-home-app: true;
     // Setup writes a log (not when it runs as administrator without --log).
