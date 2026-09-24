@@ -50,9 +50,9 @@ pub fn run(mode: Mode, log: Option<PathBuf>) -> ExitCode {
     let Ok(window) = SetupWindow::new() else {
         return ExitCode::FAILURE;
     };
-    // No language chosen (Setup has no config.toml): the first Windows display language it has.
+    // Setup is always English, like Mujina Settings by default.
     // Slint wants a window to exist first; this fails only without bundled translations.
-    let _ = slint::select_bundled_translation(locale::language("", &LANGUAGES));
+    let _ = slint::select_bundled_translation(locale::language("en", &LANGUAGES));
     let log = host_windows::log_file(log);
     let version = payload::attached().map_or_else(
         |_| env!("CARGO_PKG_VERSION").to_string(),

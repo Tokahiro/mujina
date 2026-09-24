@@ -9,6 +9,11 @@ The versions before 0.28.0 are described here but not published any more.
 
 ## [Unreleased]
 
+### Changed
+
+- Mujina Settings and Mujina Setup start in English. Settings → Help can switch to German or
+  to "auto", which follows Windows.
+
 ### Fixed
 
 - Mujina Settings, Status: long texts in the tiles wrap instead of being cut off.

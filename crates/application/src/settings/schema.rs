@@ -325,7 +325,7 @@ pub static CORE: &[SettingSection] = &[
             key: "language",
             kind: SettingKind::Choice {
                 values: &["auto", "en", "de"],
-                default: "auto",
+                default: "en",
             },
             title: "Language",
             help: "Of Mujina Settings: \"auto\" follows Windows.",

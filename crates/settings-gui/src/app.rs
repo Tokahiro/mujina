@@ -41,8 +41,8 @@ pub fn run() -> Result<(), slint::PlatformError> {
     let window = MainWindow::new()?;
     let data_dir = tool::data_dir();
     // The chosen language before anything is worded; Slint wants a window to exist first.
-    let stored = tool::configuration().stored("interface.language");
-    use_language(&form::as_text(stored));
+    let stored = form::as_text(tool::configuration().stored("interface.language"));
+    use_language(if stored.is_empty() { "en" } else { &stored });
     window.set_version(env!("CARGO_PKG_VERSION").into());
     window.set_data_directory(shown(&data_dir).into());
     // Xbox mode has no desktop; `--full-screen` tries that layout on the desktop.
