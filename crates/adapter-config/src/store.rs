@@ -91,7 +91,6 @@ pub fn parse_value(text: &str) -> Result<SettingValue, String> {
     })
 }
 
-/// The kinds of values settings use; `None` for any other.
 fn from_value(value: &Value) -> Option<SettingValue> {
     match value {
         Value::Boolean(flag) => Some(SettingValue::Bool(*flag.value())),
@@ -106,7 +105,6 @@ fn from_value(value: &Value) -> Option<SettingValue> {
     }
 }
 
-/// Applies `changes` to the text of a configuration file.
 fn edit(text: &str, changes: &[SettingChange]) -> Result<String, String> {
     let mut text = text.to_string();
     for change in changes {
@@ -119,9 +117,8 @@ fn edit(text: &str, changes: &[SettingChange]) -> Result<String, String> {
     button_rest(text, changes)
 }
 
-/// Unsetting the last of `[device.button]`'s keys unsets `injected_only` with it: left alone it
-/// describes no button, and the reader would note it. Mujina Settings clears a button by
-/// unsetting its two keys.
+/// Unsetting the last of `[device.button]`'s keys unsets `injected_only` too: alone it describes
+/// no button, and the reader would note it.
 fn button_rest(text: String, changes: &[SettingChange]) -> Result<String, String> {
     const BUTTON: [&str; 2] = ["device", "button"];
     let unsets_a_key = changes.iter().any(|change| {
@@ -186,8 +183,7 @@ fn set_in(text: &str, tables: &[&str], leaf: &str, value: Value) -> Result<Strin
 }
 
 /// Why a key under `tables` cannot be set when the file holds one of those tables as something
-/// else, such as `features = 5`: a section of that name cannot be added beside it, so only a
-/// hand edit can sort it out.
+/// else, such as `features = 5`; only a hand edit can fix that.
 fn not_a_section(document: &DocumentMut, tables: &[&str]) -> Option<String> {
     let mut table = document.as_table();
     for (depth, name) in tables.iter().enumerate() {
@@ -214,8 +210,8 @@ fn not_a_section(document: &DocumentMut, tables: &[&str]) -> Option<String> {
     None
 }
 
-/// Comments the entry out again rather than deleting it: deleting would take the comment lines
-/// in front of it along, and a commented line can be set again later.
+/// Comments the entry out rather than deleting it, which would take the comment lines in front of
+/// it along; a commented line can be set again later.
 fn unset_in(text: &str, tables: &[&str], leaf: &str) -> Result<String, String> {
     let document = parse(text)?;
     if !present(&document, tables, leaf) {
@@ -247,8 +243,8 @@ fn check(
     let (system, launchers, devices) = (&config.system, &config.launchers, &config.devices);
     let parsed = file::parse(after, launchers, devices)
         .map_err(|error| format!("not saved: {}", error.message()))?;
-    // A value set where the reader skips it is refused even when the file held one there
-    // before: stored, it would still change nothing.
+    // A value set where the reader skips it changes nothing, so it is refused even if the file
+    // already held one there.
     let still_ignored: Vec<String> = parsed
         .skipped
         .iter()
@@ -291,8 +287,8 @@ fn lock_path(path: &Path) -> PathBuf {
     path.with_extension("toml.lock")
 }
 
-/// Opens the lock file, which is only ever locked and stays empty. With write access, because
-/// std leaves it open whether a handle without one can be locked.
+/// Opens the lock file, which stays empty. With write access, since std leaves open whether a
+/// handle without it can be locked.
 pub(crate) fn lock_file(path: &Path) -> io::Result<File> {
     OpenOptions::new()
         .read(true)
@@ -328,7 +324,7 @@ fn lock(path: &Path, wait: Duration) -> PortResult<File> {
 
 /// Replaces the file in one step, so a reader never sees half of it. The caller holds the lock.
 fn write(path: &Path, text: &str) -> PortResult<()> {
-    // This process's own name, so no other writer can use it at the same time.
+    // With the process id, a temporary name no other writer uses at the same time.
     static WRITES: AtomicU32 = AtomicU32::new(0);
     remove_stale(path);
     let temporary = path.with_extension(format!(
@@ -338,16 +334,14 @@ fn write(path: &Path, text: &str) -> PortResult<()> {
     ));
     let written = write_through(&temporary, text).and_then(|()| std::fs::rename(&temporary, path));
     if written.is_err() {
-        // Nobody else would ever clean it up. Should this fail too, the first error is the one
-        // to report.
+        // Should this fail too, the first error is the one to report.
         let _ = std::fs::remove_file(&temporary);
     }
     written.map_err(|error| PortError::Failed(format!("{}: {error}", path.display())))
 }
 
-/// Removes the temporary files of writes that never reached the rename, as when the power went
-/// in between. With the lock held no write is under way, so every one found is left over. Best
-/// effort: one that cannot go now is tried again on the next write.
+/// Removes temporary files of writes that never reached the rename (a power cut). With the lock
+/// held no write is under way, so every one found is left over. Best effort.
 fn remove_stale(path: &Path) {
     let name = path.file_name().and_then(|file| file.to_str());
     let (Some(folder), Some(name)) = (path.parent(), name) else {
@@ -363,7 +357,7 @@ fn remove_stale(path: &Path) {
                 .and_then(|rest| rest.strip_prefix('.'))
                 .and_then(|rest| rest.strip_suffix(".new"))
                 .is_some_and(|middle| !middle.is_empty())
-                // The single fixed name that 0.27 and earlier wrote.
+                // The fixed temporary name older releases used.
                 || other.strip_prefix(name) == Some(".new")
         });
         if stale {
@@ -372,9 +366,8 @@ fn remove_stale(path: &Path) {
     }
 }
 
-/// Writes `text` to a new file at `path` and waits until it is on the disk, so that a power cut
-/// after the rename cannot leave an empty configuration. The file is closed on return, before
-/// it is renamed.
+/// Waits until `text` is on the disk, so a power cut after the rename cannot leave an empty
+/// configuration. The file is closed on return, before it is renamed.
 fn write_through(path: &Path, text: &str) -> io::Result<()> {
     let mut file = File::create(path)?;
     file.write_all(text.as_bytes())?;
@@ -469,9 +462,8 @@ fn assignment<'a>(line: &'a str, leaf: &str) -> Option<&'a str> {
 /// Replaces the first line of the section named by `tables` for which `replace` has an answer.
 /// `replace` sees the line without its indentation and line ending, which are kept.
 ///
-/// A commented-out header, as the template has for a launcher that is not the default, ends the
-/// section above it: the lines below it belong to a section that does not exist yet, which a
-/// change adds at the end of the file instead.
+/// A commented-out header (the template's non-default launchers) ends the section above it; a
+/// change to that commented section adds the real one at the end of the file instead.
 fn replace_line(
     text: &str,
     tables: &[&str],
@@ -828,8 +820,8 @@ mod tests {
         let generic =
             "[launcher]\nkind = \"generic\"\n[launcher.generic]\nexecutable = 'C:\\F\\f.exe'\n";
         let to = |id: &str| SettingChange::set("launcher.kind", SettingValue::Text(id.into()));
-        // As Mujina Settings chooses Steam, and as `mujinactl config set` does; ADR-0009's check
-        // refuses neither.
+        // Unset (as Mujina Settings does) and set (as `mujinactl config set` does); the check
+        // (ADR-0009) refuses neither.
         for back in [SettingChange::unset("launcher.kind"), to("steam")] {
             std::fs::write(config.path(), generic).unwrap();
             config.apply(std::slice::from_ref(&back)).unwrap();

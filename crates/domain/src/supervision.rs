@@ -3,10 +3,8 @@
 /// User-selectable reaction to the launcher exiting.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ExitPolicy {
-    /// Bring the launcher back only if it crashed.
     #[default]
     RelaunchOnCrash,
-    /// Bring the launcher back whenever it exits.
     RelaunchAlways,
     /// Leave it to the user.
     Nothing,
@@ -23,20 +21,18 @@ impl ExitPolicy {
     }
 }
 
-/// A launcher that dies sooner than this after we started watching it is not going to be fixed
-/// by starting it again; relaunching would only loop.
+/// A launcher that dies sooner than this after watching began is not relaunched: it would only
+/// loop.
 pub const MIN_UPTIME_SECS: u64 = 30;
 
-/// How a launcher process ended.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct LauncherExit {
     /// `None` when the exit code could not be read.
     pub exit_code: Option<u32>,
-    /// How long the process had been observed running.
+    /// Since watching began, not since the process started.
     pub uptime_secs: u64,
 }
 
-/// Whether the launcher should be started again.
 pub const fn should_relaunch(
     policy: ExitPolicy,
     exit: LauncherExit,

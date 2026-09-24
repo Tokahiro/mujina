@@ -1,8 +1,5 @@
-//! The innermost ring of Mujina.
-//!
-//! Everything in here is plain data and pure decision logic. The crate is `no_std`, forbids
-//! `unsafe` and has no dependencies, so it is mechanically impossible for it to perform I/O or to
-//! reach an operating-system API. Outer rings depend on this crate, never the other way round.
+//! The innermost ring of Mujina: plain data and pure decision logic. `no_std`, no `unsafe` and no
+//! dependencies, so it cannot do I/O or call the OS. Outer rings depend on it, never the reverse.
 
 #![no_std]
 #![forbid(unsafe_code)]
