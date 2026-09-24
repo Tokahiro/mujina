@@ -17,7 +17,7 @@ env:
   CARGO_TERM_COLOR: always
 
 # preflight + keys -> build -> sign -> publish (docs/signing.md)
-# Only sign gets the key, a secret of the `release` environment, which admits only v* tags. It
+# Only sign uses the key, a secret of the `release` environment, which admits only v* tags. It
 # runs no cargo and nothing cargo built. Only publish may write to the repository.
 
 jobs:
