@@ -1,6 +1,5 @@
-// Setup: what starts in Xbox mode, the device button, what Mujina fixes, and the details under
-// Advanced. Every change is stored at once; Rust answers with a toast. The core settings have
-// rows of their own here; a launcher's and a device's come from Rust, built from their settings.
+// Setup: what starts in Xbox mode, the device button, what Mujina fixes, and Advanced. The core
+// settings have rows here; a launcher's and a device's own rows come from Rust.
 
 import { Theme } from "@mujina/theme.slint";
 import { Icons } from "@mujina/icons.slint";
@@ -12,13 +11,12 @@ import { RowItem, RowData, RowKind, RowSection, Rows, PluginRows } from "../rows
 // What config.toml says, as the pages show it. Choices are indices into the lists the pages and
 // the Rust side agree on; an empty text means "the default".
 export struct Config {
-    // Into the launcher names, which Rust lists from the launchers Mujina has: the one shown,
-    // which may be one being chosen.
+    // Index into the launcher names; may be a launcher being chosen.
     launcher-kind: int,
     // The launcher shown tells when a game runs, so the starting screen row applies.
     game-detection: bool,
-    // It cannot keep its starting screen with its options as they are: without the setting
-    // `start-screen-needs` names (in the app's language), where one of its switches is it.
+    // The starting screen is unavailable with the options as they are; `start-screen-needs`
+    // names the one switch that would allow it, if there is one.
     start-screen-off: bool,
     start-screen-needs: string,
     on-exit: int,
@@ -181,8 +179,7 @@ export component SetupPage inherits Rectangle {
         }
     ];
 
-    // Where each group's rows start: the page's rows are numbered in order, each group after the
-    // ones before it.
+    // Where each group's rows start in the page's numbering.
     property <int> launcher-at: root.start-rows.length;
     property <int> button-at: root.launcher-at + root.launcher.main.length;
     property <int> device-at: root.button-at + root.button-rows.length;

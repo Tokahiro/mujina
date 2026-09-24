@@ -1,26 +1,6 @@
-//! Devices whose extra buttons arrive as keyboard chords, and the keys Mujina sends.
-//!
-//! Handheld companion software usually reports an extra button as a synthesized key chord (a
-//! OneXPlayer's injected `LWIN`+`D`). Such a device is data: a file in `profiles/devices/`,
-//! built in by `build.rs`, or a button of one's own in `[device.button]`. One runtime serves all
-//! of them, so a switch between them applies at once.
-//!
-//! On Windows the crate keeps together what shares state: the low-level keyboard hook on a
-//! thread of its own ([`hook`]), the thread that sends keys ([`sender`]), and the hook's proof of
-//! life, which is the hook seeing the keys that thread sent. The rules learned on devices
-//! (ADR-0005, superseded by ADR-0013 only in making devices plug-ins) hold:
-//! - The hook callback must be quick and must not allocate, lock or log. Windows silently removes
-//!   a low-level hook whose callback overruns `LowLevelHooksTimeout`, so the hook runs on a
-//!   thread that does nothing else.
-//! - The whole chord is swallowed, held keys included, and nothing another program sends is
-//!   lost: what turns out to be no chord is sent on in order.
-//! - Synthesized chords are held for tens of milliseconds, on a separate thread, because games
-//!   and Steam's overlay sample the keyboard once per frame.
-//! - Mujina's own keystrokes carry a tag so the hook never reinterprets them; seeing them also
-//!   proves the hook is still alive.
-//!
-//! The profiles, the button of one's own and what they come to are built everywhere, so they are
-//! tested on Linux too; the hook and the sender need Windows.
+//! Devices whose extra buttons arrive as keyboard chords (a OneXPlayer's injected `LWIN`+`D`),
+//! the low-level hook that catches them, and the thread that sends Mujina's keys. A device is a
+//! file in `profiles/devices/` or `[device.button]`; the hook's rules are in ADR-0005.
 
 mod custom;
 mod profile;
@@ -42,8 +22,7 @@ pub use profile::{ChordProfile, builtin, wildcard_match};
 #[cfg(windows)]
 pub use runtime::{KeyboardRuntime, KeyboardSender, RUNTIME, plugins};
 
-/// How many buttons of one device the hook catches: a bit each of the presses it hands the event
-/// loop, and more than any handheld has. A profile with more is refused.
+/// How many buttons of one device the hook catches; a profile with more is refused.
 pub const MAX_BUTTONS: usize = 8;
 
 /// Every device this crate serves: the built-in profiles by file name, then the button of one's

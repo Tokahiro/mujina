@@ -1,13 +1,6 @@
-//! Texts that Rust puts into a window, in the user's language.
-//!
-//! Slint translates the `@tr("…")` texts of its `.slint` files itself. A text that Rust has only
-//! at run time, such as an entry of a list it fills or a setting a launcher describes,
-//! cannot be an `@tr` literal; it goes through a [`Localizer`] instead, which reads the same kind
-//! of catalog: a gettext `.po` file, compiled in with `include_str!`.
-//!
-//! A text is its English wording, a [`Msg`], which is also its key in every catalog (gettext's
-//! msgid), so the log and `mujinactl`, which stay English, need nothing from here. `cargo xtask
-//! i18n-check` finds every `Msg::new("…")` and fails when a catalog of its crate lacks it.
+//! Texts that Rust puts into a window, in the user's language. Slint translates its `@tr` texts
+//! itself; a text Rust has only at run time goes through a [`Localizer`], which reads the same
+//! gettext `.po` catalogs. A [`Msg`]'s English wording is its key (msgid) in every catalog.
 
 mod catalog;
 
@@ -30,13 +23,11 @@ impl Msg {
     }
 }
 
-/// The texts of one language at a time, from the catalogs added for it; English, as written,
-/// where they have nothing.
+/// The texts of one language at a time; a text no catalog of it has stays English.
 #[derive(Debug, Default)]
 pub struct Localizer {
     catalogs: Vec<(String, Catalog)>,
-    /// The translations of the language set, from all its catalogs; the first to have a text
-    /// wins.
+    /// The set language's translations; the first catalog added that has a text wins.
     current: HashMap<String, String>,
 }
 
@@ -45,16 +36,15 @@ impl Localizer {
         Self::default()
     }
 
-    /// Adds `po`, a catalog of `language` (as the folder under `lang/` names it). A language
-    /// may have several: an app's own, and each part's that brings its own texts. Takes effect
-    /// with the next [`set`](Self::set).
+    /// Adds `po`, a catalog of `language` (its folder name under `lang/`); a language may have
+    /// several. Takes effect with the next [`set`](Self::set).
     pub fn add(&mut self, language: &str, po: &str) -> Result<(), ParseError> {
         self.catalogs
             .push((language.to_string(), Catalog::parse(po)?));
         Ok(())
     }
 
-    /// Shows `language` from now on: English for "en", or one without a catalog.
+    /// Switches to `language`; "en", or a language without a catalog, shows English.
     pub fn set(&mut self, language: &str) {
         let mut current = HashMap::new();
         let catalogs = self
@@ -76,9 +66,8 @@ impl Localizer {
         self.text(msg.english())
     }
 
-    /// `english` in the language set: a text that comes as data, such as the title of a setting
-    /// a launcher describes. i18n-check cannot see such a text here, so the crate that has it
-    /// writes it as a `Msg` there.
+    /// `english` in the language set, for a text that comes as data. i18n-check cannot see it
+    /// here, so the crate it comes from must also write it as a `Msg`.
     pub fn text<'a>(&'a self, english: &'a str) -> &'a str {
         self.current.get(english).map_or(english, String::as_str)
     }
@@ -114,7 +103,7 @@ msgstr "Automatisch ({})"
         localizer.add("de", DE).unwrap();
         assert_eq!(localizer.t(&NONE), "None");
         localizer.set("de");
-        // The entry of Rust's, not the one Slint looks up for a component.
+        // The entry without a context, not Slint's.
         assert_eq!(localizer.t(&NONE), "Keine");
         assert_eq!(localizer.t(&AUTOMATIC), "Automatisch ({})");
         assert_eq!(localizer.t(&UNKNOWN), "Not in any catalog");

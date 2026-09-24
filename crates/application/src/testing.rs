@@ -93,10 +93,9 @@ pub struct FakeLauncher {
     pub fail_prepare: bool,
     calls: RefCell<Vec<&'static str>>,
     game_running: Cell<bool>,
-    /// The game's window, as far as the launcher can find it: in front, or behind something.
+    /// The game's window: `Some(true)` in front, `Some(false)` behind, `None` not found.
     pub game_in_front: Cell<Option<bool>>,
-    /// Whether the launcher knows the game's processes, so that a window of none of them is not
-    /// the game's.
+    /// Whether the launcher knows the game's processes.
     pub game_known: Cell<bool>,
     /// Whether nothing of the game runs any more, although the launcher counts it as running.
     pub game_gone: Cell<bool>,
@@ -307,8 +306,8 @@ impl SessionLauncher for FakeLauncher {
     }
 }
 
-/// A launcher's description, made of whatever the test needs. Built in a `static` with
-/// [`FakeLauncherDescriptor::named`] and struct update syntax.
+/// A launcher descriptor for tests; build it in a `static` from [`FakeLauncherDescriptor::named`]
+/// with struct update syntax.
 pub struct FakeLauncherDescriptor {
     pub id: &'static str,
     pub name: &'static str,
@@ -379,16 +378,8 @@ impl LauncherDescriptor for FakeLauncherDescriptor {
     }
 }
 
-/// What every launcher's descriptor has to keep to, checked by a test in its own crate that
-/// calls `conformance(&DESCRIPTOR)`, with `mujina-application`'s `test-util` feature as a
-/// dev-dependency.
-///
-/// Its id and keys are plain, and its id is no key of `[launcher]` itself; every key is there
-/// once, with a title; a default lies within its kind; only a setting without a default is
-/// required; `requires` names a toggle beside it; the template names exactly its options, in
-/// order, under `[launcher.<id>]`; its defaults pass its own rules; its conflicting programs
-/// are file names in lower case; and each of its catalogs translates its name and every title,
-/// help and choice value of its settings.
+/// Checks the rules every launcher descriptor must keep. Call it from a test in the launcher's
+/// crate, with `mujina-application`'s `test-util` feature as a dev-dependency.
 ///
 /// # Panics
 ///
@@ -399,7 +390,7 @@ pub fn conformance(descriptor: &dyn LauncherDescriptor) {
         plain(id),
         "launcher id \"{id}\": lower case, digits and _ only"
     );
-    // `[launcher]` holds these beside the launchers' sections, and they are read first.
+    // `[launcher]` keys are read before the launchers' sections, so no id may be one of them.
     let taken = CORE
         .iter()
         .filter(|section| section.name == "launcher")
@@ -487,9 +478,7 @@ pub fn check_settings(section: &str, settings: &[SettingSpec]) {
     }
 }
 
-/// The settings a configuration template names, as (section, key), in order: the `key = value`
-/// lines, commented out or not, under a `[section]` or `# [section]` header. Explanations in
-/// between are passed over.
+/// The (section, key) pairs a configuration template names, in order, commented out or not.
 pub fn template_keys(template: &str) -> Vec<(String, String)> {
     let mut section = String::new();
     let mut keys = Vec::new();
@@ -510,16 +499,8 @@ pub fn template_keys(template: &str) -> Vec<(String, String)> {
 /// What `[device]` itself gives a meaning to: `profile`'s own values, and its keys and sections.
 const RESERVED_DEVICE_IDS: &[&str] = &["auto", "none", "button", "profile"];
 
-/// What every device's descriptor has to keep to, checked by a test in its own crate that calls
-/// `device_conformance` for each of its devices, with `mujina-application`'s `test-util` feature
-/// as a dev-dependency.
-///
-/// Its id is lower case, digits, `_` and `-`, and none `[device]` gives a meaning of its own
-/// (`auto`, `none`, `button`, `profile`); it has a name and at least one button; each button's
-/// id and key are there once, the key plain and the label not empty; its settings keep the rules
-/// of [`check_settings`] under `[device.<id>]`; its defaults pass its own rules; and each of its
-/// catalogs translates its name, its buttons' labels and every title, help and choice value of
-/// its settings.
+/// Checks the rules every device descriptor must keep. Call it from a test in the device's
+/// crate, with `mujina-application`'s `test-util` feature as a dev-dependency.
 ///
 /// # Panics
 ///
@@ -582,8 +563,7 @@ pub fn device_conformance(descriptor: &dyn DeviceDescriptor) {
     check_catalogs(&format!("device {id}"), descriptor.catalogs(), &texts);
 }
 
-/// Adds the texts of `settings` that Mujina Settings shows: each title, each help there is, and
-/// the values of a choice, which its list shows as they are written, translated.
+/// Adds the texts Mujina Settings shows for `settings`: titles, helps and choice values.
 fn add_setting_texts(settings: &[SettingSpec], texts: &mut Vec<&str>) {
     for spec in settings {
         texts.push(spec.title);
@@ -596,8 +576,7 @@ fn add_setting_texts(settings: &[SettingSpec], texts: &mut Vec<&str>) {
     }
 }
 
-/// Each of `catalogs` reads, and translates every one of `texts`: Mujina Settings would show
-/// the English of one it lacks. Which languages there are is Mujina Settings' concern.
+/// Each of `catalogs` parses and translates every one of `texts`.
 fn check_catalogs(owner: &str, catalogs: &[(&str, &str)], texts: &[&str]) {
     for (language, po) in catalogs {
         let catalog = Catalog::parse(po).unwrap_or_else(|error| {
@@ -612,8 +591,8 @@ fn check_catalogs(owner: &str, catalogs: &[(&str, &str)], texts: &[&str]) {
     }
 }
 
-/// A device's description, made of whatever the test needs. Built in a `static` with
-/// [`FakeDevice::named`] and struct update syntax.
+/// A device descriptor for tests; build it in a `static` from [`FakeDevice::named`] with struct
+/// update syntax.
 pub struct FakeDevice {
     pub id: &'static str,
     pub name: &'static str,

@@ -32,7 +32,6 @@ pub fn contains(der: &[u8]) -> bool {
 /// Adds this certificate (its DER bytes) to `LocalMachine\TrustedPeople`, in place of an
 /// identical one already there. Needs administrator rights.
 pub fn add(der: &[u8]) -> Result<(), String> {
-    // Bytes that are no certificate never get as far as opening the store for writing.
     if Certificate::parse(der).is_none() {
         return Err("not a certificate".to_string());
     }
@@ -90,7 +89,6 @@ impl Store {
         Ok(Self(store))
     }
 
-    /// Whether the store holds a certificate identical to `certificate`.
     fn holds(&self, certificate: &Certificate) -> bool {
         // SAFETY: the store is open; for CERT_FIND_EXISTING the search parameter is a valid
         // certificate context; a null previous context starts at the beginning.
@@ -104,7 +102,7 @@ impl Store {
                 null(),
             )
         };
-        // Taken over, so that it is freed.
+        // Wrapped so that it is freed.
         Certificate::from_raw(found).is_some()
     }
 }
@@ -120,7 +118,6 @@ impl Drop for Store {
 struct Certificate(*const CERT_CONTEXT);
 
 impl Certificate {
-    /// Decodes DER bytes; `None` if they are no certificate.
     fn parse(der: &[u8]) -> Option<Self> {
         if der.is_empty() {
             return None;
@@ -139,8 +136,7 @@ impl Certificate {
 
 impl Drop for Certificate {
     fn drop(&mut self) {
-        // SAFETY: the context came from a function whose result the caller frees, and is freed
-        // exactly once.
+        // SAFETY: a context the caller must free (see `from_raw`), freed exactly once.
         unsafe { CertFreeCertificateContext(self.0) };
     }
 }
@@ -159,8 +155,7 @@ mod tests {
         assert!(add(b"not a certificate").is_err());
     }
 
-    /// Read-only: a certificate from the machine's root store is found there by its bytes, and
-    /// the same certificate with one byte of its signature changed is not.
+    /// Read-only: uses the first certificate of the machine's root store.
     #[test]
     fn a_certificate_is_found_only_as_it_is() {
         let store = Store::open("Root", Access::Read).unwrap();

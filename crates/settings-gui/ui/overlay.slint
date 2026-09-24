@@ -1,13 +1,11 @@
-// Over everything while the device button is captured, then with what came of it. The
-// controller is Rust's meanwhile: only B while waiting, A or B on the result. The keyboard and a
-// tap do the same.
+// Covers the window during a device button capture, then shows the result. Rust reads the
+// controller meanwhile (B cancels, A or B closes the result); keys and taps match it here.
 
 import { Theme } from "@mujina/theme.slint";
 import { Icons } from "@mujina/icons.slint";
 import { Notice, Words } from "controls.slint";
 
-// Where a capture is: not under way, waiting for the button, the button stored, the button
-// seen but not stored, nothing seen in time, or the watcher failing.
+// `captured`: the button is stored; `refused`: seen but not stored.
 export enum CapturePhase {
     none,
     waiting,
@@ -23,7 +21,6 @@ export component CaptureOverlay inherits Rectangle {
     in property <int> total-seconds: 10;
     // The combination captured, or why the watcher failed (English).
     in property <string> detail;
-    // What came of storing the combination captured.
     in property <Notice> result;
     // Cancel while waiting, close on the result.
     callback dismiss();

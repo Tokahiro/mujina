@@ -1,10 +1,8 @@
 import { Theme } from "theme.slint";
 import { Icons } from "icons.slint";
 
-// The mark: 狢 in the front square of two, the back one offset down-left. `size` is the side of
-// one square. The character's thirteen strokes fill in below about 24 px, so small marks keep
-// the frame alone. Measured in real pixels: the desktop window is smaller, but a 150 % display
-// draws it larger again.
+// The mark: 狢 in the front of two squares. `size` is one square's side. Below about 24 physical
+// px the character's strokes fill in, so small marks show the frame alone.
 export component Mark inherits Rectangle {
     in property <length> size: 44 * Theme.u;
     // What the front square sits on; it covers the back square's corner.

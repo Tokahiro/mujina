@@ -1,24 +1,9 @@
-//! `cargo xtask dist`: the release's files, built on a developer's machine the way the release
-//! workflow builds them (ADR-0015), with a certificate the developer supplies.
+//! `cargo xtask dist`: the files a release publishes, built and signed into `target/dist` the way
+//! the release workflow does it (ADR-0015), but on one machine, the developer's.
 //!
-//! 1. The package, unsigned (`cargo xtask package`), and Mujina Setup without it, in the release
-//!    profile.
-//! 2. `packaging/sign.ps1` signs the package and writes its certificate.
-//! 3. `packaging/attach-payload.ps1` attaches both to Mujina Setup.
-//! 4. `packaging/sign.ps1` signs Mujina Setup.
-//! 5. `SHA256SUMS.txt`, and Mujina Setup's `--about` as a last check.
-//!
-//! Everything lands in `target/dist`: `Mujina-Setup-v<version>.exe`, the package, `Mujina.cer`
-//! and `SHA256SUMS.txt`, as a release publishes them. The workflows run the same two scripts,
-//! with no cargo in the job that holds the key; here it is one machine, the developer's.
-//!
-//! Options:
-//! - `--pfx <file>`: the certificate to sign with (required). Its password comes from
-//!   `SIGNING_PFX_PASSWORD`. signtool leaves a copy of its private key in the user's key store:
-//!   use a development certificate (docs/signing.md), never the release one.
-//! - `--no-build`: package and attach what target/release already holds.
-//!
-//! `MSIX_PUBLISHER` is read as by `cargo xtask package` and must be the certificate's subject.
+//! The password of the `--pfx` certificate comes from `SIGNING_PFX_PASSWORD`, and
+//! `MSIX_PUBLISHER` must be its subject. signtool leaves a copy of the private key in the user's
+//! key store: use a development certificate (docs/signing.md), never the release one.
 
 use std::fmt::Write as _;
 use std::fs;
@@ -28,7 +13,6 @@ use std::process::Command;
 use crate::package::{self, env_or, run_tool};
 use crate::{TaskResult, workspace};
 
-/// What the command line asks for.
 #[derive(Debug, PartialEq, Eq)]
 struct Options {
     pfx: PathBuf,
@@ -128,7 +112,7 @@ pub fn run(arguments: &[String]) -> TaskResult {
     fs::write(out.join("SHA256SUMS.txt"), sums)
         .map_err(|error| format!("SHA256SUMS.txt: {error}"))?;
 
-    // Mujina Setup says what it carries: on this machine it may run.
+    // A last check: unlike the signing jobs, this machine may run Mujina Setup.
     let about = Command::new(&setup)
         .arg("--about")
         .output()
@@ -141,9 +125,8 @@ pub fn run(arguments: &[String]) -> TaskResult {
     Ok(())
 }
 
-/// A script of `packaging/`, run by PowerShell 7 where it is installed, else by Windows
-/// PowerShell from the system directory. Both run the scripts; the execution policy is set aside
-/// for this one process, as it is on GitHub's runners.
+/// A `packaging/` script, run by PowerShell 7 if installed, else by Windows PowerShell; the
+/// execution policy is bypassed for this one process, as on GitHub's runners.
 fn powershell(script: &Path) -> Command {
     let program = if Command::new("pwsh").arg("-Version").output().is_ok() {
         PathBuf::from("pwsh")
@@ -183,7 +166,6 @@ fn sha256(file: &Path) -> Result<String, String> {
     }
 }
 
-/// Windows PowerShell, from the system directory.
 fn windows_powershell() -> PathBuf {
     std::env::var_os("SystemRoot")
         .map_or_else(|| PathBuf::from(r"C:\Windows"), PathBuf::from)

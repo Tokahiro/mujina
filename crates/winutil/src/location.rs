@@ -52,7 +52,6 @@ mod tests {
 
     #[test]
     fn a_test_runner_is_unpackaged_unless_location_is_off_everywhere() {
-        // Tests run outside any package, so nothing is granted to them in particular.
         assert!(matches!(
             consent(),
             LocationConsent::Unpackaged | LocationConsent::DeniedEverywhere

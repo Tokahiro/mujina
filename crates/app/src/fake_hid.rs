@@ -1,8 +1,6 @@
-//! A device made up for the tests whose button reaches Windows as something other than a key
-//! chord, the way a vendor HID report does, and which the device's own software also sees. It
-//! plugs in through the same types a device crate would use (a descriptor, a runtime, a wait
-//! source of its own) and the same code: the choice of device, the agent's event loop and the
-//! agent. Nothing in the rings inside is made for it.
+//! A test device whose button arrives as something other than a key chord, like a vendor HID
+//! report the device's own software also sees. It plugs in through the same types and code a
+//! device crate would use.
 
 use std::collections::BTreeMap;
 use std::os::windows::io::{AsHandle, BorrowedHandle};

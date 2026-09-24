@@ -1,5 +1,4 @@
-//! The first connected game controller, as XInput reports it. Read on demand; nothing is
-//! registered and nothing runs in between.
+//! The first connected game controller, read from XInput on demand.
 
 use windows_sys::Win32::UI::Input::XboxController::{XINPUT_STATE, XInputGetState};
 
@@ -15,7 +14,6 @@ pub struct PadState {
     pub left_y: i16,
 }
 
-/// The state of the first connected controller, if any.
 pub fn first_connected() -> Option<PadState> {
     (0..SLOTS).find_map(|slot| {
         // SAFETY: XINPUT_STATE is plain data for which all-zero is a valid value.

@@ -5,8 +5,8 @@ use std::ffi::OsStr;
 use mujina_application::ports::{LauncherInstall, PortError, PortResult};
 use mujina_winutil::window::{self, Focused, WindowHandle};
 
-/// Starts the launcher with `args`, handing it the foreground: its window may then come to the
-/// front by itself.
+/// Starts the launcher with `args` and hands it the foreground right, so its window may come to
+/// the front by itself.
 pub fn launch<S: AsRef<OsStr>>(install: &LauncherInstall, args: &[S]) -> PortResult<()> {
     match window::spawn_with_foreground(&install.executable, args, &install.directory) {
         Ok(handed_over) => {
@@ -22,7 +22,6 @@ pub fn launch<S: AsRef<OsStr>>(install: &LauncherInstall, args: &[S]) -> PortRes
     }
 }
 
-/// The executable and its arguments, as the user would type them.
 fn command_line<S: AsRef<OsStr>>(install: &LauncherInstall, args: &[S]) -> String {
     let mut line = install.executable.display().to_string();
     for arg in args {
@@ -44,9 +43,8 @@ pub fn focus_ui(handle: WindowHandle, what: &str) -> PortResult<()> {
     }
 }
 
-/// Brings a game's window back to the front. For the home role only, never for the agent: the
-/// synthetic key tap this may need passes through the agent's own keyboard hook, whose thread
-/// would be the one waiting here.
+/// Brings a game's window back to the front. Home role only: the synthetic key tap this may need
+/// passes through the agent's own keyboard hook, whose thread would be the one waiting here.
 pub fn focus_game(handle: WindowHandle) -> PortResult<()> {
     if window::claim_foreground(handle) {
         Ok(())
@@ -55,7 +53,7 @@ pub fn focus_game(handle: WindowHandle) -> PortResult<()> {
     }
 }
 
-/// Saying what is in front instead tells a harmless refusal from a real one.
+/// Naming what is in front tells a harmless refusal from a real one.
 fn refused(in_front: &str) -> PortError {
     PortError::Failed(format!(
         "Windows refused the foreground change; in front: {in_front}"

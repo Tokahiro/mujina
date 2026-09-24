@@ -1,5 +1,4 @@
-//! Locating, starting and focusing a launcher, with the foreground rules that are easy to get
-//! wrong in every adapter again.
+//! Locating, starting and focusing a launcher.
 
 #[cfg(windows)]
 mod foreground;

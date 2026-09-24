@@ -6,8 +6,7 @@ import { ScrollPage } from "../page.slint";
 import { Card, FocusFrame, OutlineButton } from "@mujina/controls.slint";
 import { SectionLabel, StateIcon } from "../controls.slint";
 
-// The doctor's counts. `known` once the first checks are back; the page says it is checking
-// until then.
+// The doctor's counts; `known` once the first checks are back.
 export struct Verdict {
     known: bool,
     problems: int,
@@ -15,8 +14,7 @@ export struct Verdict {
     total: int,
 }
 
-// One doctor finding. `title` names its check in the app's language; Rust names it again when
-// the language changes. The detail is English in every language, as in `mujinactl doctor`.
+// One doctor finding: `title` translated, `detail` English as in `mujinactl doctor`.
 export struct CheckRow {
     health: Health,
     title: string,
@@ -115,7 +113,6 @@ component Tile inherits Rectangle {
 
 export component StatusPage inherits Rectangle {
     in property <Verdict> verdict;
-    // The checks are under way.
     in property <bool> checking;
     // When the checks were last done, as HH:MM.
     in property <string> checked-time;
@@ -125,7 +122,6 @@ export component StatusPage inherits Rectangle {
     in property <[CheckRow]> checks;
     callback check-again();
     callback open-folder();
-    // Back to the rail.
     callback leave();
 
     // The rows the controller lands on: 0 Check again, 1 the folder tile.
@@ -422,8 +418,7 @@ export component StatusPage inherits Rectangle {
             }
         }
 
-        // Something the settings reader noticed: a line it ignored, or no profile for
-        // this device. The note itself stays English, like the doctor's findings.
+        // A settings reader note, e.g. an ignored line; English, like the doctor's findings.
         if root.note != "": Rectangle {
             background: #d9a44117;
             border-width: 1px;

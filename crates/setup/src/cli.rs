@@ -1,5 +1,4 @@
-//! The command line, and how Setup ends: what each option asks for, and the exit codes a script
-//! can rely on. Pure, so that `--elevated` refusing anything after it is a test, not a comment.
+//! The command line, and the exit codes a script can rely on.
 
 use std::ffi::OsString;
 use std::path::PathBuf;
@@ -7,9 +6,8 @@ use std::path::PathBuf;
 use crate::plan::Refusal;
 use crate::run::{ErrorKind, Unattended};
 
-/// Starts the administrator part. It takes nothing else from the command line: it acts only on
-/// what is attached to its own file, never on anything a program without administrator rights
-/// could have written or named.
+/// Starts the administrator part. It takes no other arguments: it acts only on what is attached
+/// to its own file, never on anything an unelevated program could have written or named.
 pub const ELEVATED: &str = "--elevated";
 
 pub const USAGE: &str = "\
@@ -37,15 +35,12 @@ EXIT CODES:
     5  a newer version of Mujina is installed (--quiet never replaces it)
 ";
 
-/// What the command line asks for.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Request {
-    /// The window, to install or update, or to remove.
     Window {
         mode: Mode,
         log: Option<PathBuf>,
     },
-    /// The same without a window.
     Quiet {
         mode: Mode,
         no_home_app: bool,
@@ -53,7 +48,7 @@ pub enum Request {
     },
     /// The administrator part, which the installer starts itself.
     Elevated,
-    /// The check at sign-in, `--cleanup`, for the family of the attached package.
+    /// The check at sign-in, for the attached package's family.
     Cleanup {
         log: Option<PathBuf>,
     },
@@ -67,8 +62,7 @@ pub enum Mode {
     Uninstall,
 }
 
-/// How Setup ends, for a script. The administrator part has codes of its own
-/// ([`ElevatedFailure`]), which only Setup itself reads.
+/// Exit codes for scripts; the administrator part ends with an [`ElevatedFailure`] instead.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Exit {
     Done = 0,
@@ -84,7 +78,6 @@ impl Exit {
         self as u8
     }
 
-    /// The exit code of an unattended run.
     pub fn of(outcome: &Unattended) -> Self {
         match outcome {
             Unattended::Done => Self::Done,
@@ -94,8 +87,7 @@ impl Exit {
             Unattended::Failed(failure) => match failure.error.kind {
                 ErrorKind::Declined => Self::Declined,
                 ErrorKind::WindowsTooOld => Self::Blocked,
-                // Windows refused the package itself: a newer one arrived after the facts were
-                // read, or they could not say which version is installed.
+                // A downgrade the facts did not foresee: Windows refused the package itself.
                 ErrorKind::NewerInstalled => Self::NewerInstalled,
                 _ => Self::Failed,
             },
@@ -170,12 +162,10 @@ fn parse_options(arguments: Vec<OsString>) -> Result<Request, lexopt::Error> {
     })
 }
 
-/// How the administrator part ends when it does not succeed, so the installer can say why.
+/// The administrator part's exit codes on failure.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ElevatedFailure {
-    /// It was started with arguments; it takes none.
     Arguments = 2,
-    /// Developer Mode could not be turned on.
     DeveloperMode = 3,
     /// The certificate could not be added to the trusted people, or the installer carries none.
     Certificate = 4,
@@ -186,15 +176,13 @@ impl ElevatedFailure {
         self as u8
     }
 
-    /// Why the administrator part ended with `code`, so the installer can say it; `None` for a
-    /// code it never ends with on its own, such as a crash's.
+    /// `None` for a code the administrator part never ends with on its own, such as a crash's.
     pub fn from_code(code: u32) -> Option<Self> {
         [Self::Arguments, Self::DeveloperMode, Self::Certificate]
             .into_iter()
             .find(|failure| u32::from(failure.code()) == code)
     }
 
-    /// The kind of error the installer reports for it.
     pub fn kind(self) -> ErrorKind {
         match self {
             Self::Arguments => ErrorKind::ElevatedArguments,

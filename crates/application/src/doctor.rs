@@ -17,26 +17,21 @@ pub enum Severity {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Finding {
-    /// Which check found it: stable, English and lower case, e.g. `developer mode`. What
-    /// `mujinactl doctor` prints, so that reports stay comparable, and what Mujina Settings
-    /// looks a finding up by.
+    /// The check's stable id, English and lower case, e.g. `developer mode`: printed by
+    /// `mujinactl doctor` and used by Mujina Settings to look the finding up.
     pub id: &'static str,
-    /// What Mujina Settings calls the check, e.g. "Developer Mode"; its own crate's catalog
-    /// translates it.
+    /// Its name in Mujina Settings, e.g. "Developer Mode", translated by its crate's catalog.
     pub title: Msg,
     pub severity: Severity,
     /// What it found, in English, as `mujinactl doctor` and the log say it.
     pub detail: String,
-    /// What it found as a sentence for someone who reads no report, which its crate's catalog
-    /// translates: Mujina Settings' System page shows it in the window's language. `None` for a
-    /// check whose detail says it all.
+    /// A translated sentence for Mujina Settings' System page; `None` when the detail says it all.
     pub summary: Option<Msg>,
-    /// What a page can offer to put it right, as the check decides.
     pub remedy: Option<Remedy>,
 }
 
 impl Finding {
-    /// The finding, said in `summary` as well ([`Finding::summary`]).
+    /// Sets [`Finding::summary`].
     #[must_use]
     pub fn saying(self, summary: Msg) -> Self {
         Self {
@@ -45,7 +40,7 @@ impl Finding {
         }
     }
 
-    /// The finding, with what a page can offer beside it ([`Finding::remedy`]).
+    /// Sets [`Finding::remedy`].
     #[must_use]
     pub fn remedied_by(self, remedy: Remedy) -> Self {
         Self {
@@ -55,21 +50,17 @@ impl Finding {
     }
 }
 
-/// What a page can offer beside a finding. The check that found it chooses, so that no page
-/// has to know which of them needs what.
+/// What a page can offer to fix a finding. The check chooses, so pages need not know.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Remedy {
     /// Windows' page of location permissions.
     LocationSettings,
-    /// Starting the background agent.
     StartAgent,
 }
 
-/// One thing worth looking at. Adapters contribute checks for what only they know about
-/// (operating system settings, a launcher's files and ports).
+/// A doctor check. Adapters add those only they can make (OS settings, a launcher's files).
 pub trait Check {
-    /// The id of its findings ([`Finding::id`]); known before it looks, so that a page can
-    /// ask for the checks it shows alone.
+    /// Its findings' [`Finding::id`], known before examining so a page can run only its checks.
     fn id(&self) -> &'static str;
 
     /// The title of its findings ([`Finding::title`]).
@@ -98,12 +89,11 @@ pub struct Doctor<'a> {
     pub identity: &'a dyn PackageIdentity,
     pub registry: &'a dyn HomeAppRegistry,
     pub launcher: &'a dyn HomeLauncher,
-    /// Checks beyond the ones the ports above allow: the operating system's, then the
-    /// launcher's own.
+    /// Adapters' checks, run after the doctor's own: the operating system's, then the launcher's.
     pub checks: &'a [Box<dyn Check>],
 }
 
-/// The id of the doctor's check of Xbox mode, the full screen experience.
+/// Id of the doctor's check of Xbox mode, the full screen experience.
 pub const FULL_SCREEN_EXPERIENCE: &str = "full screen experience";
 
 // The doctor's own checks, by id and title.
@@ -141,9 +131,8 @@ impl<'d> Doctor<'d> {
         self.examine_only(|_| true)
     }
 
-    /// The findings of the checks whose id `wanted` takes, in the order of
-    /// [`examine`](Self::examine). The rest are not looked at: a page that shows a few need not
-    /// wait for all.
+    /// Runs only the checks whose id `wanted` accepts, in [`examine`](Self::examine)'s order, so a
+    /// page showing a few need not wait for all.
     pub fn examine_only(&self, wanted: impl Fn(&str) -> bool) -> Vec<Finding> {
         let own = Self::own()
             .into_iter()
@@ -157,8 +146,8 @@ impl<'d> Doctor<'d> {
         own.chain(theirs).collect()
     }
 
-    /// Every finding, as [`examine`](Self::examine) has them, with those `known` from a moment
-    /// before (a page's few, say) in place of looking again.
+    /// As [`examine`](Self::examine), but reuses the `known` findings instead of running those
+    /// checks again.
     pub fn examine_knowing(&self, mut known: Vec<Finding>) -> Vec<Finding> {
         let mut take = |id: &str| {
             let at = known.iter().position(|finding| finding.id == id)?;

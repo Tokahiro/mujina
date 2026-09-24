@@ -1,10 +1,8 @@
-//! A client of the WLAN service: its handle, the change notifications it asked for, and what it
-//! can ask about an interface.
+//! A client of the WLAN service: its handle, change notifications and interface queries.
 //!
-//! The service calls back on a thread of its own, with a context the client hands it. The
-//! client owns that context and frees it only after the service let go of it: unregistering and
-//! closing the handle each wait for a callback that is running (see WlanRegisterNotification
-//! and WlanCloseHandle).
+//! The service calls back on its own thread with a context the client owns. The client frees it
+//! only after the service let go: unregistering and closing the handle each wait for a running
+//! callback (see WlanRegisterNotification and WlanCloseHandle).
 
 use std::ffi::c_void;
 use std::ptr::{null, null_mut};
@@ -32,7 +30,6 @@ pub struct Notification<'a> {
     pub data: &'a [u8],
 }
 
-/// A wireless interface.
 #[derive(Clone, Copy)]
 pub struct Interface {
     pub guid: GUID,
@@ -98,30 +95,23 @@ impl WlanClient {
     }
 
     /// Has `handler` called for every notification from `sources` (`WLAN_NOTIFICATION_SOURCE_*`
-    /// flags), duplicates left out, until the client is dropped. It runs on a thread of the
-    /// service and must be quick; it must not use this client, whose drop waits for it. A
-    /// handler registered before is replaced, and so is one whose registration failed: calling
-    /// again with fewer sources after a refusal is how to get what is granted.
+    /// flags), duplicates left out, until the client is dropped. It runs on a service thread and
+    /// must be quick; it must not use this client, whose drop waits for it. Replaces any earlier
+    /// handler, also a refused one: after a refusal, call again with fewer sources.
     pub fn notify(
         &mut self,
         sources: u32,
         handler: impl Fn(&Notification<'_>) + Send + Sync + 'static,
     ) -> Win32Result<()> {
-        // Unregistering first also after a failed registration, whose handler the service may
-        // hold, and not only for that: a registration the service refuses leaves the one before
-        // it in place, with its callback's context (seen on build 26200, where a refused
-        // replacement still reported the earlier sources when unregistering). Unregistering
-        // with nothing registered is confirmed all the same (same build), so a call after a
-        // refusal does not fail for that.
+        // Also after a refusal: a refused registration leaves the one before it in place, with
+        // its context. Unregistering with nothing registered succeeds (both seen on build 26200).
         self.unregister()?;
         // Kept even if registering fails: Microsoft does not say that a failed registration
-        // leaves nothing behind (one for several sources, say, of which only some are refused),
-        // so the handler goes only the way of a successful one, which waits for the service.
+        // holds no context, so the handler is freed only once the service confirms it let go.
         let context = Arc::as_ptr(self.handler.insert(Arc::new(Handler(Box::new(handler)))));
         // SAFETY: valid client handle; the callback matches WLAN_NOTIFICATION_CALLBACK; the
-        // context is the handler just stored in `self`, which keeps it until the service has let
-        // go of it (see `unregister` and `Drop`); the reserved pointer is null and the previous
-        // sources are not asked for.
+        // context is the handler stored in `self` until the service let go of it (see
+        // `unregister` and `Drop`); the reserved and previous-sources pointers are null.
         let status = unsafe {
             WlanRegisterNotification(
                 self.handle,
@@ -154,14 +144,12 @@ impl WlanClient {
                 null_mut(),
             )
         };
-        // Named apart from registering: after a refused registration, `notify` fails here or
-        // there, and the log is to tell which.
+        // A name of its own, so that the log tells which step of `notify` failed.
         checked("WlanRegisterNotification (unregister)", status)?;
         self.handler = None;
         Ok(())
     }
 
-    /// The wireless interfaces of this machine.
     pub fn interfaces(&self) -> Win32Result<Vec<Interface>> {
         let mut list: *mut WLAN_INTERFACE_INFO_LIST = null_mut();
         // SAFETY: valid client handle; the reserved pointer is null; `list` receives memory the
@@ -288,11 +276,8 @@ mod tests {
         second: WLAN_INTERFACE_INFO,
     }
 
-    /// A layout and arithmetic test: `interfaces` finds the second entry where the WLAN API puts
-    /// it, and reads as many entries as the list says. It does not show that the pointer may
-    /// reach past the first entry: it passes the same way with `.as_ptr()`, whose fault is an
-    /// aliasing rule a normal test run does not check. That needs Miri (`cargo +nightly miri
-    /// test -p mujina-winutil wlan::tests`), which was not at hand when this was written.
+    /// Checks layout and count only: it would also pass with `.as_ptr()`, whose aliasing fault
+    /// only Miri finds (`cargo +nightly miri test -p mujina-winutil wlan::tests`).
     #[test]
     fn every_entry_of_an_interface_list_is_read() {
         assert_eq!(
@@ -403,10 +388,8 @@ mod tests {
         );
     }
 
-    /// A registration the service refuses, then another: the second goes through, and the first
-    /// one's handler is let go once the service confirmed unregistering. The refusal is one the
-    /// documentation promises (no callback for a source other than NONE); what `notify` leaves
-    /// behind after it, the handler, is put in place by hand.
+    /// Refused as documented (no callback for a source other than NONE); the handler `notify`
+    /// would leave behind is put in place by hand.
     #[test]
     fn a_refused_registration_does_not_stand_in_the_way_of_the_next() {
         let Ok(mut client) = WlanClient::open() else {

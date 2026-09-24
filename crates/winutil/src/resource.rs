@@ -1,8 +1,5 @@
-//! Data resources of the running executable.
-//!
-//! Mujina Setup carries its package as resources that are added to the finished executable
-//! (`packaging/attach-payload.ps1`, with UpdateResource), not compiled in: the file that gets
-//! signed is the one that carries them.
+//! Data resources of the running executable, such as the package that
+//! `packaging/attach-payload.ps1` adds to the built Mujina Setup.
 
 use std::ptr::null;
 

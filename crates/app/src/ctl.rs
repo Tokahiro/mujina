@@ -161,7 +161,6 @@ fn config_show() -> ExitCode {
 
 fn config_apply(change: &SettingChange) -> ExitCode {
     let changes = std::slice::from_ref(change);
-    // Whether config.toml held the key at all before this change.
     let was_stored = compose::config().snapshot().stored(&change.key).is_some();
     match tool::change(changes) {
         Ok(applied) => {

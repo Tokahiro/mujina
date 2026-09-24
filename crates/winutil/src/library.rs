@@ -15,9 +15,9 @@ use windows_sys::Win32::System::SystemInformation::GetSystemDirectoryW;
 use crate::error::{Win32Result, last_error};
 use crate::wide::to_wide;
 
-/// From now on, this process looks for DLLs it loads by name only in the system directory,
-/// never in its own folder or the current one, where a planted DLL could wait (a Downloads
-/// folder, say). Call it first thing in `main`. False if Windows refused.
+/// Makes this process look for DLLs loaded by name only in the system directory, never in its
+/// own or the current folder, where a planted DLL could wait. Call it first thing in `main`.
+/// False if Windows refused.
 pub fn search_only_system32() -> bool {
     // SAFETY: plain call with a documented flag.
     unsafe { SetDefaultDllDirectories(LOAD_LIBRARY_SEARCH_SYSTEM32) != 0 }

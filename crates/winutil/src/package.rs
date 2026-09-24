@@ -11,10 +11,9 @@ use windows_sys::Win32::Storage::Packaging::Appx::{
 
 use crate::wide::{from_wide, to_wide};
 
-/// The family name Windows gives packages with this name and publisher (the manifest's
-/// `Identity` attributes, exactly as written there): the name and a hash of the publisher.
-/// Version and architecture play no part, so every version of a package shares it. `None` if
-/// Windows rejects the pair.
+/// The family name of packages with this name and publisher (the manifest's `Identity`
+/// attributes, exactly as written): the name and a hash of the publisher, the same for every
+/// version and architecture. `None` if Windows rejects the pair.
 pub fn family_name_from_id(name: &str, publisher: &str) -> Option<String> {
     let mut name = to_wide(name);
     let mut publisher = to_wide(publisher);
@@ -31,7 +30,7 @@ pub fn family_name_from_id(name: &str, publisher: &str) -> Option<String> {
     (status == ERROR_SUCCESS).then(|| from_wide(&buffer))
 }
 
-/// Whether a package of this family is installed for the current user. Quick: no PowerShell.
+/// Whether a package of this family is installed for the current user.
 pub fn is_installed(family: &str) -> bool {
     let family = to_wide(family);
     let mut count: u32 = 0;
@@ -138,7 +137,6 @@ mod tests {
             super::family_name_from_id("Mujina", "CN=Mujina").as_deref(),
             Some("Mujina_k2veznmcx4n98")
         );
-        // Another publisher, another family, although the name is the same.
         assert_ne!(
             super::family_name_from_id("Mujina", "CN=Mujina"),
             super::family_name_from_id("Mujina", "CN=Mujina Dev")
@@ -153,8 +151,7 @@ mod tests {
         assert!(super::installed_full_names("Mujina.Test.NoSuchPackage_0000000000000").is_empty());
     }
 
-    /// Read-only: every Windows 11 has the calculator's family installed for a signed-in user;
-    /// where it is not (a stripped test image), there is nothing to compare.
+    /// Read-only. A stripped test image may lack the calculator.
     #[test]
     fn an_installed_family_names_its_packages() {
         let family = "Microsoft.WindowsCalculator_8wekyb3d8bbwe";

@@ -1,15 +1,7 @@
-//! Telling the running game from everything else on screen.
-//!
-//! A Steam game is installed in a folder of its own, `<library>\steamapps\common\<installdir>`
-//! ([`library`]). Its processes are the running programs that lie in that folder, whoever
-//! started them: a game started through a launcher of its own (the EA app, Ubisoft Connect) or
-//! whose own launcher has exited is found too, and what the game started from elsewhere (a
-//! browser for a link in it) is not the game.
-//!
-//! Without a manifest for the running app (a shortcut to a program Steam did not install), or
-//! while nothing runs from the game's folder, the game is what it used to be: the descendants of
-//! the Steam client that are not Steam's own. A chain broken by a launcher in between that has
-//! exited is not found then; callers treat that as "cannot tell", never as "there is no game".
+//! Telling the running game from everything else on screen: its processes are those running from
+//! its install folder ([`library`]), whoever started them. Without a manifest, or with nothing
+//! running from the folder, they are the Steam client's descendants that are not Steam's own;
+//! callers treat an empty result then as "cannot tell", never as "there is no game".
 
 use std::path::{Path, PathBuf};
 
@@ -67,10 +59,9 @@ fn found(installed: Option<Vec<u32>>, tree: Vec<u32>) -> Found {
     }
 }
 
-/// Whether the program at `image` is Steam's own: one of its known processes, or any program in
-/// Steam's folder `steam` outside its game library there (`steamapps`). Steam starts more of its
-/// own than the known ones: the 64-bit overlay, the shader cache's `fossilize-replay64.exe`,
-/// `steam_monitor.exe`, `streaming_client.exe`.
+/// Whether the program at `image` is Steam's own: a known Steam process, or any program in
+/// Steam's folder `steam` outside `steamapps`. Steam starts more than the known ones, e.g. the
+/// shader cache's `fossilize-replay64.exe`.
 fn is_steams_own(image: &str, steam: Option<&Path>) -> bool {
     let name = image.rsplit(['\\', '/']).next().unwrap_or(image);
     is_steam_process(name)
@@ -149,7 +140,7 @@ mod tests {
 
     #[test]
     fn every_program_in_steam_s_folder_but_its_games_is_steam_s_own() {
-        // As on a machine that was looked at: the programs Steam's folder holds.
+        // Programs a real Steam folder holds.
         let steam = Path::new(r"C:\Program Files (x86)\Steam");
         for own in [
             r"C:\Program Files (x86)\Steam\gameoverlayui64.exe",

@@ -1,13 +1,8 @@
-//! `cargo xtask new-launcher <id>` and `cargo xtask new-device <id> [--profile]`: the skeleton of
-//! a launcher or a device as docs/new-launcher.md and docs/new-device.md describe them, listed
-//! where Mujina lists them. It builds, keeps every rule the tests and checks hold a plug-in to,
-//! and marks with `TODO` what only knowledge of the launcher or the device can fill in.
-//!
-//! A crate is listed in three places: `[workspace.dependencies]` of the root `Cargo.toml`,
-//! `crates/app/Cargo.toml` and `crates/app/src/registry.rs`. Each edit looks for the lines that
-//! are there for it (the other launchers or devices, and their comments) and fails, saying what
-//! to add by hand, where it finds none; nothing is written then. A key-chord device is one
-//! profile file, which a build script finds by itself.
+//! `cargo xtask new-launcher` and `new-device`: a skeleton that builds and passes the checks, with
+//! `TODO`s for what only knowledge of the launcher or device can fill in (docs/new-launcher.md,
+//! docs/new-device.md). A crate is listed after its kind's lines in the root `Cargo.toml`,
+//! `crates/app/Cargo.toml` and `crates/app/src/registry.rs`; if a file has none, nothing is
+//! written and the error says what to add by hand.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -70,9 +65,8 @@ const DEVICE_ID_RULE: &str = "lower case letters, digits, _ and -, beginning wit
 const LAUNCHER_TYPES: &[&str] = &["Descriptor", "Launcher", "Options", "Runtime"];
 const DEVICE_TYPES: &[&str] = &["Buttons", "Descriptor", "Runtime"];
 
-/// The names the templates import that one of those could be as well: `home` would make
-/// `HomeLauncher` beside the port of that name, and the crate would not build. A test holds the
-/// lists to the templates.
+/// Imported names an id could clash with: `home` would make a second `HomeLauncher` and the crate
+/// would not build. A test holds these lists to the templates.
 const LAUNCHER_IMPORTS: &[&str] = &[
     "HomeLauncher",
     "LauncherDescriptor",
@@ -81,14 +75,13 @@ const LAUNCHER_IMPORTS: &[&str] = &[
 ];
 const DEVICE_IMPORTS: &[&str] = &["DeviceButtons", "DeviceDescriptor", "DeviceRuntime"];
 
-/// What to make.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Kind {
-    /// A launcher crate.
     Launcher,
     /// A device crate, for buttons that are no key chords.
     Device,
-    /// A profile in `profiles/devices/`, for buttons that are key chords.
+    /// A profile in `profiles/devices/`, for buttons that are key chords. adapter-keyboard's build
+    /// script finds it, so no list is edited.
     Profile,
 }
 
@@ -246,17 +239,14 @@ impl Skeleton {
         })
     }
 
-    /// The crate's directory under `crates/`: `adapter-<id>`, with `-` for `_`.
     fn dir(&self) -> String {
         format!("adapter-{}", self.id.replace('_', "-"))
     }
 
-    /// The crate's package name.
     fn package(&self) -> String {
         format!("mujina-{}", self.dir())
     }
 
-    /// The crate's name in Rust code.
     fn ident(&self) -> String {
         self.package().replace('-', "_")
     }
@@ -266,7 +256,6 @@ impl Skeleton {
         words(&self.id).concat()
     }
 
-    /// `template` with its placeholders filled in.
     fn fill(&self, template: &str) -> String {
         template
             .replace("@ID@", &self.id)
@@ -289,10 +278,8 @@ fn words(id: &str) -> Vec<String> {
         .collect()
 }
 
-/// An id users write in their `config.toml`, spelt as [`LAUNCHER_ID_RULE`] or
-/// [`DEVICE_ID_RULE`] says, as the conformance tests want it; none that the configuration gives
-/// a meaning of its own, and none that names a type of the crate the same as a name its
-/// templates import.
+/// Checks `id` against [`LAUNCHER_ID_RULE`] or [`DEVICE_ID_RULE`] (as the conformance tests do),
+/// the ids `config.toml` reserves, and the names the templates import.
 fn check_id(kind: Kind, id: &str) -> Result<(), String> {
     let (what, rule, reserved, types, imports) = match kind {
         Kind::Launcher => (
@@ -513,7 +500,6 @@ fn app_dependency(text: &str, block: &str, package: &str, line: &str) -> Result<
     Ok(inserted(text, &lines, after, line))
 }
 
-/// Whether `line` of a manifest names `package` as a dependency.
 fn is_dependency(line: &str, package: &str) -> bool {
     line.strip_prefix(package)
         .is_some_and(|rest| rest.starts_with([' ', '=', '.']))

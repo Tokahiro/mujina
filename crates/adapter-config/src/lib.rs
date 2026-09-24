@@ -1,8 +1,5 @@
-//! Settings from `config.toml`.
-//!
-//! Launchers and devices bring their own sections, which are read against what their
-//! descriptors say, and the device is chosen among those the composition root lists; this crate
-//! names none of them.
+//! Settings from `config.toml`. Launcher and device sections are read against their descriptors;
+//! this crate names no launcher or device itself.
 
 #[cfg(test)]
 mod fakes;
@@ -72,10 +69,8 @@ pub fn template(launchers: &Launchers) -> String {
     text
 }
 
-/// Reads `<directory>/config.toml`.
 pub struct ConfigFile {
     path: PathBuf,
-    /// The machine the device is chosen for.
     system: SystemIdentity,
     /// The launchers compiled in, whose sections the file may hold.
     launchers: Launchers,
@@ -84,8 +79,7 @@ pub struct ConfigFile {
 }
 
 impl ConfigFile {
-    /// `config.toml` in `directory`, for the machine `system` describes, with the launchers and
-    /// devices compiled in.
+    /// `config.toml` in `directory`.
     pub fn for_system(
         directory: &Path,
         system: SystemIdentity,
@@ -102,16 +96,16 @@ impl ConfigFile {
 
     /// Writes a commented template unless a configuration already exists.
     pub fn ensure_template(&self) {
-        // The lock is busy while a change is being stored, and that change writes the file
-        // anyway. Held here, it keeps a change from reading a half-written template.
+        // A change holding the lock writes the file anyway. Holding it here keeps a change from
+        // reading a half-written template.
         let lock = store::lock_file(&self.path);
         if let Ok(lock) = &lock
             && matches!(lock.try_lock(), Err(TryLockError::WouldBlock))
         {
             return;
         }
-        // `create_new` never replaces a file, not even one another process has just written.
-        // Without a template the defaults still apply; nothing to report.
+        // `create_new` never replaces a file another process has just written. Errors are
+        // ignored: without a template the defaults still apply.
         if let Ok(mut file) = OpenOptions::new()
             .write(true)
             .create_new(true)
@@ -129,9 +123,9 @@ impl ConfigFile {
         &self.path
     }
 
-    /// What the file stores, read once: for asking many keys, where each
-    /// [`SettingsStore::stored`](mujina_application::settings::SettingsStore::stored) reads the
-    /// file again.
+    /// The file read once, for asking many keys; each
+    /// [`SettingsStore::stored`](mujina_application::settings::SettingsStore::stored) reads it
+    /// again.
     pub fn snapshot(&self) -> StoredSnapshot {
         StoredSnapshot::read(&self.path)
     }

@@ -1,14 +1,6 @@
-//! Noticing that the session ends: the user signs out, the machine shuts down, or the Restart
-//! Manager closes the agent alone (to replace a file it uses, for instance). `WM_ENDSESSION`
-//! says which in its flags, and the log keeps them.
-//!
-//! Windows tells windows, not processes. The agent therefore owns one top-level window that is
-//! never shown; its only job is to receive `WM_ENDSESSION`, so that the agent can leave in an
-//! orderly way (and say what the session cost) instead of simply being terminated.
-//!
-//! Once the window has answered `WM_ENDSESSION`, the session may end at any moment, and the
-//! process with it. What has to be done for sure (the last lines of the log) is therefore done
-//! while the message is handled; the orderly exit that follows is best effort.
+//! Noticing that the session ends: sign-out, shutdown, or the Restart Manager closing the agent.
+//! Windows tells windows, not processes, so the agent owns a hidden window that receives
+//! `WM_ENDSESSION`.
 
 use std::cell::{Cell, RefCell};
 use std::ptr::{null, null_mut};
@@ -40,8 +32,8 @@ unsafe extern "system" fn window_proc(
         WM_ENDSESSION => {
             if wparam != 0 {
                 ENDING.with(|flag| flag.set(true));
-                // Flushing looks the log up by name (see `log_file`), so this line and the
-                // closing lines after it land in the current file.
+                // Flushing reopens the log by name (see `log_file`), so the closing lines land
+                // in the current file.
                 log::logger().flush();
                 log::info!("session ending ({})", cause(lparam));
                 // Taken out first, so the slot is not borrowed while they run.
@@ -56,11 +48,11 @@ unsafe extern "system" fn window_proc(
     }
 }
 
-/// Creates the hidden window on the calling thread, which must pump messages. It lives as long
-/// as the process. Returns whether the session end will be noticed.
+/// Creates the hidden window on the calling thread, which must pump messages; it lives as long as
+/// the process. Returns whether the session end will be noticed.
 ///
-/// `last_words` runs once, inside `WM_ENDSESSION`, because Windows may end the session as soon
-/// as every application has returned from that message. It must be quick.
+/// `last_words` runs once, inside `WM_ENDSESSION`, since Windows may end the session as soon as
+/// every application has returned from it. It must be quick.
 pub fn watch(last_words: Box<dyn FnOnce()>) -> bool {
     LAST_WORDS.with(|slot| *slot.borrow_mut() = Some(last_words));
     let class_name = to_wide("MujinaSessionEnd");
@@ -104,9 +96,8 @@ pub fn take_ending() -> bool {
     ENDING.with(|flag| flag.replace(false))
 }
 
-/// What the flags of `WM_ENDSESSION` say, for the log. They are a bit mask: none means a
-/// shutdown or restart, and ENDSESSION_CLOSEAPP the Restart Manager closing this application
-/// while the session goes on. The raw value follows, for anything not named here.
+/// The `WM_ENDSESSION` flags in words, for the log. No flag means shutdown or restart; the raw
+/// value follows for anything not named here.
 fn cause(lparam: LPARAM) -> String {
     // The documented flags all lie in the low 32 bits.
     let flags = u32::try_from(lparam.cast_unsigned() & 0xFFFF_FFFF).unwrap_or_default();

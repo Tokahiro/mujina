@@ -1,9 +1,6 @@
-//! Making Mujina the console home app, and handing the setting back cleanly.
-//!
-//! Handing it back matters: on some Windows builds Task View stops working when the configured
-//! home app is uninstalled while still selected. `mujinactl`, Mujina Settings and Mujina Setup
-//! (its removal, and its check at sign-in once the package is gone) all hand it back by the one
-//! rule here, [`home_app_repair`].
+//! Making Mujina the console home app, and handing the setting back cleanly: on some Windows
+//! builds Task View stops working when the selected home app is uninstalled. Every tool hands it
+//! back by one rule, [`home_app_repair`].
 
 use crate::ports::{HomeAppRegistry, PackageIdentity, PortError};
 
@@ -23,8 +20,7 @@ pub enum UnregisterOutcome {
     NotRegistered,
 }
 
-/// What to do with the home app setting when this Mujina stops being the home app, from what the
-/// setting and its backup say.
+/// What to do with the home app setting when this Mujina stops being the home app.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum HomeAppRepair {
     /// This Mujina is the home app: put the previous one back.
@@ -36,9 +32,8 @@ pub enum HomeAppRepair {
     Leave,
 }
 
-/// The rule for giving the home app back. `ours` is this Mujina's app ID, `<family>!App`; only
-/// exactly that counts as Mujina, so a contributor's build installed beside the release (another
-/// family) is another app.
+/// The rule for giving the home app back. `ours` is this Mujina's app ID (`<family>!App`); a
+/// contributor's build beside the release has another family, so it is another app.
 pub fn home_app_repair(current: Option<&str>, backup: Option<&str>, ours: &str) -> HomeAppRepair {
     match current {
         Some(current) if same_app(current, ours) => match backup {
@@ -62,9 +57,8 @@ pub fn same_app(one: &str, other: &str) -> bool {
     }
 }
 
-/// Whether two app IDs name the same app of the same product, whoever signed it: the package
-/// name (the family up to its last `_`, where the publisher's id begins) and the application id.
-/// A release and a contributor's build of Mujina are two packages of one product.
+/// Whether two app IDs name the same app whoever signed it: compares the package name (the
+/// family up to its last `_`, where the publisher's id begins) and the application id.
 pub fn same_product(one: &str, other: &str) -> bool {
     fn parts(id: &str) -> Option<(&str, &str)> {
         let (family, app) = id.split_once('!')?;
@@ -79,8 +73,8 @@ pub fn same_product(one: &str, other: &str) -> bool {
     }
 }
 
-/// Why the home app setting was not changed. The message names the port's error too, so that
-/// error is not also given as the source: whoever prints the chain would print it twice.
+/// Why the home app setting was not changed. The port's error is in the message, not the source,
+/// so a printed error chain does not repeat it.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum RegisterError {
     #[error("this process has no package identity; install the MSIX package first")]
@@ -115,24 +109,19 @@ impl<'a> HomeAppRegistration<'a> {
             Some(current) if same_app(&current, &ours) => {
                 return Ok(RegisterOutcome::AlreadyRegistered);
             }
-            // Another Mujina, say a release beside a contributor's build: the app before it stays
-            // the one to go back to. Every Mujina shares one backup, and a Mujina in it would be
-            // put back after its package may have gone, which breaks Task View.
+            // Another Mujina: keep the shared backup. A Mujina in it could be put back after its
+            // package is gone, which breaks Task View.
             Some(other) if same_product(&other, &ours) => {}
             Some(other) => self.registry.set_backup(Some(&other))?,
-            // Exactly what was there before: a backup left from an earlier time would otherwise
-            // come back in place of no home app at all.
+            // Record no home app too, or a stale backup would come back in its place.
             None => self.registry.set_backup(None)?,
         }
         self.registry.set(&ours)?;
         Ok(RegisterOutcome::Registered)
     }
 
-    /// Gives the setting back to the app before Mujina, if Mujina is the home app, and forgets
-    /// the backup. Otherwise it touches nothing, the backup least of all: every Mujina package
-    /// shares it, so while another app is the home app it may be another Mujina's, which that
-    /// one needs when it goes. `mujinactl unregister`, Mujina Settings, Setup's removal and its
-    /// check at sign-in all come here.
+    /// If Mujina is the home app, gives the setting back to the app before it and forgets the
+    /// backup. Otherwise touches nothing: the shared backup may belong to another Mujina.
     pub fn unregister(&self) -> Result<UnregisterOutcome, RegisterError> {
         let ours = self
             .identity
@@ -295,7 +284,7 @@ mod tests {
         assert!(!same_product("no-family!App", "no-family!App"));
     }
 
-    /// The release, then a contributor's build over it; both registrations, then `remove`.
+    /// The release registered, then a contributor's build over it.
     fn release_then_dev() -> (FakeHomeAppRegistry, FakeIdentity, FakeIdentity) {
         let registry = FakeHomeAppRegistry::with_current(Some(XBOX));
         let release = FakeIdentity::packaged(OURS);
@@ -328,8 +317,8 @@ mod tests {
 
     #[test]
     fn removing_the_build_first_gives_the_xbox_app_back_too() {
-        // Not the release, although it is still installed: one backup is shared, and that is
-        // its price. Never a package that may be gone.
+        // Not the still installed release: the backup is shared and never names a package that
+        // may be gone.
         let (registry, release, dev) = release_then_dev();
         assert_eq!(
             HomeAppRegistration::new(&dev, &registry).unregister(),
@@ -344,7 +333,7 @@ mod tests {
 
     #[test]
     fn a_mujina_left_in_the_backup_is_not_put_back() {
-        // Written by an earlier Mujina Setup, which recorded the Mujina it took over from.
+        // An older Mujina Setup recorded the Mujina it took over from.
         let registry = FakeHomeAppRegistry::with_current(Some(DEV));
         registry.set_backup(Some(OURS)).unwrap();
         let dev = FakeIdentity::packaged(DEV);
@@ -436,7 +425,7 @@ mod tests {
             RegisterError::Registry(PortError::Failed("access denied".to_string()))
         );
         assert_eq!(error.to_string(), "home app setting: access denied");
-        // In the message, so not the source as well: a printed chain would say it twice.
+        // Already in the message, so not repeated as the source.
         assert!(std::error::Error::source(&error).is_none());
     }
 }

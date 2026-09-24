@@ -1,8 +1,6 @@
-//! The Wi-Fi status as Big Picture's icon wants to see it: bars smoothed at their edges, and
-//! pushed only when they, or the network, change; and which of the WLAN service's changes are
-//! followed when Windows refuses some, and when to ask again. Portable, so these rules are tested
-//! on every system; the reading itself and the registration come from the WLAN service
-//! (`wlan.rs`).
+//! The Wi-Fi status as Big Picture's icon wants it: bars smoothed at their edges and pushed only
+//! on change, and which WLAN changes to follow when Windows refuses some. Portable, so tested on
+//! every system; the WLAN calls are in `wlan.rs`.
 
 /// Signal strength in the 0–4 scale Big Picture draws (none, weak, ok, good, excellent).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -86,7 +84,7 @@ impl WifiFeedPolicy {
         true
     }
 
-    /// Steam lost our state (it restarted or reloaded); push again next time.
+    /// Forgets the last push, for a Steam that restarted or reloaded.
     pub fn invalidate(&mut self) {
         self.last_pushed = None;
     }
@@ -129,7 +127,8 @@ impl IconFeed {
 pub enum WifiChanges {
     /// Connecting and disconnecting.
     Connection,
-    /// Those, and the signal strength, which Windows guards more closely (see `wlan.rs`).
+    /// Those, and the signal strength, which Windows grants only with the package's wiFiControl
+    /// capability and the location permission.
     ConnectionAndSignal,
 }
 
@@ -145,9 +144,8 @@ pub enum Followed<E> {
 }
 
 /// Registers for every change that can alter the icon or, where Windows refuses that, for
-/// connecting and disconnecting alone. `register` makes one registration; `refused` tells a
-/// refusal from any other error, after which nothing more is tried: only the signal strength is
-/// guarded more closely, so only a refusal is a reason to ask for less.
+/// connecting and disconnecting alone. Only a refusal (`refused`) is a reason to ask for less;
+/// any other error ends the attempt.
 pub fn register_changes<E>(
     mut register: impl FnMut(WifiChanges) -> Result<(), E>,
     refused: impl Fn(&E) -> bool,
@@ -162,11 +160,10 @@ pub fn register_changes<E>(
     }
 }
 
-/// When to register once more after Windows refused the signal strength. It ties that to the
-/// location permission, which the first registration may have come before: the query that makes
-/// Windows ask is one for a connection, so with Wi-Fi not yet connected nothing asked. The first
-/// reading with the connection's details shows the permission is given since; a refusal after
-/// such a reading is not about the permission, so it is not tried again.
+/// When to register again after Windows refused the signal strength. With Wi-Fi not connected,
+/// the first query did not ask for the location permission; the first reading with the
+/// connection's details shows it was given since, so register once more then. A refusal after
+/// such a reading is not about the permission and is not retried.
 #[derive(Debug)]
 pub struct SignalRetry {
     pending: bool,
@@ -181,9 +178,8 @@ impl SignalRetry {
         }
     }
 
-    /// Whether to register again now, after a reading that had the connection's details or not.
-    /// `true` once at most: waits for readings, which come from Windows' notifications, and
-    /// never for time.
+    /// Whether to register again after a reading with (`detailed`) or without the connection's
+    /// details. `true` at most once.
     pub fn due(&mut self, detailed: bool) -> bool {
         let due = self.pending && detailed;
         self.pending &= !due;

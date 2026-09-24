@@ -84,7 +84,7 @@ export component HelpPage inherits Rectangle {
             }
             false
         }
-        // Refresh and the log are not rows; they are shown by hand.
+        // Refresh and the log are drawn by the page, so it scrolls them into view.
         moved(row) => {
             if (row == 2) {
                 page.reveal(refresh.absolute-position.y, refresh.height);

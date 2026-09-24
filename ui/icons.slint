@@ -1,6 +1,5 @@
-// Phosphor icons (MIT, assets/icons/LICENSE), regular and fill weights, bundled as SVG and
-// tinted with `colorize`; also the mark's character, the app icon and the Slint badge. Shared by
-// Mujina Settings and Mujina Setup.
+// Phosphor icons (MIT, assets/icons/LICENSE) as SVG, tinted with `colorize`, plus the mark's
+// glyph, the app icon and the Slint badge.
 
 import { Health } from "theme.slint";
 
@@ -39,10 +38,8 @@ export global Icons {
     out property <image> admin: @image-url("assets/icons/shield-check.svg");
     out property <image> info: @image-url("assets/icons/info.svg");
     out property <image> remove: @image-url("assets/icons/trash.svg");
-    // The bright quarter of a spinner, drawn over a faint ring and turned.
     out property <image> spinner-arc: @image-url("assets/spinner-arc.svg");
 
-    // The icon of a doctor state.
     public pure function of-health(health: Health) -> image {
         return health == Health.problem ? problem : health == Health.warning ? warning : ok;
     }

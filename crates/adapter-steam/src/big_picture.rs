@@ -23,12 +23,11 @@ const START_ARGUMENT: &str = "-gamepadui";
 const SWITCH_ARGUMENT: &str = "steam://open/bigpicture";
 
 pub struct SteamBigPicture {
-    /// Steam's UI link, `[launcher.steam] ui_link`: the debugging-port marker is kept in place,
-    /// and Big Picture's pages are reached through the port.
+    /// `[launcher.steam] ui_link`: keep the debugging-port marker and reach Big Picture's pages
+    /// through the port.
     ui_link: bool,
     indicator: Option<SteamWifiIndicator>,
-    /// The direct way to the menus, only where the indicator runs: its worker keeps the link
-    /// this needs, and knows whether it is up.
+    /// Only with the indicator, whose worker keeps the link the menus need.
     menus: Option<DirectMenus>,
 }
 
@@ -42,22 +41,18 @@ impl SteamBigPicture {
         }
     }
 
-    /// For the resident agent: additionally runs, with the Wi-Fi fix on, the worker that keeps
-    /// the link to Big Picture and corrects its Wi-Fi icon, and the worker that reads the Wi-Fi
-    /// from the WLAN service for it. Nothing asks the WLAN service otherwise, so Windows asks
-    /// for the location permission only for the Wi-Fi fix.
+    /// For the resident agent: with the Wi-Fi fix on, also starts the Steam UI worker and the
+    /// WLAN reader. Nothing else asks the WLAN service, so only the Wi-Fi fix makes Windows ask
+    /// for the location permission.
     pub fn for_agent(options: SteamOptions) -> Self {
-        // The worker is what keeps a link up for the direct menus too, so without the Wi-Fi fix
-        // the menus go by their shortcuts for now.
-        // TODO(rings-4): the direct menus should need only `ui_link`, once the steam-ui worker
-        // can run without the Wi-Fi hook, and without a thread more than today.
+        // TODO: the direct menus should need only `ui_link`. They need the Wi-Fi fix, whose
+        // worker keeps the link; let that worker run without the hook, with no extra thread.
         let indicator = options
             .wifi_fix()
             .then(|| SteamWifiIndicator::start(STEAM_DEBUG_PORT))
             .flatten();
         if let Some(indicator) = &indicator {
-            // As early as possible: the earlier in Steam's start-up the link is up, the less it
-            // disturbs.
+            // The earlier in Steam's start-up the link is up, the less it disturbs.
             indicator.connect();
             if !wlan::follow(indicator.clone()) {
                 log::warn!(
@@ -75,10 +70,8 @@ impl SteamBigPicture {
         }
     }
 
-    /// Opens or closes a menu directly while the link to Big Picture is known to be up;
-    /// [`Direct::NotTaken`] means "use the shortcut". Only the indicator's worker keeps that link,
-    /// so where it does not run (the home and tool roles, the Wi-Fi fix off) there is no live
-    /// link and the shortcut is all there is.
+    /// Opens or closes a menu directly while the link to Big Picture is up;
+    /// [`Direct::NotTaken`] means "use the shortcut".
     fn toggle(&self, host: MenuHost) -> Direct {
         let Some(menus) = &self.menus else {
             return Direct::NotTaken;
@@ -124,9 +117,8 @@ impl HomeLauncher for SteamBigPicture {
         }
     }
 
-    /// Makes sure of the marker on every activation, not only before a start: Steam may have been
-    /// started by anything, and it reads the marker when it starts. Once the marker is there,
-    /// this is one file creation that fails.
+    /// Ensures the marker on every activation, not only before a start: anything may start
+    /// Steam, and Steam reads the marker only at start-up.
     fn prepare(&self, install: &LauncherInstall) -> PortResult<()> {
         if !self.ui_link {
             return Ok(());
@@ -169,18 +161,14 @@ impl HomeLauncher for SteamBigPicture {
         let (route, patience) = match destination {
             // The game is a window, not a page; the home role handles it before it gets here.
             HomeDestination::Game => return Ok(()),
-            // Without the UI link no page can be reached: no waiting for a port that will not
-            // answer, and no complaint on every press of the home button.
+            // No UI link, no pages: neither wait for a port that will not answer nor complain.
             _ if !self.ui_link => return Ok(()),
-            // Only asked for while Big Picture is up and running.
             HomeDestination::Home => (navigation::HOME_ROUTE, Duration::ZERO),
             HomeDestination::Library => (navigation::LIBRARY_ROUTE, navigation::START_PATIENCE),
         };
         navigation::show(STEAM_DEBUG_PORT, route, patience).map_err(PortError::Failed)
     }
 
-    /// For the home role only. Never for the agent: the synthetic key tap this may need passes
-    /// through the agent's own keyboard hook, whose thread would be the one waiting here.
     fn focus_game(&self) -> PortResult<()> {
         let handle =
             games::window().ok_or_else(|| PortError::NotFound("the game's window".into()))?;
@@ -211,9 +199,8 @@ impl SessionLauncher for SteamBigPicture {
         games::window().is_some()
     }
 
-    /// Knows the game's processes by the folder Steam installed it in, and so also when nothing
-    /// of it runs any more: Steam may keep counting a game as running while something it started
-    /// is still open (reported for a browser opened from a link in the game; not verified).
+    /// By the game's install folder, so it also knows when nothing of the game runs any more:
+    /// Steam may count a game as running while something it started, like a browser, is open.
     fn game_whereabouts(&self) -> GameWhereabouts {
         games::whereabouts()
     }
@@ -230,22 +217,17 @@ impl SessionLauncher for SteamBigPicture {
         }
     }
 
-    /// `Ctrl+1` opens the Steam menu in Big Picture.
     fn menu_shortcut(&self) -> Option<KeyChord> {
         Some(shortcuts::menu())
     }
 
-    /// Read from Steam's settings when a press needs it: a button press is rare, and the user may
-    /// change the setting any time. Big Picture's own shortcuts do not reach a focused game; the
-    /// overlay hotkey does.
+    /// Read on every press: presses are rare and the user may change the setting any time. Big
+    /// Picture's own shortcuts do not reach a focused game; the overlay hotkey does.
     fn overlay_shortcut(&self) -> Option<KeyChord> {
         Some(self.overlay())
     }
 
-    /// Through Big Picture's menu store, which works wherever the keyboard focus is. Falls back
-    /// to the shortcut while the link to Big Picture is not known to be up, without Big Picture
-    /// on screen, and for the rest of a Steam run in which the menu store turned out to be
-    /// missing.
+    /// Through Big Picture's menu store, which works wherever the keyboard focus is.
     fn open_menu(&self) -> Direct {
         self.toggle(MenuHost::BigPicture)
     }
@@ -256,10 +238,8 @@ impl SessionLauncher for SteamBigPicture {
         self.toggle(MenuHost::GameOverlay)
     }
 
-    /// Every sign of life from Steam is a chance to (re)establish the link to Big Picture: the
-    /// earlier in Steam's start-up the link is up, the less it disturbs, and Steam may restart
-    /// at any time. Cheap when the link is already up. Foreground changes alone are not enough;
-    /// behind the Windows welcome screen none arrive.
+    /// Every sign of life from Steam (re)establishes the link; cheap when it is up. Foreground
+    /// changes alone are not enough: behind the Windows welcome screen none arrive.
     fn observe(&self, event: &AgentEvent) {
         let sign_of_life = match event {
             AgentEvent::ForegroundChanged {

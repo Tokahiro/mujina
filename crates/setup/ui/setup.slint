@@ -1,15 +1,8 @@
-// Mujina Setup: says what it found and what it is going to do, does it step by step, and says how
-// it went. After design_handoff_mujina_settings/SETUP.md, with the colours, icons, mark and
-// switch of Mujina Settings (ui/ at the top of the repository).
+// Mujina Setup: says what it found and will do, does it step by step, and says how it went.
+// Rust passes states and data, never sentences: every text is worded here.
 //
-// The window shows at once and says it is checking the device; Rust sends what it found. Rust
-// passes states and data, never sentences: every text is worded here.
-//
-// Tab moves between the home-app row and the main button (when done: Open Mujina Settings and
-// Close; when stopped: Try again, Copy details, Open log if there is one, and Close); Enter or
-// Space presses.
-// Slint's own Tab order does not reach elements inside `if`, so each focusable element passes Tab
-// on itself.
+// Tab moves between the home-app row and the buttons; Enter or Space presses. Slint's own Tab
+// order does not reach elements inside `if`, so each focusable element passes Tab on itself.
 
 import { Theme } from "@mujina/theme.slint";
 import { Icons } from "@mujina/icons.slint";
@@ -21,7 +14,7 @@ import "@mujina/assets/fonts/Inter-Regular.ttf";
 import "@mujina/assets/fonts/Inter-Medium.ttf";
 
 // What a step does. Preparing the machine is one step with one prompt, named after what it still
-// has to do; putting the package on the device is named after what that is.
+// has to do.
 export enum StepKind {
     check-device,
     prepare,
@@ -39,7 +32,6 @@ export enum StepKind {
     remove-cleanup
 }
 
-// How far a step is.
 export enum StepState {
     todo,
     running,
@@ -52,8 +44,7 @@ export struct StepRow {
     state: StepState,
 }
 
-// Where the whole run is: finding out about the device, before the run, under way, or how it
-// ended.
+// Where the run is: `checking` the device, `ready` to start, `running`, or how it ended.
 export enum SetupPhase {
     checking,
     ready,
@@ -62,8 +53,8 @@ export enum SetupPhase {
     failed
 }
 
-// What installing here is, as found: the package goes on new, over an older, the same or a newer
-// version; or it cannot (a build without a package, or Windows too old).
+// What installing here means: new, over an older, the same or a newer (`downgrade`) version, or
+// not possible.
 export enum Situation {
     install,
     update,
@@ -73,8 +64,8 @@ export enum Situation {
     windows-too-old
 }
 
-// Why a step failed. `code` is the code Windows or the administrator part gave ("" for none), and
-// `detail` what was said, in English: both for a bug report, below the sentence.
+// Why a step failed. `code` is from Windows or the administrator part ("" for none), `detail`
+// what was said, in English; both are for bug reports.
 export enum FailureKind {
     declined,
     elevation-failed,
@@ -107,7 +98,7 @@ export struct Failure {
     detail: string,
 }
 
-// The window's buttons: outlined, 40 px high. `busy` shows a spinner and takes no presses.
+// An outlined button; `busy` shows a spinner and takes no presses.
 component SetupButton inherits FocusFrame {
     in property <string> text;
     in property <image> icon;
@@ -282,9 +273,6 @@ component SwitchRow inherits FocusFrame {
     }
 }
 
-// One step and how far it is.
-
-// One step and how far it is.
 component StepItem inherits Rectangle {
     in property <StepRow> step;
     property <StepKind> kind: root.step.kind;
@@ -328,8 +316,8 @@ component StepItem inherits Rectangle {
     }
 }
 
-// How it went, under the steps. Fades in and rises 6 px. A failure has a heading, and below its
-// sentence what Windows said, for a report.
+// How it went, below the steps; fades in and rises 6 px. A failure adds a heading and what
+// Windows said.
 component Result inherits Rectangle {
     in property <bool> failed;
     in property <string> heading;
@@ -451,7 +439,6 @@ export component SetupWindow inherits Window {
     // Mujina's agent runs now, and installing stops it.
     in property <bool> stops-agent;
     in property <[StepRow]> steps;
-    // Why the step that failed failed.
     in property <Failure> failure;
     in property <bool> make-home-app: true;
     // Setup writes a log (not when it runs as administrator without --log).

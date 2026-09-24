@@ -1,11 +1,8 @@
-# Draws Mujina's icons from the mark: two squares, 狢 in the front one (the glyph path in
-# ui/assets/mark-glyph.svg). Below 40 px two squares leave the character too small to read,
-# so small icons draw the front square alone, filling the icon.
+# Draws Mujina's icons (the SVG, the package logos, mujina.ico and the window icon) from the mark:
+# two squares, 狢 in the front one (ui/assets/mark-glyph.svg). Below 40 px the character would be
+# too small, so the front square alone fills the icon. Windows only: it draws with WPF.
 #
 #   powershell -NoProfile -File packaging\icons.ps1
-#
-# Writes docs/images/mujina.svg, the package logos, packaging/mujina.ico (embedded into the
-# executables by their build scripts) and the window icons. Windows only: it draws with WPF.
 
 $ErrorActionPreference = "Stop"
 Add-Type -AssemblyName PresentationCore, WindowsBase

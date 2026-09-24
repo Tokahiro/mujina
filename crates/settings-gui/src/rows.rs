@@ -1,11 +1,5 @@
-//! The Setup page's rows of a launcher's or a device's own options, built from its
-//! `SettingSpec`s: nothing here names a launcher or a device, so a new one needs no change to
-//! Mujina Settings. The core settings keep rows of their own, worded in the `.slint` files.
-//!
-//! Where a row goes follows from what it holds. A switch is something the launcher brings, so
-//! it joins What Mujina fixes and says when it takes effect, as the rows there do. A program,
-//! its arguments, a choice or anything required belong with the launcher choice (or with the
-//! device's button). A name or a number is a detail, under Advanced.
+//! The Setup page's rows for a launcher's or device's own options, built from its
+//! `SettingSpec`s, so a new launcher or device needs no change here.
 
 use mujina_application::settings::SettingValue;
 use mujina_application::settings::schema::{self, Applies, SettingKind, SettingSpec, TextFormat};
@@ -28,8 +22,8 @@ pub const NOT_SET: Msg = Msg::new("Not set");
 /// An empty list of arguments.
 pub const NOTHING: Msg = Msg::new("Nothing");
 
-/// Whose options: a launcher's, whose switches join What Mujina fixes, or a device's, whose rows
-/// stay with its button.
+/// Whose options: a launcher's switches join What Mujina fixes; a device's rows stay with its
+/// button.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Owner {
     Launcher,
@@ -55,9 +49,8 @@ impl Rows {
     }
 }
 
-/// The rows of `specs`, the options of `[section]` as `options` holds them (what is set; the
-/// defaults apply to the rest). `draft`: the launcher is chosen but not stored yet, for want of
-/// a required value. `words` puts an English text into the window's language.
+/// The rows of `specs` for `[section]`, with `options` holding what is set. `draft`: the launcher
+/// is chosen but not stored yet. `words` translates an English text.
 pub fn build(
     owner: Owner,
     section: &str,
@@ -171,7 +164,6 @@ fn row(spec: &SettingSpec, options: &OptionTable, words: &dyn Fn(&str) -> String
     }
 }
 
-/// Two sentences as one description.
 fn joined(first: &str, second: &str) -> String {
     if first.is_empty() {
         second.to_string()
@@ -239,8 +231,7 @@ mod tests {
         )
     };
 
-    /// The window's words in `language` for a part that brings `extra` catalogs, as Mujina
-    /// Settings has them (`texts::launcher_words`): those first, then its own.
+    /// Like `texts::launcher_words`: `extra` catalogs first, then this app's, in `language`.
     fn words(language: &str, extra: &[(&str, &str)]) -> impl Fn(&str) -> String {
         let mut localizer = Localizer::new();
         for (catalog_language, po) in extra.iter().chain(&texts::CATALOGS) {

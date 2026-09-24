@@ -1,9 +1,6 @@
-//! The texts Rust puts into the window: the entries of the lists it fills, and what the parts of
-//! Mujina it shows bring (a launcher's name and options, the titles of the doctor's checks),
-//! which a `.slint` file cannot translate. They go through mujina-i18n: this app's own `Msg`s
-//! from the catalog that holds Slint's texts too (Rust's are the entries without a context), the
-//! parts' from the catalogs they bring. A launcher's or a device's texts are looked up in its own
-//! catalogs first, so that the same English in another part's does not decide them.
+//! Texts Rust puts into the window: list entries, and the words launchers, devices and the
+//! doctor's checks bring. This app's `Msg`s share Slint's catalog (the entries without a
+//! context); a launcher's or device's texts come from its own catalogs first.
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -20,7 +17,7 @@ pub const CATALOGS: [(&str, &str); 1] = [(
 )];
 
 pub const AUTOMATIC: Msg = Msg::new("Automatic");
-/// With what the button is called on the device found.
+/// `{}`: the button's name on the device found.
 pub const AUTOMATIC_WITH: Msg = Msg::new("Automatic ({})");
 pub const NONE: Msg = Msg::new("None");
 // The buttons of the System page's rows.
@@ -28,28 +25,27 @@ pub const WINDOWS_SETTINGS: Msg = Msg::new("Windows settings");
 pub const START_IT: Msg = Msg::new("Start it");
 
 thread_local! {
-    /// The lists are filled on the window's thread, as is everything else it shows.
+    /// Everything the window shows is built on its thread.
     static LOCALIZER: RefCell<Localizer> = RefCell::new(localizer());
     /// The language set, for the words of a part made after it was set.
     static LANGUAGE: RefCell<String> = RefCell::new(String::from("en"));
-    /// The words of each launcher and device shown, by its section (`launcher.steam`): made
-    /// once, when first shown.
+    /// Each launcher's and device's localizer, by section (`launcher.steam`), made on first use.
     static PARTS: RefCell<HashMap<String, Localizer>> = RefCell::new(HashMap::new());
 }
 
 fn localizer() -> Localizer {
     let mut localizer = Localizer::new();
-    // This app's own first, so that its words win; then those of the parts whose texts it shows.
+    // This app's catalogs first, so its words win.
     let parts = tool::catalogs();
     let catalogs = CATALOGS.iter().chain(&parts);
     for (language, po) in catalogs {
-        // A test reads every catalog; one that did not read would leave its texts English.
+        // A test reads every catalog; a failure here would only leave texts English.
         let _ = localizer.add(language, po);
     }
     localizer
 }
 
-/// The texts from now on in `language`, the one the window shows.
+/// Switches all texts to `language`.
 pub fn set(language: &str) {
     LOCALIZER.with(|localizer| localizer.borrow_mut().set(language));
     LANGUAGE.with(|set| language.clone_into(&mut set.borrow_mut()));
@@ -70,9 +66,8 @@ pub fn t_with(msg: &Msg, value: &str) -> String {
     t(msg).replacen("{}", value, 1)
 }
 
-/// `english`, a text of the launcher or device whose section `part` is (`launcher.steam`) and
-/// which brings `catalogs`, in the language set: from its own catalogs first, then from this
-/// app's, which has the words Mujina Settings adds to its rows.
+/// Translates `english` for the part at section `part` (`launcher.steam`): from its own
+/// `catalogs` first, then this app's, which has the words Mujina Settings adds to its rows.
 fn part_text(part: &str, catalogs: &[(&str, &str)], english: &str) -> String {
     PARTS.with(|parts| {
         let mut parts = parts.borrow_mut();
@@ -113,7 +108,7 @@ mod tests {
 
     #[test]
     fn every_catalog_reads() {
-        // The parts' too: the Localizer leaves one that does not read out, English.
+        // The parts' too: `localizer` skips a catalog that does not parse, leaving it English.
         let parts = tool::catalogs();
         assert!(!parts.is_empty());
         for (language, po) in CATALOGS.iter().chain(&parts) {

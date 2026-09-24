@@ -1,5 +1,4 @@
-//! From controller states to what the app should do: a press is one action, a direction held
-//! down repeats like a key does. Pure, so it can be tested without a controller.
+//! From controller states to actions: a press is one action, a held direction repeats like a key.
 
 use std::time::{Duration, Instant};
 

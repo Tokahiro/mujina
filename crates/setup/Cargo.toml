@@ -21,7 +21,7 @@ path = "src/main.rs"
 lexopt.workspace = true
 
 [target.'cfg(windows)'.dependencies]
-# The home app rule and its registry (INST-12): the same code as mujinactl's, in-process.
+# The home app rule and its registry: the same code as mujinactl's, in-process.
 mujina-adapter-windows.workspace = true
 mujina-application.workspace = true
 mujina-winutil.workspace = true

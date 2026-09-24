@@ -1,14 +1,12 @@
-//! Carrying out a plan: the runner the window and the command line share, over small traits that
-//! `host_windows` implements on the machine and the tests implement with a fake. Everything that
-//! decides (what a failure means, when the check at sign-in may go) is here, where it is tested
-//! on any system; the host only does what it is told.
+//! Carries out a plan for the window and the command line, over small traits that `host_windows`
+//! implements and the tests fake. Every decision is made here; the host only does what it is told.
 
 use std::fmt;
 
 use crate::plan::{self, Choice, Facts, Package, Refusal, Step};
 
-/// Why a step failed, in kinds the window words (in the user's language) and a code and detail
-/// that stay as Windows or a program said them (English, for the log and a bug report).
+/// Why a step failed: a kind the window words in the user's language, and a code and detail
+/// kept as Windows or a program said them, for the log.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StepError {
     pub kind: ErrorKind,
@@ -57,8 +55,7 @@ impl fmt::Display for StepError {
     }
 }
 
-/// What went wrong, as far as the user can do something about it. Each has its sentence in
-/// `ui/setup.slint`.
+/// What went wrong, as far as the user can act on it; each has its sentence in `ui/setup.slint`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ErrorKind {
     /// The administrator prompt was declined: `ShellExecuteExW` reported `ERROR_CANCELLED`.
@@ -73,7 +70,6 @@ pub enum ErrorKind {
     Certificate,
     /// The administrator part ended with a code of none of the above (a crash, say).
     Preparing,
-    /// This build of Setup carries no package.
     NoPackage,
     WindowsTooOld,
     /// 0x80073D06, ERROR_INSTALL_PACKAGE_DOWNGRADE.
@@ -97,7 +93,7 @@ pub enum ErrorKind {
     Damaged,
     /// Any other deployment error; `code` says which.
     DeploymentFailed,
-    /// Removing: this Mujina (this package family) is not installed.
+    /// This Mujina (this package family) is not installed.
     NotInstalled,
     /// The home app setting could not be read or changed.
     HomeApp,
@@ -143,7 +139,7 @@ pub fn hresult_in(text: &str) -> Option<u32> {
     })
 }
 
-/// Reading the device, read-only.
+/// Reads the device without changing anything.
 pub trait Probe {
     fn facts(&self) -> Facts;
 }
@@ -154,12 +150,10 @@ pub trait Trust {
     fn prepare(&self) -> Result<(), StepError>;
 }
 
-/// The package itself.
 pub trait Packages {
     fn add(&self, how: Package) -> Result<(), StepError>;
     /// Fails with [`ErrorKind::NotInstalled`] without this Mujina.
     fn remove(&self) -> Result<(), StepError>;
-    /// Whether this Mujina is installed for the user.
     fn installed(&self) -> bool;
 }
 
@@ -170,12 +164,11 @@ pub trait HomeApp {
     fn give_back(&self) -> Result<(), StepError>;
 }
 
-/// The check at sign-in, its copy of Setup, and how often it has failed to give the home app
-/// back.
+/// The check at sign-in, its copy of Setup, and its count of failed attempts.
 pub trait SignInCheck {
-    /// Arranges the check, and starts its count of failed attempts again.
+    /// Also starts the count of failed attempts again.
     fn arrange_check(&self) -> Result<(), StepError>;
-    /// Removes the check, the copy and the count of failed attempts.
+    /// Also removes the copy and the count of failed attempts.
     fn remove_check(&self) -> Result<(), StepError>;
     fn attempts(&self) -> u32;
     fn record_attempts(&self, attempts: u32) -> Result<(), StepError>;
@@ -190,17 +183,14 @@ pub trait CreatedFiles {
     fn remain(&self) -> bool;
 }
 
-/// Setup's log.
 pub trait Journal {
     fn note(&self, line: &str);
 }
 
-/// Everything the runner works with.
 pub trait Host: Probe + Trust + Packages + HomeApp + SignInCheck + CreatedFiles + Journal {}
 
 impl<T: Probe + Trust + Packages + HomeApp + SignInCheck + CreatedFiles + Journal> Host for T {}
 
-/// How far a step is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StepState {
     Running,
@@ -217,7 +207,6 @@ impl Progress for () {
     fn update(&mut self, _: usize, _: StepState) {}
 }
 
-/// The step that failed, and why.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Failure {
     pub index: usize,
@@ -225,8 +214,6 @@ pub struct Failure {
     pub error: StepError,
 }
 
-/// Runs `steps` one after the other; the first failure stops the run. Every step and every
-/// failure goes to the log.
 pub fn run(host: &impl Host, steps: &[Step], progress: &mut impl Progress) -> Result<(), Failure> {
     for (index, &step) in steps.iter().enumerate() {
         progress.update(index, StepState::Running);
@@ -276,8 +263,6 @@ fn execute(host: &impl Host, step: Step) -> Result<(), StepError> {
         Step::RemovePackage => host.remove(),
         Step::ForgetCreatedFiles => host.forget(),
         Step::RemoveCleanup => {
-            // While files Mujina made elsewhere are still listed, the check at sign-in stays to
-            // finish them.
             if host.remain() {
                 host.note("files Mujina made are still listed: the check at sign-in stays");
                 return Ok(());
@@ -287,30 +272,24 @@ fn execute(host: &impl Host, step: Step) -> Result<(), StepError> {
     }
 }
 
-/// How often the check at sign-in tries to give the home app back before it gives up and
-/// removes itself anyway. A failure that repeats is deterministic (a value of the wrong type,
-/// say); running at every sign-in for ever would not help it.
+/// How often the check at sign-in tries to give the home app back before it removes itself
+/// anyway: a failure that keeps repeating will not go away.
 pub const SIGN_IN_ATTEMPTS: u32 = 5;
 
 /// What the check at sign-in did.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SignedIn {
-    /// Mujina is installed: nothing to do.
     Installed,
-    /// Mujina is gone, and so is everything of it the check looks after (or the check stays
-    /// only for files that could not be deleted yet).
+    /// All cleaned up, or the check stays only for files that could not be deleted yet.
     Done,
-    /// The home app could not be given back: the check stays and tries again at the next
-    /// sign-in. This many attempts have failed.
+    /// Giving the home app back failed this many times; the check tries again next sign-in.
     WillRetry(u32),
-    /// The home app could not be given back [`SIGN_IN_ATTEMPTS`] times: the check removed
-    /// itself anyway. The log says so.
+    /// Giving the home app back failed [`SIGN_IN_ATTEMPTS`] times; the check removed itself.
     GaveUp,
 }
 
-/// The check at sign-in, `mujina-setup.exe --cleanup`. Nothing while Mujina is installed. Once it
-/// has been removed: the home app setting goes back, the files Mujina made elsewhere go, and the
-/// check goes too, but only once the home app is back (or it has tried often enough).
+/// The check at sign-in (`--cleanup`). Once Mujina is removed, it gives the home app back and
+/// deletes Mujina's files; it removes itself only once the home app is back, or it gave up.
 pub fn sign_in(host: &impl Host) -> SignedIn {
     if host.installed() {
         return SignedIn::Installed;
@@ -355,7 +334,6 @@ pub fn sign_in(host: &impl Host) -> SignedIn {
     }
 }
 
-/// What an unattended run (`--quiet`) came to.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Unattended {
     Done,
@@ -363,9 +341,8 @@ pub enum Unattended {
     Failed(Failure),
 }
 
-/// `--quiet`: installs or updates as the window would, without asking. The home app switch is
-/// what the window would start with ([`plan::home_app_default`]), off with `--no-home-app`; a
-/// newer installed version is never replaced, since nobody could confirm it.
+/// `--quiet`: installs as the window would with its default home app switch. A newer installed
+/// version is never replaced: nobody could confirm it.
 pub fn install_unattended(host: &impl Host, no_home_app: bool) -> Unattended {
     let facts = host.facts();
     host.note(&format!("facts: {facts:?}"));
@@ -382,7 +359,6 @@ pub fn install_unattended(host: &impl Host, no_home_app: bool) -> Unattended {
     }
 }
 
-/// `--uninstall --quiet`.
 pub fn uninstall_unattended(host: &impl Host) -> Unattended {
     finish(run(host, &plan::uninstall(), &mut ()))
 }
@@ -565,7 +541,6 @@ pub(crate) mod testing {
         }
     }
 
-    /// Records the progress a run reports.
     #[derive(Default)]
     pub struct Recorded(pub Vec<(usize, StepState)>);
 
@@ -602,7 +577,7 @@ mod tests {
             host.calls(),
             ["prepare", "add", "arrange check", "make home app"]
         );
-        // Each step runs, then is done; the pre-flight too.
+        // Running, then Done, for every step.
         assert_eq!(progress.0.len(), steps.len() * 2);
         assert_eq!(progress.0.last(), Some(&(steps.len() - 1, StepState::Done)));
     }

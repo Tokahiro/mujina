@@ -1,14 +1,6 @@
-//! `cargo xtask i18n-check`: every text Mujina shows in the user's language is translated into
-//! every language the crate that shows it ships.
-//!
-//! A crate's texts are the `@tr("…")` of its `.slint` files and of the shared `ui/` they import,
-//! as slint-tr-extractor lists them (with the context Slint looks them up by: the component they
-//! are in), and every `Msg::new("…")` in its Rust code, which mujina-i18n looks up without a
-//! context. Each `.po` under the crate's `lang/` must have every one of them: an app's are
-//! `lang/<language>/LC_MESSAGES/*.po`, the layout Slint's build reads, and a crate whose texts
-//! only Rust looks up has `lang/<language>.po`. Each has them translated and not marked fuzzy,
-//! with the text's plural and with the placeholders of the English; Slint and the Localizer show
-//! the English, or a text without its value, otherwise.
+//! `cargo xtask i18n-check`: each `.po` under a crate's `lang/` must translate every text the
+//! crate shows. Texts are the `@tr("…")` of its `.slint` files and the shared `ui/` (looked up by
+//! component) and every `Msg::new("…")` of its Rust code (looked up without a context).
 
 use std::collections::BTreeSet;
 use std::fmt;
@@ -133,10 +125,9 @@ pub fn check() -> TaskResult {
     }
 }
 
-/// slint-tr-extractor of the Slint version in Cargo.lock, so it reads `.slint` files as the
-/// compiler does. Installed the first time under `target/tools`, not into the user's cargo, or
-/// under `MUJINA_TOOLS` where that is set: CI keeps that folder in a cache of its own, keyed by
-/// the version, while its cache of `target/` loses everything that is not build output.
+/// slint-tr-extractor of Cargo.lock's Slint version, so it reads `.slint` files as the compiler
+/// does. Installed on first use under `MUJINA_TOOLS` if set (CI caches it there), else under
+/// `target/tools`, never into the user's cargo.
 fn extractor(root: &Path) -> Result<PathBuf, String> {
     let lock = read(&root.join("Cargo.lock"))?;
     let version = locked_version(&lock, "slint").ok_or("Cargo.lock has no slint")?;
@@ -216,10 +207,8 @@ fn rust_texts(src: &Path, root: &Path, failures: &mut Vec<String>) -> Result<Vec
     Ok(texts)
 }
 
-/// The texts of the `Msg::new("…")` in `source`, leaving out comments and inline test modules
-/// (`#[cfg(test)]` on a `mod … {`), whose texts no window shows. Anything else is read, a
-/// `#[cfg(test)]` item of another kind too: a text read in vain only asks for one translation
-/// more, while one left out would pass unchecked.
+/// The texts of the `Msg::new("…")` in `source`, without comments and inline test modules. Other
+/// `#[cfg(test)]` items are read: an extra text costs a translation, a missed one goes unchecked.
 fn msgs(source: &str) -> Result<Vec<String>, String> {
     let lines: Vec<&str> = source.lines().collect();
     // Comments and test modules stay as empty lines, so the line numbers are the file's.
@@ -308,7 +297,8 @@ fn rust_string(code: &str) -> Option<(String, &str)> {
     None
 }
 
-/// Each language's catalog of the crate in `dir`: `lang/<language>/LC_MESSAGES/*.po`.
+/// Each `.po` under `dir/lang`: `<language>/LC_MESSAGES/*.po` for an app (Slint's layout),
+/// `<language>.po` for a crate whose texts only Rust looks up.
 fn catalogs(dir: &Path) -> Result<Vec<(PathBuf, Vec<Entry>)>, String> {
     let lang = dir.join("lang");
     if !lang.is_dir() {
@@ -372,9 +362,8 @@ fn compare(texts: &BTreeSet<Key>, entries: &[Entry]) -> (Vec<String>, Vec<Key>) 
     (missing, unused)
 }
 
-/// What i18n-check finds wrong with `po`, the catalog of a crate whose texts are the
-/// `Msg::new("…")` of `sources` alone: each text it lacks, and each entry nothing uses. For the
-/// scaffolding's tests, which cannot run the check on a workspace of their own.
+/// For the scaffolding's tests: i18n-check's findings for the catalog `po` of a crate whose texts
+/// are the `Msg::new("…")` of `sources` alone.
 #[cfg(test)]
 pub(crate) fn rust_catalog_problems(sources: &[String], po: &str) -> Result<Vec<String>, String> {
     let mut texts = BTreeSet::new();
@@ -393,10 +382,9 @@ pub(crate) fn rust_catalog_problems(sources: &[String], po: &str) -> Result<Vec<
         .collect())
 }
 
-/// The first translation of `entry` whose placeholders are not those of the English it stands
-/// for, with the placeholders of each: `msgstr[0]` stands for the msgid (German uses it for
-/// exactly one, so it may leave out a `{n}` the msgid leaves out), any other form for the plural.
-/// Without its placeholder, the window would show a text without its value.
+/// The first translation of `entry` whose placeholders differ from its English, with both lists.
+/// `msgstr[0]` is compared with the msgid, other forms with the plural: German uses `msgstr[0]`
+/// for exactly one, so it may leave out a `{n}` the msgid leaves out.
 fn lost_placeholder(entry: &Entry) -> Option<(&str, Vec<&str>, Vec<&str>)> {
     entry
         .translations

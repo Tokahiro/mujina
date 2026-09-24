@@ -33,8 +33,6 @@ impl LauncherRuntime for SteamRuntime {
         }
     }
 
-    /// The UI link only where it is wanted, the location permission only for the Wi-Fi fix,
-    /// which alone reads what it guards; the overlay shortcut always.
     fn checks(&self, options: &OptionTable) -> Vec<Box<dyn Check>> {
         let options = SteamOptions::read(options);
         let steam_directory = SteamBigPicture::for_home(options)

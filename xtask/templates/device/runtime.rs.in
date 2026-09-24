@@ -25,9 +25,9 @@ impl DeviceRuntime for @TYPE@Runtime {
         {
             return Err(PortError::Failed(format!("{id} is not @NAME@")));
         }
-        // TODO: open what reports the buttons and have a press signal this event: the event of an
-        // overlapped `ReadFile` on the vendor's HID collection, say, or one a thread of this
-        // crate's signals while it is otherwise blocked in the kernel. Nothing signals it yet.
+        // TODO: open what reports the buttons and have a press signal this event, e.g. through an
+        // overlapped `ReadFile` on the vendor's HID collection, or from a thread of this crate's
+        // that blocks in the kernel. Nothing signals it yet.
         let press = Event::new().map_err(|error| PortError::Failed(error.to_string()))?;
         Ok(DeviceParts {
             buttons: Box::new(@TYPE@Buttons),

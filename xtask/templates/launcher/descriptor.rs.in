@@ -13,10 +13,9 @@ pub struct @TYPE@Descriptor;
 
 pub static DESCRIPTOR: @TYPE@Descriptor = @TYPE@Descriptor;
 
-// Each text is a `Msg`, so that i18n-check holds lang/de.po to it; the setting keeps its English.
-// TODO: the options it needs. This one is an example: where the program is, for when Mujina
-// cannot find it by itself. Keep it, change it or remove it, together with the template below,
-// the catalog and `@TYPE@Options`.
+// Texts are `Msg`s so that i18n-check holds lang/de.po to them; the setting keeps the English.
+// TODO: the options it needs. `executable` is an example: change or remove it together with
+// `TEMPLATE`, the catalog and `@TYPE@Options`.
 const SETTINGS: &[SettingSpec] = &[SettingSpec {
     key: "executable",
     kind: SettingKind::Text {

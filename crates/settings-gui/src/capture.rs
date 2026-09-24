@@ -1,6 +1,5 @@
-//! "Press the device button now": `mujinactl capture` does the watching, through the tools'
-//! module, and this stores what it saw. A button of one's own, `[device.button]`, is a modifier
-//! and a key; a longer chord needs a device profile.
+//! Device button capture: `mujinactl capture` watches, this stores what it saw.
+//! `[device.button]` holds a modifier and a key; a longer chord needs a device profile.
 
 use std::sync::atomic::AtomicBool;
 
@@ -8,8 +7,8 @@ use mujina_app::tool;
 use mujina_application::settings::{SettingChange, SettingValue};
 use mujina_domain::chord::TriggerChord;
 
-/// Waits for the button: a chord of two keys, `Ok(None)` if none was pressed in time or `cancel`
-/// was set meanwhile, `Err` with what went wrong, a longer chord among it.
+/// Waits for a two-key chord: `Ok(None)` on timeout or `cancel`, `Err` on failure or a longer
+/// chord.
 pub fn capture(cancel: &AtomicBool) -> Result<Option<TriggerChord>, String> {
     storable(tool::capture(cancel))
 }

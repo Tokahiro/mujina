@@ -1,6 +1,5 @@
-//! Lists every device profile in `profiles/devices/` for the crate to build in, so that a device
-//! whose buttons are key chords is one file and no Rust edit. A profile that does not parse fails
-//! the crate's tests, which name the file.
+//! Builds every file in `profiles/devices/` into the crate, so a key-chord device needs no Rust
+//! edit.
 
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
@@ -36,8 +35,8 @@ fn main() {
         let Some(path) = path.to_str() else {
             panic!("{}: not a path Rust source can name", path.display());
         };
-        // Debug formatting makes it a string literal, backslashes escaped. Written into a
-        // String, which cannot fail.
+        // Debug formatting makes it a string literal, backslashes escaped. Writing into a
+        // String cannot fail.
         let _ = writeln!(code, "    ({name:?}, include_str!({path:?})),");
     }
     code.push_str("];\n");

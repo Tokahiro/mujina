@@ -16,8 +16,7 @@ pub struct Settings {
     pub launcher: LauncherSelection,
     /// Translate the device button into launcher functions.
     pub button_remap: bool,
-    /// The device whose buttons Mujina maps, as `[device]` chose it; none when the device is
-    /// unknown.
+    /// As `[device]` chose it; none when the device is unknown.
     pub device: DeviceSelection,
     /// Overrides the launcher's own menu shortcut.
     pub menu: Option<KeyChord>,
@@ -25,8 +24,7 @@ pub struct Settings {
     pub overlay: Option<KeyChord>,
     pub exit_policy: ExitPolicy,
     pub timing: HoldTiming,
-    /// Keep the launcher on its "game is starting" screen until the game shows itself. Any
-    /// launcher that notices games is told; what it makes of it is its own affair.
+    /// Keep the launcher on its "game is starting" screen until the game shows itself.
     pub game_start_screen: bool,
     /// Cover the screen with a black window while the launcher starts, instead of leaving the
     /// console experience's own backdrop up.
@@ -85,7 +83,6 @@ pub enum SettingValue {
     TextList(Vec<String>),
 }
 
-/// One edit of the configuration.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SettingChange {
     /// Dotted path as in `config.toml`, e.g. `features.launch_screen`.

@@ -1,11 +1,9 @@
 //! `mujinactl capture`: waits for one key combination, such as the device button, and prints it.
-//! Keys are held back from other programs while it waits, so the button does nothing else, with
-//! one exception Windows makes: what a program with administrator rights sends (OneXConsole on a
-//! OneXPlayer) reaches the rest of the system anyway, although this still sees it.
+//! Keys are held back from other programs meanwhile, except what a program with administrator
+//! rights sends (OneXConsole), which Windows delivers anyway (this still sees it).
 //!
-//! Mujina Settings runs it with [`watch`] rather than watching the keyboard itself: a low-level
-//! hook on a thread of the app received no key events on a device where the same hook in this
-//! console program did. [`parse`] reads back what [`line`] prints.
+//! Mujina Settings runs it with [`watch`]: a hook on a thread of the app got no key events on a
+//! device where this console program's hook did.
 
 use std::io::Read as _;
 use std::os::windows::process::CommandExt as _;
@@ -17,7 +15,6 @@ use mujina_adapter_keyboard::probe::{self, Keys};
 use mujina_domain::chord::{Direction, KeyEvent, Origin, TriggerChord, suggest_trigger};
 use mujina_domain::keys::VirtualKey;
 
-/// The events of one capture, and whether it is complete.
 #[derive(Debug, Default)]
 struct Capture {
     events: Vec<KeyEvent>,
@@ -52,7 +49,7 @@ pub fn line(button: TriggerChord) -> String {
     format!("{} {origin}", button.keys)
 }
 
-/// A chord as [`line`] prints it; `None` for anything else.
+/// A chord as [`line()`] prints it; `None` for anything else.
 pub fn parse(line: &str) -> Option<TriggerChord> {
     let (chord, origin) = line.split_once(' ')?;
     let injected_only = match origin {
@@ -67,7 +64,6 @@ pub fn parse(line: &str) -> Option<TriggerChord> {
 /// window, for `time`, and reads its line: the chord, `Ok(None)` if none was pressed in time or
 /// `cancel` was set meanwhile, `Err` with what went wrong otherwise.
 pub fn watch(time: Duration, cancel: &AtomicBool) -> Result<Option<TriggerChord>, String> {
-    /// No console window for the console program.
     const CREATE_NO_WINDOW: u32 = 0x0800_0000;
     /// How often a waiting capture looks whether it was cancelled.
     const POLL: Duration = Duration::from_millis(50);

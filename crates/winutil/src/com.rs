@@ -9,23 +9,21 @@ use windows_sys::Win32::System::Com::{
 
 /// COM initialised on this thread as a single-threaded apartment, until dropped.
 ///
-/// ShellExecute may hand its work to shell extensions that COM loads, and some of them need an
-/// STA, so Microsoft asks for this before calling it; [`crate::shell`] holds one around each
-/// call. An STA thread must pump messages while it waits, which a thread with windows or hooks
-/// does anyway. A thread that calls ShellExecute often may hold one for its whole life: the
-/// last drop closes COM on the thread and unloads the DLLs it loaded, which each call would
-/// otherwise repeat.
+/// Microsoft asks for an STA before ShellExecute, whose shell extensions may need one
+/// (ADR-0014). An STA thread must pump messages while it waits. A thread that calls ShellExecute
+/// often may hold one for its whole life, so that COM and its DLLs are not unloaded after each
+/// call.
 #[must_use = "COM is uninitialised again when the apartment is dropped"]
 #[derive(Debug)]
 pub struct Apartment {
-    /// CoUninitialize must be called on the thread that initialised COM.
+    /// Not `Send`: CoUninitialize must run on the thread that initialised COM.
     _this_thread: PhantomData<*const ()>,
 }
 
 impl Apartment {
-    /// Initialises COM as recommended for ShellExecute. Also succeeds when the thread already
-    /// is in an STA. The error is the HRESULT, for the log; RPC_E_CHANGED_MODE means the thread
-    /// is in the multithreaded apartment, which stays as it is.
+    /// Initialises COM as recommended for ShellExecute; also succeeds when the thread already is
+    /// in an STA. The error is the HRESULT; RPC_E_CHANGED_MODE means the thread is in the
+    /// multithreaded apartment, which is left as it is.
     pub fn sta() -> Result<Self, i32> {
         let mode = (COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE).cast_unsigned();
         // SAFETY: plain call; the reserved parameter must be null, and the flags are a valid
@@ -58,7 +56,6 @@ mod tests {
 
     use super::*;
 
-    /// Enters the multithreaded apartment, as other code on the thread might have done.
     fn enter_mta() -> i32 {
         // SAFETY: plain call; the reserved parameter must be null.
         unsafe { CoInitializeEx(null(), COINIT_MULTITHREADED.cast_unsigned()) }

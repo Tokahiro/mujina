@@ -1,7 +1,5 @@
-//! A failed Win32 call, with the reason Windows gave for it.
-//!
-//! Problems on a device have to be diagnosed from its log, so a failure keeps the name of the
-//! call and its error code, and says in words what the code means.
+//! A failed Win32 call: its name, its error code and Windows' text for the code, so that a
+//! failure on a device can be diagnosed from its log.
 
 use std::fmt;
 
@@ -41,9 +39,8 @@ pub(crate) fn checked(call: &'static str, status: u32) -> Win32Result<()> {
 }
 
 impl Win32Error {
-    /// What Windows says about the code: in English, as it goes into English log lines and
-    /// details, or in the user's language where Windows has no English text. `None` if it has
-    /// no text for it at all.
+    /// Windows' text for the code: in English, the log's language, else in the user's language.
+    /// `None` if Windows has no text for it.
     pub fn message(&self) -> Option<String> {
         let mut buffer = [0u16; 512];
         // A language asked for by its id is the only one looked up; 0 lets Windows choose.
@@ -61,8 +58,7 @@ impl Win32Error {
     /// Writes the system's text for the code in `language` to `buffer`; its length, 0 if none.
     fn format(&self, language: u32, buffer: &mut [u16]) -> usize {
         // SAFETY: `buffer` is writable for the length passed; with IGNORE_INSERTS no arguments
-        // are read (which Microsoft asks for with codes from elsewhere), and the source is unused
-        // with FROM_SYSTEM.
+        // are read, and with FROM_SYSTEM the source is unused.
         let length = unsafe {
             FormatMessageW(
                 FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
@@ -104,8 +100,7 @@ mod tests {
         ERROR_FILE_NOT_FOUND, ERROR_INVALID_HANDLE, SetLastError,
     };
 
-    // A Windows without English texts gives them in the user's language, so only their presence
-    // is checked, never the words, unless the English text is there.
+    // Windows may lack English texts, so the words are checked only where it has them.
 
     #[test]
     fn the_text_is_english_where_windows_has_it() {

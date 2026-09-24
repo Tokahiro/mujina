@@ -2,8 +2,7 @@
 targets = ["x86_64-pc-windows-msvc"]
 
 [advisories]
-# No ignores: every advisory fails the check. (Slint 1.18 dropped paste, ttf-parser and rustybuzz,
-# the unmaintained crates that were ignored here.)
+# No ignores: every advisory fails the check.
 
 [licenses]
 allow = [
@@ -16,9 +15,8 @@ allow = [
     "BSL-1.0",
     "ISC",
     "CC0-1.0",
-    # Slint, for the two apps with a window, Mujina Settings and Mujina Setup (ADR-0011). Free
-    # for desktop apps with the Slint attribution: the README and every release page show
-    # Slint's badge (the licence's condition 2 (b)), and so does Mujina Settings' Help page.
+    # Slint (ADR-0011): free for desktop apps that show its badge (condition 2 (b)), as the
+    # README, every release page and Mujina Settings' Help page do.
     "LicenseRef-Slint-Royalty-free-2.0",
 ]
 
@@ -26,8 +24,6 @@ allow = [
 multiple-versions = "warn"
 wildcards = "deny"
 allow-wildcard-paths = true
-# Promises checked here rather than only written down: the UI toolkit stays in the two apps that
-# have a window (ADR-0011), and nothing brings an async runtime into the resident agent (ADR-0002).
 deny = [
     { crate = "slint", wrappers = ["mujina-settings-gui", "mujina-setup"], reason = "the resident agent has no UI" },
     { crate = "slint-build", wrappers = ["mujina-settings-gui", "mujina-setup"], reason = "the resident agent has no UI" },

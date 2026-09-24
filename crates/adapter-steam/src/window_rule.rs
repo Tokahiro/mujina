@@ -15,7 +15,6 @@ pub fn big_picture_rule() -> WindowRule {
     }
 }
 
-/// Finds the Big Picture window, if it is on screen.
 pub fn find_big_picture() -> Option<WindowHandle> {
     window::find_top_level(&big_picture_rule())
 }

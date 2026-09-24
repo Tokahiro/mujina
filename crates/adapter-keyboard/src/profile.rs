@@ -14,7 +14,6 @@ use crate::MAX_BUTTONS;
 
 include!(concat!(env!("OUT_DIR"), "/profiles.rs"));
 
-/// A profile file, as written.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct ProfileFile {
@@ -49,9 +48,8 @@ struct ButtonFile {
 enum SuppressionFile {
     #[default]
     Swallowed,
-    /// Refused for now: the hook holds every chord back until it knows which button it is, so a
-    /// button whose keys are to reach other programs too would need a matcher that passes them
-    /// while still telling buttons apart. Read, so that the refusal says why.
+    /// Refused, since the hook holds every chord back until it knows the button; parsed so that
+    /// the refusal can say why.
     Observed,
 }
 
@@ -70,9 +68,8 @@ pub struct ChordProfile {
 }
 
 impl ChordProfile {
-    /// Reads a profile file; what is wrong with it, otherwise. Besides the shape, it refuses what
-    /// the hook could not serve: more buttons than it catches, and two chords it cannot tell
-    /// apart, so that the folder's test names the file rather than a button never firing.
+    /// Reads a profile file. Also refuses what the hook could not serve: more than [`MAX_BUTTONS`]
+    /// buttons, or two chords it cannot tell apart.
     pub fn parse(text: &str) -> Result<Self, String> {
         let file: ProfileFile =
             toml::from_str(text).map_err(|error| error.message().to_string())?;
@@ -154,10 +151,9 @@ impl DeviceDescriptor for ChordProfile {
     }
 }
 
-/// Why the matcher could not tell two buttons' chords apart, if it could not: the same keys
-/// with the same trigger, or one chord made only of keys the other holds. The held keys come in
-/// whatever order the firmware presses them, so the second would fire as the first the moment
-/// its keys were down (the matcher takes the shorter chord).
+/// Why the matcher could not tell two chords apart: the same keys and trigger, or one chord made
+/// only of keys the other holds. Held keys come in any order, and the matcher takes the shorter
+/// chord.
 fn clash(ours: &TriggerChord, theirs: &TriggerChord) -> Option<&'static str> {
     let same = ours.trigger() == theirs.trigger()
         && ours.held().len() == theirs.held().len()
@@ -177,9 +173,8 @@ fn clash(ours: &TriggerChord, theirs: &TriggerChord) -> Option<&'static str> {
 }
 
 /// The profiles shipped with Mujina, sorted by file name. `auto` takes the first that matches, so
-/// a profile for some of the machines another one's patterns cover has to sort before it (a
-/// OneXPlayer model's before `onexplayer.toml`, which takes every ONE-NETBOOK machine); the
-/// folder's test checks that. One that does not parse is left out here and fails the tests.
+/// a more specific profile must sort first (a test checks this). One that does not parse is left
+/// out here and fails the tests.
 pub fn builtin() -> &'static [ChordProfile] {
     static PROFILES: LazyLock<Vec<ChordProfile>> = LazyLock::new(|| {
         BUILTIN
@@ -293,7 +288,6 @@ mod tests {
             "ONEXPLAYER X1"
         )));
         assert!(!oxp.matches(&machine("ASUSTeK COMPUTER INC.", "ROG Ally RC71L")));
-        // Its button, exactly as before profiles had several: an injected LWIN+D.
         let chords = oxp.chords();
         assert_eq!(chords.len(), 1);
         assert_eq!(chords[0].0, ButtonId(0));

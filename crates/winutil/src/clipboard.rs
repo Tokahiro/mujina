@@ -10,12 +10,11 @@ use windows_sys::Win32::UI::Input::KeyboardAndMouse::GetActiveWindow;
 
 /// Replaces what the clipboard holds with `text`; `false` if the clipboard could not be had.
 ///
-/// Called on the thread of the window the user pressed Copy in: that window becomes the
-/// clipboard's owner. Without an active window on this thread nothing is copied.
+/// Call it on the thread of the active window, which becomes the clipboard's owner; without one
+/// nothing is copied.
 pub fn set_text(text: &str) -> bool {
     let wide: Vec<u16> = text.encode_utf16().chain(std::iter::once(0)).collect();
-    // The clipboard needs an owner window: opened with none, EmptyClipboard leaves it without an
-    // owner and SetClipboardData fails.
+    // Opened without an owner window, SetClipboardData fails after EmptyClipboard.
     // SAFETY: no arguments; null when this thread has no active window.
     let owner = unsafe { GetActiveWindow() };
     if owner.is_null() {

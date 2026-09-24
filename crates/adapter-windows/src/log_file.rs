@@ -1,18 +1,6 @@
-//! A small file logger behind the `log` facade.
-//!
-//! Synchronous on purpose: a background logging thread would be one more thing that wakes up,
-//! and Mujina logs a handful of lines per session.
-//!
-//! Every role appends to the same file. Once it grows past a size it is renamed to
-//! `mujina.log.1`, replacing an older one, and a new file begins. Each process checks when it
-//! opens the log and again every few lines, so a long agent session is capped too. Two
-//! processes rotating at the same moment may lose the older file; the log is best effort.
-//!
-//! Between two looks a process writes to the file it has open, which another role may have
-//! renamed meanwhile. A flush looks too, so the lines that must be found (the agent's closing
-//! lines, a panic) flush first and land in the current `mujina.log`. Other lines written after
-//! another role rotated the log, up to one look later, still go to `mujina.log.1`, and are lost
-//! should yet another rotation replace that file first.
+//! A synchronous file logger behind the `log` facade: a logging thread would be one more thing
+//! that wakes up. Every role appends to `mujina.log`, rotated to `mujina.log.1` past a size; best
+//! effort, as racing processes may lose the older file.
 
 use std::ffi::OsString;
 use std::fs::{File, OpenOptions};
@@ -25,7 +13,7 @@ use mujina_winutil::time::local_timestamp;
 
 /// Past this size the log is rotated.
 const MAX_BYTES: u64 = 256 * 1024;
-/// How many lines a process writes between two looks at the size.
+/// Lines written between two size checks.
 const CHECK_EVERY: u32 = 32;
 
 struct FileLogger {
@@ -38,7 +26,7 @@ struct FileLogger {
 
 struct Sink {
     file: File,
-    /// Lines written since the size was last looked at.
+    /// Lines written since the last size check.
     lines: u32,
 }
 
@@ -91,10 +79,9 @@ impl Log for FileLogger {
         self.write(&line);
     }
 
-    /// Nothing is buffered here: each line goes to Windows as it is written, and Windows keeps
-    /// it even when the process ends right after. A flush is also when the file is looked up by
-    /// name again, so lines that must be found (the agent's closing lines, a panic) can make sure
-    /// they land in the current log by flushing first.
+    /// Nothing is buffered: Windows keeps each written line even if the process ends right after.
+    /// Flushing reopens the log by name, so lines that must be found (the agent's closing lines,
+    /// a panic) land in the current file if they flush first.
     fn flush(&self) {
         if let Ok(mut sink) = self.sink.lock() {
             let _ = sink.file.flush();
@@ -129,9 +116,8 @@ pub fn init(dir: &Path, role: &'static str, level: LevelFilter) -> std::io::Resu
     Ok(())
 }
 
-/// Release builds abort on a panic, and mujina.exe has no console for the message to appear
-/// in, so without this a crash would leave no trace. The previous hook still runs afterwards,
-/// for anyone who redirected stderr.
+/// Release builds abort on a panic and mujina.exe has no console, so without this a crash would
+/// leave no trace. The previous hook still runs, for anyone who redirected stderr.
 fn log_panics() {
     let previous = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {

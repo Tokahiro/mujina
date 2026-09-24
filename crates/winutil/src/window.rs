@@ -46,7 +46,6 @@ impl WindowHandle {
     }
 }
 
-/// A snapshot of one top-level window.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WindowSnapshot {
     pub handle: WindowHandle,
@@ -211,10 +210,9 @@ pub fn allow_any_foreground() -> bool {
     unsafe { AllowSetForegroundWindow(ASFW_ANY) != 0 }
 }
 
-/// Starts `executable` with `args` in `directory`, and lets whatever shows a window next take
-/// the foreground from us. This is the hand-over that makes focus-stealing tricks unnecessary.
-/// `Ok(false)` means started without the hand-over: this process did not hold the foreground
-/// right itself. The program is not waited for.
+/// Starts `executable` with `args` in `directory` without waiting, and lets whatever shows a
+/// window next take the foreground from us. `Ok(false)` means started without that hand-over:
+/// this process did not hold the foreground right itself.
 pub fn spawn_with_foreground<S: AsRef<OsStr>>(
     executable: &Path,
     args: &[S],
@@ -247,8 +245,7 @@ pub fn focus_with_fallbacks(handle: WindowHandle) -> Result<Focused, String> {
     if bring_to_foreground(handle) {
         return Ok(Focused::Directly);
     }
-    // Booting into the console experience: the window is up before the user has unlocked, and
-    // it is what shows once they have.
+    // At boot the window may be up before the user unlocks; it shows once they have.
     if lock_screen_in_front() {
         return Ok(Focused::BehindLockScreen);
     }
@@ -305,10 +302,9 @@ pub struct Presentation {
     pub maximized: bool,
     /// DWM hides it (`DWMWA_CLOAKED`), although it counts as visible.
     pub cloaked: bool,
-    /// It belongs to the process of the shell's desktop window (`GetShellWindow`): on the
-    /// desktop, the desktop itself, the taskbar, the task switcher. Xbox mode replaces the
-    /// desktop shell, so there may be no shell window then (not verified); the home of Xbox
-    /// mode is a packaged app, which `packaged` covers.
+    /// It belongs to the process of the shell's desktop window (`GetShellWindow`): the desktop,
+    /// the taskbar, the task switcher. Xbox mode may have no shell window; its home is a
+    /// packaged app, which `packaged` covers.
     pub shell: bool,
     /// It is a packaged app's: its process has a package identity, or it is the frame Windows
     /// draws around such an app (the window classes of [`PACKAGED_APP_FRAMES`]), whose process,
@@ -316,10 +312,8 @@ pub struct Presentation {
     pub packaged: bool,
 }
 
-/// Window classes of the windows a packaged (UWP) app is shown in: the frame that
-/// `ApplicationFrameHost.exe` draws around it, and the app's own core window. The frame is the
-/// foreground window of Settings, say, but its process is not the app's and has no package
-/// identity, so it is recognised by its class.
+/// Window classes a packaged (UWP) app is shown in: the frame `ApplicationFrameHost.exe` draws
+/// around it, whose process has no package identity, and the app's own core window.
 pub const PACKAGED_APP_FRAMES: [&str; 2] = ["ApplicationFrameWindow", "Windows.UI.Core.CoreWindow"];
 
 /// Class name of a window; empty for a stale handle.
@@ -427,7 +421,6 @@ fn presentation_of(hwnd: HWND) -> Option<Presentation> {
     let class = class_of(hwnd);
     let frame = PACKAGED_APP_FRAMES.iter().any(|name| *name == class);
     Some(Presentation {
-        // Any bit of the caption (a border alone, too) counts: a game in full screen has none.
         framed: style & (WS_CAPTION | WS_THICKFRAME) != 0,
         fills_monitor: bounds(rect) == bounds(info.rcMonitor),
         maximized,
@@ -572,8 +565,8 @@ mod tests {
         };
         // SAFETY: plain call without arguments.
         let before = unsafe { GetThreadDpiAwarenessContext() };
-        // Headless CI sessions may have no foreground window, and what is in front depends on
-        // the machine: only that reading it works and leaves the thread as it was is checked.
+        // What is in front depends on the machine (none in headless CI): only the DPI awareness
+        // is checked.
         let _ = foreground_presentation();
         // SAFETY: plain call without arguments.
         let after = unsafe { GetThreadDpiAwarenessContext() };
@@ -641,13 +634,11 @@ mod tests {
     #[test]
     fn a_frameless_window_over_its_monitor_is_read_as_one_and_a_framed_one_as_framed() {
         use windows_sys::Win32::UI::WindowsAndMessaging::{WS_OVERLAPPEDWINDOW, WS_POPUP};
-        // A session without a monitor or a window manager has nothing to measure against.
         let Some(monitor) = primary_monitor() else {
             eprintln!("skipped: no monitor");
             return;
         };
-        // Drawn as a game in full screen draws its window (the style Unreal's full screen
-        // window was read with: WS_POPUP, no caption, no sizing border).
+        // Styled as a full-screen game (Unreal's): WS_POPUP, no caption, no sizing border.
         let game = TestWindow::new(WS_POPUP, monitor);
         let Some(read) = presentation_of(game.0) else {
             eprintln!("skipped: the window manager's facts cannot be read here");
@@ -687,9 +678,8 @@ mod tests {
             eprintln!("skipped: no monitor");
             return;
         };
-        // A class of this process's own with the frame's name: its process has no package
-        // identity, as ApplicationFrameHost.exe has none, and its window is shaped as a game's
-        // (as a packaged app in full screen may be shown).
+        // A class with the frame's name in this process, which, like ApplicationFrameHost.exe,
+        // has no package identity.
         let name = crate::wide::to_wide(PACKAGED_APP_FRAMES[0]);
         // SAFETY: plain call; GetModuleHandleW(null) is this executable.
         let instance = unsafe { GetModuleHandleW(null()) };
