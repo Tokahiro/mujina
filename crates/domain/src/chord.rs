@@ -1,6 +1,6 @@
 //! Recognition of device buttons that arrive as keyboard chords, such as the `OneXPlayer`'s
-//! injected `LWIN`+`D` (ADR-0005). [`ChordSetMatcher`] runs inside a low-level keyboard hook, which
-//! Windows silently removes if it answers too slowly, so it is allocation-free and constant-time.
+//! injected `LWIN`+`D`. [`ChordSetMatcher`] runs inside a low-level keyboard hook, which Windows
+//! silently removes if it answers too slowly, so it is allocation-free and constant-time.
 
 use core::fmt;
 
@@ -187,7 +187,8 @@ pub struct ChordSetMatcher<const N: usize> {
     /// Sent on and not yet seen back.
     in_flight: usize,
     /// When `in_flight` last rose from 0, in the caller's milliseconds. Not the latest batch, so
-    /// a stream of keys cannot put off giving up on one that never returns.
+    /// a stream of keys cannot put off giving up on one that never returns. It may predate the
+    /// oldest replay still out, which only ends the wait sooner.
     in_flight_since: u32,
 }
 
