@@ -79,7 +79,7 @@ jobs:
           cargo fmt --all
           git diff > rustfmt.patch
       - if: failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: rustfmt-patch
           path: rustfmt.patch
@@ -95,7 +95,7 @@ jobs:
         with:
           persist-credentials: false
       - run: rustup toolchain install
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           shared-key: linux
           save-if: ${{ github.ref == 'refs/heads/main' }}
@@ -149,7 +149,7 @@ jobs:
         with:
           persist-credentials: false
       - run: rustup toolchain install
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           shared-key: win-debug
           save-if: ${{ github.ref == 'refs/heads/main' }}
@@ -168,7 +168,7 @@ jobs:
           persist-credentials: false
       - run: rustup toolchain install
       # The cache release.yml's build job restores: keep key, toolchain and cargo invocations equal.
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           shared-key: win-release
           save-if: ${{ github.ref == 'refs/heads/main' }}
@@ -178,12 +178,12 @@ jobs:
           # the revision, a CI build never updates or outranks a release.
           MSIX_REVISION: ${{ github.run_number }}
         run: cargo xtask package --timings
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: msix
           path: target/package/*.msix
           if-no-files-found: error
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: cargo-timing
           path: target/cargo-timings/cargo-timing.html
@@ -193,7 +193,7 @@ jobs:
         if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
         run: cargo build --locked --release -p mujina-setup
       - if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: setup-unsigned
           path: target/release/mujina-setup.exe
@@ -235,12 +235,12 @@ jobs:
             packaging/attach-payload.ps1
           sparse-checkout-cone-mode: false
       - if: env.HAS_KEY == 'true'
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: msix
           path: msix
       - if: env.HAS_KEY == 'true'
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: setup-unsigned
           path: stub
@@ -270,13 +270,13 @@ jobs:
           -PfxVariable DEV_SIGNING_PFX_BASE64 -PasswordVariable DEV_SIGNING_PFX_PASSWORD
           -Subject 'CN=Mujina Dev'
       - if: env.HAS_KEY == 'true'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: msix-signed
           path: msix/
           if-no-files-found: error
       - if: env.HAS_KEY == 'true'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: setup-dev
           path: setup/Mujina-Setup-dev.exe
