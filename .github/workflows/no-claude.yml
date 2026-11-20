@@ -1,0 +1,38 @@
+name: No Claude lines
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize, labeled, unlabeled]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Title, description, branch and commits
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          TITLE: ${{ github.event.pull_request.title }}
+          BODY: ${{ github.event.pull_request.body }}
+          BRANCH: ${{ github.event.pull_request.head.ref }}
+          ABOUT_CLAUDE: ${{ contains(github.event.pull_request.labels.*.name, 'about-claude') }}
+        run: |
+          commits=$(gh api "repos/$REPO/pulls/$PR/commits" --paginate --jq '.[].commit.message')
+          all=$(printf '%s\n%s\n%s\n%s\n' "$TITLE" "$BODY" "$BRANCH" "$commits")
+          # Always wrong: tool attribution, session links, tool branch names.
+          hard='co-authored-by: *claude|generated (by|with) \[?claude|claude\.ai/code|claude-session:|anthropic\.com>|^claude/'
+          bad=$(printf '%s\n' "$all" | grep -inE "$hard" || true)
+          # A pull request about Claude itself (a skill, a plugin) can name it with the label about-claude.
+          if [ "$ABOUT_CLAUDE" != "true" ]; then
+            bad=$(printf '%s\n%s\n' "$bad" "$(printf '%s\n' "$all" | grep -in 'claude' || true)" | sort -u | sed '/^$/d')
+          fi
+          if [ -n "$bad" ]; then
+            printf 'Remove these lines from the title, description, branch name or commit messages:\n%s\n' "$bad"
+            exit 1
+          fi
