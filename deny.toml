@@ -2,7 +2,12 @@
 targets = ["x86_64-pc-windows-msvc"]
 
 [advisories]
-# No ignores: every advisory fails the check.
+ignore = [
+    # Both come in through Slint (1.18 and 1.19) and have no maintained release.
+    # Drop each ignore once Slint no longer depends on the crate.
+    { id = "RUSTSEC-2026-0543", reason = "chrono is unmaintained; i-slint-core depends on it, no fixed version" },
+    { id = "RUSTSEC-2026-0441", reason = "pin-utils is unmaintained; Slint's spin_on depends on it, no fixed version" },
+]
 
 [licenses]
 allow = [
