@@ -71,7 +71,7 @@ device and note the result (Windows build, device, Steam client version).
 - [ ] Installed from a folder whose path has an apostrophe (e.g. `C:\Users\O'Brien\Downloads`)
 - [ ] Smart App Control: note its state before installing (Windows Security → *App & browser
       control* → *Smart App Control settings*). Where it is *On*, note whether the release's
-      Setup is blocked with no *Run anyway*, as the README's troubleshooting expects, and what
+      Setup is blocked with no *Run anyway*, as docs/install.md expects, and what
       Windows says. Where it is in *Evaluation*, Setup runs: note its state after Setup turned
       Developer Mode on. SECURITY.md expects it *Off* then, which no device has confirmed yet
 - [ ] `mujina-setup.exe --uninstall`: the home app is back at once, the package is gone, and
