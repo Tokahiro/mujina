@@ -1,8 +1,16 @@
 name: No Claude lines
 
+# Fails a pull request whose title, description, branch name, own commit messages or commit
+# authors name Claude. Files are not checked, so CLAUDE.md and the skills under .claude/ stay
+# as they are, and their names may appear in the text. A pull request about Claude itself can
+# carry the label about-claude; tool attribution and session lines fail even then.
 on:
   pull_request:
     types: [opened, edited, reopened, synchronize, labeled, unlabeled]
+
+concurrency:
+  group: no-claude-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -11,7 +19,7 @@ permissions:
 jobs:
   check:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 2
     steps:
       - name: Title, description, branch and commits
         env:
@@ -23,14 +31,14 @@ jobs:
           BRANCH: ${{ github.event.pull_request.head.ref }}
           ABOUT_CLAUDE: ${{ contains(github.event.pull_request.labels.*.name, 'about-claude') }}
         run: |
-          commits=$(gh api "repos/$REPO/pulls/$PR/commits" --paginate --jq '.[].commit.message')
+          commits=$(gh api "repos/$REPO/pulls/$PR/commits" --paginate \
+            --jq '.[].commit | .message, "\(.author.name) <\(.author.email)>", "\(.committer.name) <\(.committer.email)>"')
           all=$(printf '%s\n%s\n%s\n%s\n' "$TITLE" "$BODY" "$BRANCH" "$commits")
-          # Always wrong: tool attribution, session links, tool branch names.
-          hard='co-authored-by: *claude|generated (by|with) \[?claude|claude\.ai/code|claude-session:|anthropic\.com>|^claude/'
+          hard='co-authored-by:[[:space:]]*claude|generated (by|with) \[?claude|claude\.(ai|com)/|claude-session:|anthropic\.com>|^claude/'
           bad=$(printf '%s\n' "$all" | grep -inE "$hard" || true)
-          # A pull request about Claude itself (a skill, a plugin) can name it with the label about-claude.
           if [ "$ABOUT_CLAUDE" != "true" ]; then
-            bad=$(printf '%s\n%s\n' "$bad" "$(printf '%s\n' "$all" | grep -in 'claude' || true)" | sort -u | sed '/^$/d')
+            soft=$(printf '%s\n' "$all" | sed -E 's#claude\.md|\.claude/##gI' | grep -in 'claude' || true)
+            bad=$(printf '%s\n%s\n' "$bad" "$soft" | sort -u | sed '/^$/d')
           fi
           if [ -n "$bad" ]; then
             printf 'Remove these lines from the title, description, branch name or commit messages:\n%s\n' "$bad"
